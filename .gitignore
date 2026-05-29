@@ -1,0 +1,57 @@
+cd ~/projects/regulatory-research-assistant
+cat > .gitignore << 'EOF'
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Environment
+.env
+.env.local
+*.local
+
+# uv
+.uv/
+
+# Data and corpora (too large for git)
+data/
+corpus/
+*.pdf
+
+# Eval outputs (keep latest only, see evals/results/.gitignore)
+evals/results/*
+!evals/results/latest.md
+!evals/results/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes
+postgres-data/
+langfuse-data/
+
+# Logs
+*.log
+logs/
+
+# Terraform
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/*.tfvars
+!infra/terraform/*.tfvars.example
+EOF
