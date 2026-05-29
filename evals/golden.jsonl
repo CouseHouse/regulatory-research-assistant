@@ -1,0 +1,14 @@
+// Golden set — REPLACE THESE THREE EXAMPLES with your real 30 questions
+// before running any evals. Picking them after the agent works biases the set.
+//
+// Target distribution: 10 easy, 15 medium, 5 hard
+// Easy:   single-guidance lookup with known answers
+// Medium: synthesis across 2-4 guidances
+// Hard:   edge cases where the right answer is "the guidance does not clearly
+//         address this" — tests refusal to hallucinate
+//
+// Lines starting with // and blank lines are ignored by the loader.
+
+{"id":"easy-001","difficulty":"easy","query":"What does FDA guidance recommend regarding software bill of materials (SBOM) disclosure for premarket cybersecurity submissions?","product_context":"Class II networked medical device, original 510(k) clearance 2019","expected_facts":["SBOM should be machine-readable","SBOM should be provided in premarket submission","Format should follow recognized standards such as SPDX or SWID"],"expected_guidance_ids":["FDA-2021-D-1158"],"notes":"Sanity check — well-documented in the cybersecurity guidance"}
+{"id":"med-001","difficulty":"medium","query":"We're updating our infusion pump firmware to add a new pressure-alarm threshold. Does this require a new 510(k)?","product_context":"Class II infusion pump, cleared K123456 in 2020","expected_facts":["Modifications to cleared devices may require a new 510(k) per 21 CFR 807.81(a)(3)","Special 510(k) may be appropriate for design changes","Software changes that affect safety or effectiveness typically trigger new submission","Letter to File may suffice for changes that do not significantly affect safety or effectiveness"],"expected_guidance_ids":["FDA-2017-D-5761","FDA-2017-D-5762"],"notes":"Requires synthesizing modifications guidance with software-specific guidance"}
+{"id":"hard-001","difficulty":"hard","query":"Does FDA guidance specifically address use of federated learning for continuously-updating SaMD models trained across multiple hospital sites?","product_context":"AI/ML-based SaMD, in development","expected_facts":["Existing guidance covers PCCP (Predetermined Change Control Plans) for AI/ML SaMD","Federated learning specifically is not addressed in current binding guidance as of knowledge cutoff","The PCCP framework provides relevant principles but does not prescribe federated approaches"],"expected_guidance_ids":["FDA-2023-D-4488"],"notes":"Refusal test — system should NOT confidently answer yes; should acknowledge gap"}

@@ -54,4 +54,13 @@ infra/terraform/*.tfstate
 infra/terraform/*.tfstate.*
 infra/terraform/*.tfvars
 !infra/terraform/*.tfvars.example
-EOF
+
+# Windows NTFS metadata from files downloaded via browser
+*:Zone.Identifier
+notes.md
+
+
+
+# Personal dev notes — not part of the public repo
+docs/dev-log-future.md
+docs/dev-log-private-notes.md
