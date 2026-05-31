@@ -1,5 +1,88 @@
 # Dev log
 
+## 2026-05-31 — Day 2 postmortem: schema drift + systemic ingest hardening
+
+### Root cause
+
+`init-db/01-init.sql` and `_ensure_schema()` in `ingest.py` defined two
+completely different tables. In the normal developer workflow (`docker compose up`
+→ `rra-ingest`), init-db runs first. `_ensure_schema`'s `CREATE TABLE IF NOT
+EXISTS` is then a no-op, so the table keeps init-db's schema. Every INSERT
+immediately fails.
+
+Three crash-level drifts, triggered in sequence as each was individually fixed:
+1. `token_count` present in code's INSERT, missing from init-db table
+2. `UNIQUE (guidance_id, chunk_index)` required by `ON CONFLICT`, missing from
+   init-db table
+3. `guidance_title TEXT NOT NULL` present in init-db, never written by code
+
+### What was fixed (full enumeration)
+
+**Schema:**
+- `init-db/01-init.sql`: added `token_count INT NOT NULL`, `UNIQUE (guidance_id,
+  chunk_index)`, changed `embedding` to `NOT NULL`. Added sync comment: both
+  files must be updated together.
+- `_ensure_schema()`: rewritten to match init-db exactly (full column list,
+  same index names, same constraints).
+- Running DB (no rows): applied three ALTER TABLE statements directly.
+- `_ensure_schema` now called once in `main()` before any download/embed work,
+  so schema problems surface before API costs are incurred.
+
+**Ingest hardening:**
+- `Chunk` gained `guidance_title` sourced from manifest `"title"` field.
+  `_urls_from_manifest()` replaced by `_entries_from_manifest()` returning full
+  entry dicts; `guidance_id` now comes from manifest `"id"`, not URL parsing.
+- `DownloadedDoc(path, guidance_id, guidance_title)` dataclass threads identity
+  through the download → ingest pipeline.
+- `_download_one` accepts explicit `guidance_id` param (eliminated URL stem
+  heuristic that would silently produce wrong IDs for non-standard URLs).
+- `main()` per-doc loop: `parse_pdf → chunk_text → embed_chunks → write_to_postgres`
+  wrapped in `try/except`; one bad doc logs an error and continues.
+- `--truncate` flag added: TRUNCATEs `corpus.chunks` before ingesting. Use after
+  schema changes for a clean-slate re-ingest.
+- `_embed_batch` retry predicate narrowed from `Exception` (retried everything,
+  including permanent auth and bad-input errors) to a whitelist of retryable
+  Voyage error types: `RateLimitError`, `ServerError`, `ServiceUnavailableError`,
+  `APIConnectionError`, `TryAgain`, `Timeout`.
+- `NotImplementedError` for embedding count mismatch replaced with `RuntimeError`.
+
+**Tests:**
+- `tests/test_ingest_integration.py` added (two tests, `@pytest.mark.integration`):
+  - `test_write_populates_all_columns`: asserts every column lands in the live DB
+  - `test_write_is_idempotent`: two identical writes → exactly N rows
+  These two tests would have caught every schema-drift crash before it reached
+  a live ingest run.
+- `@pytest.mark.integration` registered in `pyproject.toml`.
+- Unit tests updated for new `Chunk.guidance_title` field and `DownloadedDoc`
+  return type.
+
+### Systemic lesson
+
+The root failure was two files defining the same table independently with no
+enforcement that they stayed in sync. The fixes:
+1. Added a warning comment in init-db pointing at `_ensure_schema`.
+2. Added integration tests that actually write to Postgres — unit tests mocking
+   `_ensure_schema` cannot catch schema drift by construction.
+3. `_ensure_schema` is now called at the start of `main()` before any
+   download/embed work, so schema failures are cheap to discover.
+
+### Open questions (carry forward to Day 6)
+
+1. **Stale high-index rows on re-chunk.** If a document is re-chunked and
+   produces fewer chunks than before, old high-index rows linger. The `--truncate`
+   flag handles full re-ingests; per-doc cleanup would need a
+   `DELETE FROM corpus.chunks WHERE guidance_id = %s` before each upsert batch.
+   Accept or fix? Depends on whether re-chunking is needed before evals.
+
+2. **`_embed_batch` creates a new `voyageai.Client` per call.** Fine for the
+   batch job, but the query path (day 3+) should share a singleton client.
+
+3. **Partial download file corruption.** `dest.write_bytes()` is atomic if
+   the process runs to completion; a mid-write kill can leave a truncated file
+   that the cache check (`if dest.exists()`) will accept as valid. Atomic
+   write via tmp-file + `os.replace` is the fix. Low priority until a
+   corruption event is actually observed.
+
 ## 2026-05-31 — Day 2 follow-up: ingest hardening
 
 ### Decisions
@@ -34,6 +117,26 @@
 2. **`--limit` now defaults to `None` (all entries).** The manifest has 20 entries
    in the current snapshot. If the manifest grows large, callers should pass
    `--limit` explicitly to avoid long ingest runs.
+
+### Issues
+
+1. **Voyage rate limit**
+
+After fixing download resilience, hit the next failure mode: Voyage's
+free-tier rate limit (3 RPM / 10K TPM). One rate-limit error crashed
+the entire ingest, including the 5 successful downloads.
+
+**Resolution:** added payment method to Voyage account (no charge — still
+in the 200M free-token grant), unlocks 300 RPM / 1M TPM.
+
+**Lesson:** same fault-tolerance gap as the 404 issue — embedding failure
+should not lose download work. Deferred a retry-on-RateLimitError fix
+in _embed_batch; the rate limit lift removes the immediate need but
+the fault-tolerance issue stands.
+
+**Decision:** keep the deferral on the radar. If Day 6 evals show recall
+problems and we need to re-embed the corpus with different settings,
+the retry logic becomes worth shipping.
 
 ## 2026-05-30 — Day 2: ingest pipeline
 
