@@ -15,6 +15,8 @@ CREATE SCHEMA IF NOT EXISTS langgraph;  -- LangGraph checkpointer writes here
 
 -- Corpus table — populated by `python -m rra.ingest`
 -- Embedding dimension 1024 matches Voyage 3. Change if you switch models.
+-- IMPORTANT: _ensure_schema() in src/rra/ingest.py must mirror this DDL.
+-- Update both together or a schema/code drift will crash ingest.
 CREATE TABLE IF NOT EXISTS corpus.chunks (
     id              BIGSERIAL PRIMARY KEY,
     guidance_id     TEXT NOT NULL,
@@ -24,9 +26,11 @@ CREATE TABLE IF NOT EXISTS corpus.chunks (
     text            TEXT NOT NULL,
     char_start      INT NOT NULL,
     char_end        INT NOT NULL,
-    embedding       vector(1024),
+    token_count     INT NOT NULL,
+    embedding       vector(1024) NOT NULL,
     metadata        JSONB DEFAULT '{}'::jsonb,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (guidance_id, chunk_index)
 );
 
 -- Lookups by guidance_id are frequent (fetch_guidance tool, check_citation tool)
@@ -50,7 +54,8 @@ CREATE TABLE IF NOT EXISTS app.query_audit (
     response        JSONB,
     langfuse_trace_id TEXT,
     started_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-    completed_at    TIMESTAMPTZ
+    completed_at    TIMESTAMPTZ,
+    token_count     INT
 );
 
 CREATE INDEX IF NOT EXISTS query_audit_session_idx
