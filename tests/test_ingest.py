@@ -13,7 +13,7 @@ os.environ.setdefault("VOYAGE_API_KEY", "pa-test")
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
@@ -22,11 +22,12 @@ from rra.ingest import (
     VOYAGE_MAX_BATCH,
     Chunk,
     DATA_DIR,
+    DownloadedDoc,
     EmbeddedChunk,
     PDF_MIN_TEXT_LEN,
     _download_one,
     _embed_batch,
-    _urls_from_manifest,
+    _entries_from_manifest,
     chunk_text,
     download_guidances,
     embed_chunks,
@@ -37,6 +38,7 @@ from rra.ingest import (
 # ─── Shared fixtures ───────────────────────────────────────────────────────────
 
 GUIDANCE_ID = "test-guidance-001"
+GUIDANCE_TITLE = "Test FDA Guidance Document"
 
 # Enough text to produce multiple chunks (~600 words → ~800 tokens → 2 chunks at 512/50)
 LONG_TEXT = (
@@ -58,6 +60,7 @@ LONG_TEXT = (
 def sample_chunk() -> Chunk:
     return Chunk(
         guidance_id=GUIDANCE_ID,
+        guidance_title=GUIDANCE_TITLE,
         chunk_index=0,
         text="FDA guidance text sample.",
         char_start=0,
@@ -134,16 +137,17 @@ def test_parse_pdf_scanned_detection(tmp_path: Path) -> None:
 # ─── chunk_text ────────────────────────────────────────────────────────────────
 
 def test_chunk_text_empty_returns_empty() -> None:
-    assert chunk_text("", GUIDANCE_ID) == []
+    assert chunk_text("", GUIDANCE_ID, GUIDANCE_TITLE) == []
 
 
 def test_chunk_text_short_text_single_chunk() -> None:
     """Text shorter than chunk_size produces exactly one chunk."""
     text = "Short FDA guidance paragraph."
-    chunks = chunk_text(text, GUIDANCE_ID)
+    chunks = chunk_text(text, GUIDANCE_ID, GUIDANCE_TITLE)
 
     assert len(chunks) == 1
     assert chunks[0].guidance_id == GUIDANCE_ID
+    assert chunks[0].guidance_title == GUIDANCE_TITLE
     assert chunks[0].chunk_index == 0
     assert chunks[0].text == text
     assert chunks[0].char_start == 0
@@ -153,19 +157,19 @@ def test_chunk_text_short_text_single_chunk() -> None:
 
 def test_chunk_text_long_text_multiple_chunks() -> None:
     """Text longer than chunk_size produces multiple chunks."""
-    chunks = chunk_text(LONG_TEXT, GUIDANCE_ID)
+    chunks = chunk_text(LONG_TEXT, GUIDANCE_ID, GUIDANCE_TITLE)
     assert len(chunks) > 1
 
 
 def test_chunk_text_indices_sequential() -> None:
     """chunk_index values form a 0-based sequence."""
-    chunks = chunk_text(LONG_TEXT, GUIDANCE_ID)
+    chunks = chunk_text(LONG_TEXT, GUIDANCE_ID, GUIDANCE_TITLE)
     assert [c.chunk_index for c in chunks] == list(range(len(chunks)))
 
 
 def test_chunk_text_overlap_exists() -> None:
     """Consecutive chunks share some text (the overlap window)."""
-    chunks = chunk_text(LONG_TEXT, GUIDANCE_ID)
+    chunks = chunk_text(LONG_TEXT, GUIDANCE_ID, GUIDANCE_TITLE)
     assert len(chunks) >= 2
 
     # The end of chunk N and start of chunk N+1 should share content.
@@ -177,18 +181,23 @@ def test_chunk_text_overlap_exists() -> None:
 
 
 def test_chunk_text_guidance_id_propagated() -> None:
-    chunks = chunk_text(LONG_TEXT, GUIDANCE_ID)
+    chunks = chunk_text(LONG_TEXT, GUIDANCE_ID, GUIDANCE_TITLE)
     assert all(c.guidance_id == GUIDANCE_ID for c in chunks)
 
 
+def test_chunk_text_guidance_title_propagated() -> None:
+    chunks = chunk_text(LONG_TEXT, GUIDANCE_ID, GUIDANCE_TITLE)
+    assert all(c.guidance_title == GUIDANCE_TITLE for c in chunks)
+
+
 def test_chunk_text_token_counts_positive() -> None:
-    chunks = chunk_text(LONG_TEXT, GUIDANCE_ID)
+    chunks = chunk_text(LONG_TEXT, GUIDANCE_ID, GUIDANCE_TITLE)
     assert all(c.token_count > 0 for c in chunks)
 
 
 def test_chunk_text_char_offsets_span_source() -> None:
     """char_start and char_end should decode back to the chunk's text."""
-    chunks = chunk_text(LONG_TEXT, GUIDANCE_ID)
+    chunks = chunk_text(LONG_TEXT, GUIDANCE_ID, GUIDANCE_TITLE)
     for chunk in chunks:
         extracted = LONG_TEXT[chunk.char_start : chunk.char_end]
         assert extracted == chunk.text, (
@@ -202,6 +211,7 @@ def _make_chunks(n: int) -> list[Chunk]:
     return [
         Chunk(
             guidance_id=GUIDANCE_ID,
+            guidance_title=GUIDANCE_TITLE,
             chunk_index=i,
             text=f"chunk text {i}",
             char_start=i * 20,
@@ -303,6 +313,7 @@ def test_write_to_postgres_calls_executemany(
     assert len(rows) == 1
     row = rows[0]
     assert row["guidance_id"] == sample_embedded_chunk.chunk.guidance_id
+    assert row["guidance_title"] == sample_embedded_chunk.chunk.guidance_title
     assert row["embedding"] == sample_embedded_chunk.embedding
 
 
@@ -312,6 +323,7 @@ def test_write_to_postgres_upsert_fields_present(
     """Each row must contain all required DB columns."""
     required_keys = {
         "guidance_id",
+        "guidance_title",
         "chunk_index",
         "text",
         "char_start",
@@ -340,10 +352,10 @@ def test_write_to_postgres_upsert_fields_present(
     assert required_keys == set(rows[0].keys())
 
 
-# ─── _urls_from_manifest ───────────────────────────────────────────────────────
+# ─── _entries_from_manifest ────────────────────────────────────────────────────
 
-def test_urls_from_manifest_loads_urls(tmp_path: Path) -> None:
-    """URLs are read from manifest.json; entries with verification.ok=False are skipped."""
+def test_entries_from_manifest_loads_and_filters(tmp_path: Path) -> None:
+    """Entries are read from manifest.json; verification.ok=False entries skipped."""
     manifest = [
         {"id": "1", "title": "A", "url": "https://example.com/1", "verification": {"ok": True}},
         {"id": "2", "title": "B", "url": "https://example.com/2", "verification": {"ok": False}},
@@ -352,18 +364,19 @@ def test_urls_from_manifest_loads_urls(tmp_path: Path) -> None:
     (tmp_path / "manifest.json").write_text(json.dumps(manifest))
 
     with patch("rra.ingest.DATA_DIR", tmp_path):
-        urls = _urls_from_manifest()
+        entries = _entries_from_manifest()
 
-    assert "https://example.com/1" in urls  # verification.ok=True → included
-    assert "https://example.com/2" not in urls  # verification.ok=False → skipped
-    assert "https://example.com/3" in urls  # no verification field → included
-    assert len(urls) == 2
+    assert len(entries) == 2
+    ids = [e["id"] for e in entries]
+    assert "1" in ids   # verification.ok=True → included
+    assert "2" not in ids  # verification.ok=False → skipped
+    assert "3" in ids   # no verification field → included
 
 
 # ─── _download_one retry policy ────────────────────────────────────────────────
 
 def test_download_one_no_retry_on_404(tmp_path: Path) -> None:
-    """A 404 response must not trigger any retries — it should raise after one attempt."""
+    """A 404 response must not trigger any retries — raises after one attempt."""
     mock_response = MagicMock()
     mock_response.status_code = 404
     mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
@@ -373,7 +386,7 @@ def test_download_one_no_retry_on_404(tmp_path: Path) -> None:
     mock_client.get.return_value = mock_response
 
     with pytest.raises(httpx.HTTPStatusError):
-        _download_one(mock_client, "https://www.fda.gov/media/99999/download", tmp_path)
+        _download_one(mock_client, "https://www.fda.gov/media/99999/download", "99999", tmp_path)
 
     assert mock_client.get.call_count == 1
 
@@ -381,27 +394,28 @@ def test_download_one_no_retry_on_404(tmp_path: Path) -> None:
 # ─── download_guidances fault tolerance ───────────────────────────────────────
 
 def test_download_guidances_continues_on_failure(tmp_path: Path) -> None:
-    """Batch completes and returns only successful paths when one download raises."""
-    manifest_urls = [
-        "https://www.fda.gov/media/1/download",
-        "https://www.fda.gov/media/2/download",
-        "https://www.fda.gov/media/3/download",
+    """Batch completes and returns only successful DownloadedDocs when one raises."""
+    manifest_entries = [
+        {"id": "1", "title": "Doc One", "url": "https://www.fda.gov/media/1/download"},
+        {"id": "2", "title": "Doc Two", "url": "https://www.fda.gov/media/2/download"},
+        {"id": "3", "title": "Doc Three", "url": "https://www.fda.gov/media/3/download"},
     ]
 
-    def fake_download(client: Any, url: str, dest_dir: Path) -> Path:
-        if "media/2" in url:
+    def fake_download(client: Any, url: str, guidance_id: str, dest_dir: Path) -> Path:
+        if guidance_id == "2":
             raise httpx.ConnectError("connection refused")
-        stem = url.rstrip("/").split("/")[-2]
-        p = dest_dir / f"{stem}.pdf"
+        p = dest_dir / f"{guidance_id}.pdf"
         p.write_bytes(b"%PDF fake")
         return p
 
     with (
         patch("rra.ingest.DATA_DIR", tmp_path),
-        patch("rra.ingest._urls_from_manifest", return_value=manifest_urls),
+        patch("rra.ingest._entries_from_manifest", return_value=manifest_entries),
         patch("rra.ingest._download_one", side_effect=fake_download),
     ):
-        paths = download_guidances()
+        docs = download_guidances()
 
-    assert len(paths) == 2
-    assert all(p.exists() for p in paths)
+    assert len(docs) == 2
+    assert all(doc.path.exists() for doc in docs)
+    assert {d.guidance_id for d in docs} == {"1", "3"}
+    assert {d.guidance_title for d in docs} == {"Doc One", "Doc Three"}
