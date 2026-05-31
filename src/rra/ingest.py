@@ -7,6 +7,7 @@ This is a batch job (correctness and reproducibility over latency).
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +22,7 @@ import voyageai
 from pgvector.psycopg import register_vector
 from tenacity import (
     retry,
+    retry_if_exception,
     retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
@@ -34,22 +36,6 @@ log = structlog.get_logger(__name__)
 
 VOYAGE_MAX_BATCH: Final[int] = 128
 PDF_MIN_TEXT_LEN: Final[int] = 500  # texts shorter than this are likely scanned images
-
-# v1 corpus: a representative set of FDA guidance PDFs.
-# TODO: verify these URLs are still current before running ingest.
-# Source: https://www.fda.gov/regulatory-information/search-fda-guidance-documents
-# Production approach: paginate the FDA guidance API and persist a manifest.
-# See docs/future-work.md for the production guidance API approach.
-_CORPUS_URLS: Final[list[str]] = [
-    "https://www.fda.gov/media/119522/download",  # Software as Medical Device (SaMD)
-    "https://www.fda.gov/media/130958/download",  # SaMD: Clinical Evaluation
-    "https://www.fda.gov/media/117169/download",  # Multiple Function Device Products
-    "https://www.fda.gov/media/72674/download",   # De Novo Request Program
-    "https://www.fda.gov/media/82395/download",   # 510(k) Program
-    "https://www.fda.gov/media/71607/download",   # Design Controls
-    "https://www.fda.gov/media/75544/download",   # Software Validation
-    "https://www.fda.gov/media/80958/download",   # Cybersecurity in Medical Devices
-]
 
 DATA_DIR: Final[Path] = PROJECT_ROOT / "data" / "corpus"
 
@@ -78,26 +64,61 @@ class EmbeddedChunk:
 
 # ─── Download ──────────────────────────────────────────────────────────────────
 
-def download_guidances(limit: int) -> list[Path]:
+def _urls_from_manifest() -> list[str]:
+    """Load download URLs from data/corpus/manifest.json.
+
+    Skips entries where verification.ok is explicitly False.
+    """
+    entries = json.loads((DATA_DIR / "manifest.json").read_text())
+    return [
+        e["url"]
+        for e in entries
+        if not (e.get("verification", {}).get("ok") is False)
+    ]
+
+
+def download_guidances(limit: int | None = None) -> list[Path]:
     """Download up to *limit* FDA guidance PDFs into DATA_DIR.
 
-    Already-cached files are skipped. Returns paths to all available local files
-    (downloaded + previously cached) up to *limit*.
+    Already-cached files are skipped. If one document fails after retries,
+    the failure is logged and the rest of the batch continues. Returns only
+    successful paths.
     """
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    urls = _CORPUS_URLS[:limit]
+    urls = _urls_from_manifest()
+    if limit is not None:
+        urls = urls[:limit]
 
     paths: list[Path] = []
+    failures: list[str] = []
     with httpx.Client(timeout=60.0, follow_redirects=True) as client:
         for url in urls:
-            path = _download_one(client, url, DATA_DIR)
-            if path is not None:
-                paths.append(path)
+            try:
+                path = _download_one(client, url, DATA_DIR)
+                if path is not None:
+                    paths.append(path)
+            except Exception:
+                log.error("corpus.download.failed", url=url)
+                failures.append(url)
+
+    log.info(
+        "corpus.download.summary",
+        succeeded=len(paths),
+        failed=len(failures),
+    )
     return paths
 
 
+def _is_retryable(exc: BaseException) -> bool:
+    # Retry only on server errors (5xx) or transient network failures.
+    # Client errors (4xx, including 404) are permanent — do not retry.
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code >= 500
+    return isinstance(exc, (httpx.TimeoutException, httpx.ConnectError, httpx.ReadError))
+
+
 @retry(
-    retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.TransportError)),
+    retry=retry_if_exception(_is_retryable),
     wait=wait_exponential(multiplier=1, min=2, max=30),
     stop=stop_after_attempt(4),
     reraise=True,
@@ -312,7 +333,7 @@ def main() -> int:
     parser.add_argument(
         "--limit",
         type=int,
-        default=len(_CORPUS_URLS),
+        default=None,
         help="Maximum number of documents to ingest (default: all)",
     )
     args = parser.parse_args()

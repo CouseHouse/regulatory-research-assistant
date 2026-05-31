@@ -1,5 +1,40 @@
 # Dev log
 
+## 2026-05-31 — Day 2 follow-up: ingest hardening
+
+### Decisions
+
+1. **Replaced `_CORPUS_URLS` with `_urls_from_manifest()`.** The hardcoded list
+   was the root cause of 404 failures against real FDA URLs — no one had verified
+   them. `_urls_from_manifest()` reads `data/corpus/manifest.json` and skips any
+   entry where `verification.ok is False`. The manifest is now the single source
+   of truth for which documents to ingest.
+
+2. **Narrowed the tenacity retry predicate on `_download_one`.** The old
+   `retry_if_exception_type((httpx.HTTPStatusError, httpx.TransportError))`
+   retried 4xx responses, burning all 4 attempts on a permanent 404.  Switched to
+   `retry_if_exception(_is_retryable)` which retries only on 5xx status codes
+   and transient network exceptions (`TimeoutException`, `ConnectError`,
+   `ReadError`).
+
+3. **`download_guidances` now fault-tolerant.** One bad document no longer
+   crashes the whole batch: each `_download_one` call is wrapped in try/except,
+   failures are logged at error level and appended to a failure list, and only
+   successful paths are returned. A summary log line (succeeded/failed counts)
+   fires after every run.
+
+### Open questions
+
+1. **Manifest `verification.ok` is `"skipped"` for all current entries.** The
+   scraper writes `{"ok": true, "reason": "skipped"}` without ever doing a live
+   HEAD check. Real verification (HTTP HEAD → confirm 200 + Content-Type PDF)
+   would let the filter actually do work. Worth a scraper pass before next ingest
+   run.
+
+2. **`--limit` now defaults to `None` (all entries).** The manifest has 20 entries
+   in the current snapshot. If the manifest grows large, callers should pass
+   `--limit` explicitly to avoid long ingest runs.
+
 ## 2026-05-30 — Day 2: ingest pipeline
 
 ### What was built
@@ -54,10 +89,11 @@ Key functions in `ingest.py`:
    (idempotent), merging it into the document transaction simplifies the code
    without changing semantics.
 
-3. **`_embed_batch` creates a new `voyageai.Client` per call.** Slightly
-   inefficient, but a new connection on each retry is actually desirable. A
-   module-level singleton would require the API key at import time, breaking
-   tests that mock the key.
+3. **`_embed_batch` creates a new `voyageai.Client` per call.** Slightly inefficient 
+   (~50ms per batch of overhead) but acceptable for the once-a-week ingest job. 
+   A lazy module-level singleton via functools.lru_cache would be cleaner and is the right fix; 
+   deferred because the query-path code (day 3+) will need a shared client and is the 
+   natural place to introduce the helper.
 
 4. **PDF filename stem as `guidance_id`.** Used `path.stem` (e.g., `"72674"` for
    `72674.pdf`). See Open Question #2 for the readability tradeoff.

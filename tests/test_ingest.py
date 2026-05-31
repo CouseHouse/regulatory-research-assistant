@@ -10,19 +10,25 @@ import os
 os.environ.setdefault("ANTHROPIC_API_KEY", "sk-ant-test")
 os.environ.setdefault("VOYAGE_API_KEY", "pa-test")
 
+import json
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, call, patch
 
+import httpx
 import pytest
 
 from rra.ingest import (
     VOYAGE_MAX_BATCH,
     Chunk,
+    DATA_DIR,
     EmbeddedChunk,
     PDF_MIN_TEXT_LEN,
+    _download_one,
     _embed_batch,
+    _urls_from_manifest,
     chunk_text,
+    download_guidances,
     embed_chunks,
     parse_pdf,
     write_to_postgres,
@@ -332,3 +338,70 @@ def test_write_to_postgres_upsert_fields_present(
 
     _sql, rows = mock_cursor.executemany.call_args.args
     assert required_keys == set(rows[0].keys())
+
+
+# ─── _urls_from_manifest ───────────────────────────────────────────────────────
+
+def test_urls_from_manifest_loads_urls(tmp_path: Path) -> None:
+    """URLs are read from manifest.json; entries with verification.ok=False are skipped."""
+    manifest = [
+        {"id": "1", "title": "A", "url": "https://example.com/1", "verification": {"ok": True}},
+        {"id": "2", "title": "B", "url": "https://example.com/2", "verification": {"ok": False}},
+        {"id": "3", "title": "C", "url": "https://example.com/3"},
+    ]
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+
+    with patch("rra.ingest.DATA_DIR", tmp_path):
+        urls = _urls_from_manifest()
+
+    assert "https://example.com/1" in urls  # verification.ok=True → included
+    assert "https://example.com/2" not in urls  # verification.ok=False → skipped
+    assert "https://example.com/3" in urls  # no verification field → included
+    assert len(urls) == 2
+
+
+# ─── _download_one retry policy ────────────────────────────────────────────────
+
+def test_download_one_no_retry_on_404(tmp_path: Path) -> None:
+    """A 404 response must not trigger any retries — it should raise after one attempt."""
+    mock_response = MagicMock()
+    mock_response.status_code = 404
+    mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "Not Found", request=MagicMock(), response=mock_response
+    )
+    mock_client = MagicMock()
+    mock_client.get.return_value = mock_response
+
+    with pytest.raises(httpx.HTTPStatusError):
+        _download_one(mock_client, "https://www.fda.gov/media/99999/download", tmp_path)
+
+    assert mock_client.get.call_count == 1
+
+
+# ─── download_guidances fault tolerance ───────────────────────────────────────
+
+def test_download_guidances_continues_on_failure(tmp_path: Path) -> None:
+    """Batch completes and returns only successful paths when one download raises."""
+    manifest_urls = [
+        "https://www.fda.gov/media/1/download",
+        "https://www.fda.gov/media/2/download",
+        "https://www.fda.gov/media/3/download",
+    ]
+
+    def fake_download(client: Any, url: str, dest_dir: Path) -> Path:
+        if "media/2" in url:
+            raise httpx.ConnectError("connection refused")
+        stem = url.rstrip("/").split("/")[-2]
+        p = dest_dir / f"{stem}.pdf"
+        p.write_bytes(b"%PDF fake")
+        return p
+
+    with (
+        patch("rra.ingest.DATA_DIR", tmp_path),
+        patch("rra.ingest._urls_from_manifest", return_value=manifest_urls),
+        patch("rra.ingest._download_one", side_effect=fake_download),
+    ):
+        paths = download_guidances()
+
+    assert len(paths) == 2
+    assert all(p.exists() for p in paths)
