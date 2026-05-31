@@ -6,6 +6,7 @@ The function signature is part of the frozen API contract (docs/plan/day03.md).
 """
 from __future__ import annotations
 
+import contextlib
 from functools import lru_cache
 from typing import Any
 
@@ -47,6 +48,7 @@ def search_corpus(
     query: str,
     k: int | None = None,
     filters: dict[str, Any] | None = None,
+    lf: Any | None = None,
 ) -> list[RetrievedPassage]:
     """Retrieve top-k passages for *query* via vector search then rerank.
 
@@ -62,10 +64,32 @@ def search_corpus(
                  Defaults to settings.rerank_top_k (5).
         filters: Optional filter dict. Recognised key:
                    "guidance_ids": list[str] — restrict to these guidance_ids.
+        lf:      Langfuse client for nested instrumentation.
+                 Pass None (default) to skip instrumentation entirely.
     """
     if k is None:
         k = settings.rerank_top_k
 
+    obs_cm = (
+        lf.start_as_current_observation(
+            name="search_corpus",
+            as_type="retriever",
+            input={"query": query, "k": k},
+        )
+        if lf is not None
+        else contextlib.nullcontext(None)
+    )
+
+    with obs_cm as span:
+        return _search_corpus_inner(query, k, filters, span)
+
+
+def _search_corpus_inner(
+    query: str,
+    k: int,
+    filters: dict[str, Any] | None,
+    span: Any | None,
+) -> list[RetrievedPassage]:
     client = _voyage_client()
 
     # ADR 0005: query must use input_type="query"; corpus was indexed with "document".
@@ -106,6 +130,8 @@ def search_corpus(
             rows: list[dict[str, Any]] = cur.fetchall()
 
     if not rows:
+        if span is not None:
+            span.update(output={"passage_count": 0, "passages": []})
         return []
 
     candidates = [
@@ -124,9 +150,27 @@ def search_corpus(
     texts = [p.text for p in candidates]
     rerank_resp = client.rerank(query, texts, model=settings.rerank_model, top_k=k)
 
-    return [
+    results = [
         RetrievedPassage(
             **{**candidates[r.index].model_dump(), "score": float(r.relevance_score)}
         )
         for r in rerank_resp.results
     ]
+
+    if span is not None:
+        span.update(
+            output={
+                "passage_count": len(results),
+                "passages": [
+                    {
+                        "guidance_id": p.guidance_id,
+                        "chunk_index": p.chunk_index,
+                        "title": p.guidance_title,
+                        "score": p.score,
+                    }
+                    for p in results
+                ],
+            }
+        )
+
+    return results

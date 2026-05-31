@@ -54,5 +54,5 @@ class QueryResponse(BaseModel):
     passages: list[RetrievedPassage]
     trace_id: str | None = Field(
         default=None,
-        description="Langfuse trace ID — populated once Langfuse is wired in Day 4.",
+        description="Langfuse trace ID. Populated when settings.langfuse_enabled is True.",
     )

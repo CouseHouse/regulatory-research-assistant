@@ -44,8 +44,7 @@
 
 ### Deferred items
 
-- **Langfuse trace wiring**: `trace_id` is always `None` in Day 3 responses. Wired in Day 4
-  alongside the LangGraph orchestrator (the trace object is naturally tied to a LangGraph run).
+- ~~**Langfuse trace wiring**~~ — **Shipped in Day 3 follow-up** (see below).
 - **Connection pool root cause**: The adapter serialization failure under psycopg_pool + anyio
   threadpool is not fully diagnosed; the text-literal workaround is robust but not elegant.
   Worth filing a psycopg_pool issue or pinning to a tested version.
@@ -364,3 +363,29 @@ Key functions in `ingest.py`:
 ### Commands blocked by hooks
 
 None — no hook restrictions were encountered during this session.
+
+---
+
+## 2026-05-31 — Day 3 follow-up: Langfuse instrumentation
+
+### What was instrumented
+
+Three scopes, all gated on `settings.langfuse_enabled`:
+
+1. **`/query` endpoint** (`src/rra/api.py`) — each request becomes a top-level `SPAN` named `query`. Input is `{query, product_context}`; output is `{answer, citation_count}`. The `trace_id` field in `QueryResponse` now carries the real Langfuse trace ID (was `None` in every Day 3 response).
+
+2. **`search_corpus`** (`src/rra/retrieval.py`) — wrapped in a `RETRIEVER` span. Input is `{query, k}`; output is `{passage_count, passages: [{guidance_id, chunk_index, title, score}]}`. Shows vector recall candidates narrowed by rerank.
+
+3. **Anthropic call** (`src/rra/api.py`) — `GENERATION` span named `anthropic-call` with `model`, full messages array as input, final answer text as output, and `usage_details: {input, output}` token counts.
+
+### SDK version note
+
+`pyproject.toml` declared `langfuse>=2.50.0` but uv resolved to **4.7.1**. The v4 SDK switched from a stateful `trace.span()` / `trace.generation()` API to OpenTelemetry context managers (`start_as_current_observation`). The instrumentation uses `contextlib.nullcontext` as the no-op gate when Langfuse is disabled, so no errors or warnings occur in environments without keys.
+
+### Why it was deferred originally
+
+The Day 3 commit left `trace_id=None  # Langfuse wired in Day 4` in the response and made no entry in `future-work.md`. The reasoning was that the trace object in the planned Day 4 design is naturally tied to a LangGraph run, making it the "right" place to hook in. That's true for the orchestrator-level trace — but the retrieval + single-LLM-call path is already complete and observable now, and deferring left a blind spot precisely when the retrieval pipeline is being tuned.
+
+### Lesson
+
+A `# TODO: wire in Day N` comment in shipped code is invisible to future-work planning. If a feature is genuinely deferred, it belongs in `docs/future-work.md` with a reopen trigger, not in a code comment that no one scans at planning time. The rule going forward: either ship the instrumentation with the feature, or add an explicit entry to `future-work.md` — comments in code don't count as tracking.
