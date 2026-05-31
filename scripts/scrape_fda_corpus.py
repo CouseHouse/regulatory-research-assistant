@@ -1,33 +1,32 @@
-"""Scrape the FDA guidance documents index to build a corpus manifest.
+"""Scrape the FDA guidance index and produce a candidate manifest with
+cluster assignments.
 
-NOT a production tool. Run-it-once-per-project utility. Lives in scripts/ to
-keep it out of the application package and out of the strict-mypy net.
+NOT a production tool. Run-it-once-per-corpus utility.
 
-Pipeline:
-  1. Fetch https://www.fda.gov/files/api/datatables/static/search-for-guidance.json
-     (the JSON endpoint that backs the FDA guidance database web UI)
-  2. Filter by:
-       - field_regulated_product_field contains "Medical Devices"
-         (CDRH; we don't want food / dietary / animal guidances)
-       - field_final_guidance_1 == "Final" (skip drafts unless --include-drafts)
-       - field_associated_media_2 contains a /media/{id}/download link
-         (skip entries that have no downloadable PDF)
-       - title matches at least one TOPIC_KEYWORDS set, OR --no-topic-filter
-  3. Verify each candidate URL with a HEAD request — alive? returns PDF?
-  4. Write data/corpus/manifest.json — input to src/rra/ingest.py
+What it does:
+  1. Fetches https://www.fda.gov/files/api/datatables/static/search-for-guidance.json
+  2. Filters to CDRH Final guidances with downloadable PDFs
+  3. Applies CLUSTER_KEYWORDS to assign each candidate to one of six clusters
+     (or 'unclassified' if no match)
+  4. Optionally HEAD-verifies each URL
+  5. Writes data/corpus/manifest.candidates.json — the input to the review tool
 
 What it doesn't do:
-  - Replace your judgment. Output is a CANDIDATE list. Review it.
-  - Survive FDA changing the schema. If parsing breaks, run with --debug and
-    look at the first raw row to see the new shape.
+  - Replace your judgment. Output is a CANDIDATE list. Use the review tool
+    (scripts/review_corpus.py) to approve/reject entries before ingest.
+  - Survive FDA changing the schema. If parsing breaks, run with --debug
+    and look at the first raw row.
 
 Usage:
-    python scripts/scrape_fda_corpus.py                       # default run
+    python scripts/scrape_fda_corpus.py                       # full run, all clusters
     python scripts/scrape_fda_corpus.py --limit 30 --debug    # quick test
-    python scripts/scrape_fda_corpus.py --topics ai-ml cybersecurity
-    python scripts/scrape_fda_corpus.py --no-topic-filter     # all CDRH finals
-    python scripts/scrape_fda_corpus.py --include-drafts
+    python scripts/scrape_fda_corpus.py --clusters software-samd-ai cybersecurity
+    python scripts/scrape_fda_corpus.py --include-unclassified  # keep no-match too
     python scripts/scrape_fda_corpus.py --no-verify           # skip HEAD checks
+
+After this finishes, run:
+    python scripts/review_corpus.py
+to approve/reject entries and produce the final data/corpus/manifest.json.
 """
 
 from __future__ import annotations
@@ -47,7 +46,6 @@ import httpx
 
 FDA_INDEX_URL = "https://www.fda.gov/files/api/datatables/static/search-for-guidance.json"
 
-# Headers the endpoint expects. Without X-Requested-With it returns HTML.
 FDA_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -58,73 +56,115 @@ FDA_HEADERS = {
     "Referer": "https://www.fda.gov/regulatory-information/search-fda-guidance-documents",
 }
 
-# The PDF URL pattern. Used to build PDF URLs we'll feed to ingest.py.
 FDA_PDF_URL_TEMPLATE = "https://www.fda.gov/media/{id}/download"
 
-# Topic taxonomy — keyword sets matching the Option 1 curation criteria.
-# Deliberately broad; YOU narrow the list in the review step.
-TOPIC_KEYWORDS: dict[str, list[str]] = {
-    "ai-ml": [
+# Cluster taxonomy — each cluster maps to a set of title-keyword patterns.
+# Order matters: clusters earlier in the list win ties.
+#
+# These are deliberately broad. False positives are fine because the review
+# tool lets you reject them; false negatives (relevant docs not matched) are
+# the bigger problem because you might miss them entirely.
+CLUSTER_KEYWORDS: dict[str, list[str]] = {
+    "software-samd-ai": [
+        "software as a medical device",
+        "samd",
+        "software function",
         "artificial intelligence",
         "machine learning",
         "ai-enabled",
         "ai/ml",
         "predetermined change control",
         "pccp",
-    ],
-    "samd": [
-        "software as a medical device",
-        "samd",
-        "software functions",
-        "digital health",
+        "good machine learning",
         "clinical decision support",
+        "digital health",
+        "computer-assisted detection",
+        "computer aided detection",
+        "general principles of software",
+        "off-the-shelf software",
+        "off the shelf software",
+        "principles for software validation",
+        "transparency for machine learning",
+        "device software function",
+        "multiple function device",
     ],
     "cybersecurity": [
         "cybersecurity",
         "cyber security",
+        "cyber devices",
     ],
-    "510k": [
-        "510(k)",
-        "510k",
-        "premarket notification",
-        "substantial equivalence",
-        "special 510",
-        "abbreviated 510",
-    ],
-    "design-controls": [
-        "design controls",
-        "quality system",
-        "21 cfr 820",
-        "design considerations",
-        "human factors",
-    ],
-    "software-validation": [
-        "software validation",
-        "off-the-shelf software",
-        "general principles of software",
-        "principles for software validation",
-    ],
-    "denovo": [
-        "de novo",
-    ],
-    "modifications": [
-        "modifications to existing",
+    "modification-decisions": [
         "deciding when to submit",
+        "changes to existing device",
         "change to an existing device",
         "software change",
+        "special 510",
+        "modifications to devices",
+        "30-day notice",
+        "135-day pma",
+        "75-day humanitarian",
+        "device modification",
+    ],
+    "pathway-classification": [
+        "510(k)",
+        "510k",
+        "de novo",
+        "premarket notification",
+        "substantial equivalence",
+        "premarket approval",
+        "humanitarian device exemption",
+        "refuse to accept",
+        "acceptance review",
+        "q-submission",
+        "pre-submission",
+        "benefit-risk",
+        "abbreviated 510",
+        "format for traditional",
+        "evaluating substantial equivalence",
+    ],
+    "design-controls-qms": [
+        "design control",
+        "quality system",
+        "21 cfr 820",
+        "human factors",
+        "usability engineering",
+        "iso 14971",
+        "risk management",
+        "postmarket surveillance",
+        "section 522",
+        "design considerations",
+        "recall",
+        "product enhancement",
+        "manufacturing practice",
     ],
     "clinical-evidence": [
         "real-world evidence",
         "real-world data",
+        "real world evidence",
+        "real world data",
         "clinical evaluation",
         "patient-reported outcome",
+        "patient reported outcome",
+        "pivotal clinical",
+        "clinical investigation",
+        "clinical performance",
+        "animal stud",
+        "adaptive design",
+        "acceptance of clinical data",
     ],
 }
 
-OUTPUT_PATH = Path(__file__).resolve().parent.parent / "data" / "corpus" / "manifest.json"
+# Communication types we generally want to skip. These are auxiliary docs.
+# Override with --include-auxiliary if you want them in the candidate list.
+SKIP_COMMUNICATION_TYPES = {
+    "Industry Letter",
+    "Small Entity Compliance Guide",
+}
+
+OUTPUT_PATH = Path(__file__).resolve().parent.parent / "data" / "corpus" / "manifest.candidates.json"
 
 REQUEST_TIMEOUT = 30.0
-INTER_REQUEST_DELAY = 0.15  # seconds between HEAD requests; be polite
+INTER_REQUEST_DELAY = 0.15
 
 # ─── Data shapes ────────────────────────────────────────────────────────────
 
@@ -134,7 +174,9 @@ class CandidateEntry:
     id: str
     title: str
     url: str
-    topics: list[str]
+    cluster: str
+    cluster_matches: list[str]  # all clusters whose keywords matched, for review context
+    matched_keywords: list[str]  # the actual keywords that triggered the assignment
     issued: str | None = None
     fda_center: str | None = None
     status: str | None = None
@@ -146,7 +188,9 @@ class VerifiedEntry:
     id: str
     title: str
     url: str
-    topics: list[str]
+    cluster: str
+    cluster_matches: list[str]
+    matched_keywords: list[str]
     issued: str | None = None
     fda_center: str | None = None
     status: str | None = None
@@ -161,20 +205,17 @@ class VerifiedEntry:
 
 
 def fetch_fda_index() -> list[dict[str, Any]]:
-    """Fetch the FDA guidance index. Returns the raw row list."""
     print(f"  → GET {FDA_INDEX_URL}", file=sys.stderr)
 
     with httpx.Client(timeout=REQUEST_TIMEOUT, headers=FDA_HEADERS, follow_redirects=True) as client:
         response = client.get(FDA_INDEX_URL)
         response.raise_for_status()
-
-        # The endpoint returns a bare JSON array of row dicts.
         data = response.json()
 
     if not isinstance(data, list):
         raise RuntimeError(
-            f"Unexpected response shape from FDA index: got {type(data).__name__}, "
-            f"expected list. The endpoint schema may have changed."
+            f"Unexpected response shape: got {type(data).__name__}, expected list. "
+            f"FDA endpoint schema may have changed."
         )
 
     print(f"  ← {len(data)} rows received", file=sys.stderr)
@@ -185,7 +226,6 @@ def fetch_fda_index() -> list[dict[str, Any]]:
 
 
 def _strip_html(s: str) -> str:
-    """Strip HTML tags and decode common entities."""
     s = re.sub(r"<[^>]+>", "", s)
     s = s.replace("&amp;", "&").replace("&#039;", "'").replace("&quot;", '"')
     s = re.sub(r"\s+", " ", s).strip()
@@ -193,27 +233,58 @@ def _strip_html(s: str) -> str:
 
 
 def _extract_pdf_id(html_fragment: str) -> str | None:
-    """Pull a numeric PDF id out of an HTML fragment containing
-    /media/{id}/download."""
     match = re.search(r"/media/(\d+)/download", html_fragment)
     return match.group(1) if match else None
 
 
-def parse_row(row: dict[str, Any], *, include_drafts: bool = False) -> CandidateEntry | None:
-    """Convert one FDA row into a CandidateEntry, or None if it fails any
-    structural filter."""
+def assign_cluster(title: str) -> tuple[str, list[str], list[str]]:
+    """Determine cluster, all matched clusters, and matched keywords for a title.
 
-    # 1. CDRH only — drop food, dietary supplements, animal products, etc.
+    Returns:
+        (primary_cluster, all_matching_clusters, matched_keywords)
+
+    The primary_cluster is the first cluster in CLUSTER_KEYWORDS order that
+    matches. all_matching_clusters lists every cluster with at least one
+    keyword match — useful in the review UI to surface ambiguous entries.
+    """
+    title_lower = title.lower()
+    all_matches: list[str] = []
+    matched_keywords: list[str] = []
+
+    for cluster, keywords in CLUSTER_KEYWORDS.items():
+        matches_in_this_cluster = [kw for kw in keywords if kw in title_lower]
+        if matches_in_this_cluster:
+            all_matches.append(cluster)
+            matched_keywords.extend(matches_in_this_cluster)
+
+    primary = all_matches[0] if all_matches else "unclassified"
+    return primary, all_matches, matched_keywords
+
+
+def parse_row(
+    row: dict[str, Any],
+    *,
+    include_drafts: bool = False,
+    include_auxiliary: bool = False,
+) -> CandidateEntry | None:
+    """Convert one FDA row into a CandidateEntry, or None if it fails filters."""
+
+    # CDRH only
     product_field = str(row.get("field_regulated_product_field", ""))
     if "Medical Devices" not in product_field:
         return None
 
-    # 2. Final guidance only (unless including drafts)
+    # Final only (unless including drafts)
     status = str(row.get("field_final_guidance_1", ""))
     if status != "Final" and not include_drafts:
         return None
 
-    # 3. Must have a downloadable PDF
+    # Skip auxiliary doc types unless explicitly included
+    comm_type = str(row.get("field_communication_type", ""))
+    if not include_auxiliary and comm_type in SKIP_COMMUNICATION_TYPES:
+        return None
+
+    # Must have a downloadable PDF
     media_html = str(row.get("field_associated_media_2", ""))
     if not media_html:
         return None
@@ -221,46 +292,35 @@ def parse_row(row: dict[str, Any], *, include_drafts: bool = False) -> Candidate
     if not pdf_id:
         return None
 
-    # 4. Extract the title (from the title field's anchor text)
     title_html = str(row.get("title", ""))
     title = _strip_html(title_html)
     if not title:
         return None
 
     pdf_url = FDA_PDF_URL_TEMPLATE.format(id=pdf_id)
-    topics = match_topics(title)
+    cluster, cluster_matches, matched_keywords = assign_cluster(title)
 
     issued = row.get("field_issue_datetime") or None
     fda_center = row.get("field_center") or None
-    communication_type = row.get("field_communication_type") or None
 
     return CandidateEntry(
         id=pdf_id,
         title=title,
         url=pdf_url,
-        topics=topics,
+        cluster=cluster,
+        cluster_matches=cluster_matches,
+        matched_keywords=matched_keywords,
         issued=str(issued) if issued else None,
         fda_center=str(fda_center) if fda_center else None,
         status=status,
-        communication_type=str(communication_type) if communication_type else None,
+        communication_type=comm_type or None,
     )
-
-
-def match_topics(title: str) -> list[str]:
-    """Return the list of topics whose keywords appear in the title."""
-    title_lower = title.lower()
-    return [
-        topic
-        for topic, keywords in TOPIC_KEYWORDS.items()
-        if any(kw in title_lower for kw in keywords)
-    ]
 
 
 # ─── Verification ───────────────────────────────────────────────────────────
 
 
 def verify_url(client: httpx.Client, candidate: CandidateEntry) -> VerifiedEntry:
-    """HEAD the PDF URL; return a VerifiedEntry with the result."""
     verification: dict[str, Any] = {"ok": False, "reason": None}
     content_type: str | None = None
     content_length: int | None = None
@@ -291,7 +351,9 @@ def verify_url(client: httpx.Client, candidate: CandidateEntry) -> VerifiedEntry
         id=candidate.id,
         title=candidate.title,
         url=candidate.url,
-        topics=candidate.topics,
+        cluster=candidate.cluster,
+        cluster_matches=candidate.cluster_matches,
+        matched_keywords=candidate.matched_keywords,
         issued=candidate.issued,
         fda_center=candidate.fda_center,
         status=candidate.status,
@@ -310,81 +372,87 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--limit", type=int, default=None, help="cap candidates (for testing)")
+    parser.add_argument("--limit", type=int, default=None, help="cap candidates (testing)")
     parser.add_argument(
-        "--topics", nargs="+", default=None, help=f"restrict to: {list(TOPIC_KEYWORDS.keys())}"
+        "--clusters",
+        nargs="+",
+        default=None,
+        help=f"restrict to these clusters: {list(CLUSTER_KEYWORDS.keys())}",
     )
     parser.add_argument(
-        "--no-topic-filter",
+        "--include-unclassified",
         action="store_true",
-        help="include all CDRH finals regardless of title topic match",
+        help="include entries that didn't match any cluster",
     )
     parser.add_argument("--include-drafts", action="store_true", help="include Draft guidances")
-    parser.add_argument("--no-verify", action="store_true", help="skip URL verification (faster)")
+    parser.add_argument(
+        "--include-auxiliary",
+        action="store_true",
+        help="include Industry Letters and Small Entity Compliance Guides",
+    )
+    parser.add_argument("--no-verify", action="store_true", help="skip HEAD verification")
     parser.add_argument("--debug", action="store_true", help="verbose output")
     parser.add_argument(
         "--output", type=Path, default=OUTPUT_PATH, help=f"output (default: {OUTPUT_PATH})"
     )
     args = parser.parse_args()
 
-    # 1. Fetch
     print("Fetching FDA guidance index...", file=sys.stderr)
     try:
         rows = fetch_fda_index()
     except Exception as e:
-        print(f"  ✗ Failed to fetch index: {e}", file=sys.stderr)
+        print(f"  ✗ Failed: {e}", file=sys.stderr)
         return 1
 
-    if args.debug and rows:
-        print("\nFirst raw row (for schema reference):", file=sys.stderr)
-        print(json.dumps(rows[0], indent=2)[:1500], file=sys.stderr)
-        print("...", file=sys.stderr)
-
-    # 2. Parse and apply structural filters
     print(f"\nParsing {len(rows)} rows...", file=sys.stderr)
     candidates: list[CandidateEntry] = []
     for row in rows:
-        c = parse_row(row, include_drafts=args.include_drafts)
+        c = parse_row(
+            row,
+            include_drafts=args.include_drafts,
+            include_auxiliary=args.include_auxiliary,
+        )
         if c is not None:
             candidates.append(c)
     print(f"  → {len(candidates)} CDRH finals with downloadable PDFs", file=sys.stderr)
 
-    # 3. Topic filter
-    if not args.no_topic_filter:
+    # Cluster filter
+    if not args.include_unclassified:
         before = len(candidates)
-        if args.topics:
-            # User-specified topics — keep entries matching ANY of them
-            candidates = [c for c in candidates if any(t in args.topics for t in c.topics)]
-        else:
-            # Default — keep entries matching ANY known topic
-            candidates = [c for c in candidates if c.topics]
+        candidates = [c for c in candidates if c.cluster != "unclassified"]
+        dropped = before - len(candidates)
+        print(f"  → dropped {dropped} unclassified entries", file=sys.stderr)
+
+    if args.clusters:
+        before = len(candidates)
+        candidates = [c for c in candidates if c.cluster in args.clusters]
         print(
-            f"  → {len(candidates)} after topic filter (dropped {before - len(candidates)})",
+            f"  → {len(candidates)} after --clusters filter (dropped {before - len(candidates)})",
             file=sys.stderr,
         )
 
     if args.limit:
         candidates = candidates[: args.limit]
-        print(f"  → limited to {len(candidates)}", file=sys.stderr)
 
     if args.debug:
         print("\nFirst 15 candidates:", file=sys.stderr)
         for c in candidates[:15]:
-            topics_str = ",".join(c.topics) if c.topics else "(no topic)"
-            print(f"    • [{topics_str}] {c.id}: {c.title[:80]}", file=sys.stderr)
+            print(f"    [{c.cluster}] {c.id}: {c.title[:75]}", file=sys.stderr)
 
     if not candidates:
-        print("  ✗ No candidates. Try --no-topic-filter to see all CDRH finals.", file=sys.stderr)
+        print("  ✗ No candidates. Loosen filters.", file=sys.stderr)
         return 1
 
-    # 4. Verify (or skip)
+    # Verify
     if args.no_verify:
         verified: list[VerifiedEntry] = [
             VerifiedEntry(
                 id=c.id,
                 title=c.title,
                 url=c.url,
-                topics=c.topics,
+                cluster=c.cluster,
+                cluster_matches=c.cluster_matches,
+                matched_keywords=c.matched_keywords,
                 issued=c.issued,
                 fda_center=c.fda_center,
                 status=c.status,
@@ -394,7 +462,7 @@ def main() -> int:
             for c in candidates
         ]
     else:
-        print(f"\nVerifying {len(candidates)} URLs (HEAD requests)...", file=sys.stderr)
+        print(f"\nVerifying {len(candidates)} URLs...", file=sys.stderr)
         verified = []
         with httpx.Client(headers=FDA_HEADERS) as client:
             for i, candidate in enumerate(candidates, 1):
@@ -407,39 +475,29 @@ def main() -> int:
                     print(f"  {marker} [{i}/{len(candidates)}] {result.id}{suffix}", file=sys.stderr)
                 time.sleep(INTER_REQUEST_DELAY)
 
-    # 5. Report
     alive = [v for v in verified if v.verification["ok"]]
     dead = [v for v in verified if not v.verification["ok"]]
 
     print(f"\nResults: {len(alive)} verified, {len(dead)} failed", file=sys.stderr)
-    if dead:
-        print("\nFailed URLs (will not be written to manifest):", file=sys.stderr)
-        for d in dead:
-            print(f"  ✗ {d.id} — {d.verification.get('reason')} — {d.title[:60]}", file=sys.stderr)
 
-    # 6. Write output
+    # Write candidate manifest
     args.output.parent.mkdir(parents=True, exist_ok=True)
     payload = [asdict(v) for v in alive]
     args.output.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
-    print(f"\nWrote {len(alive)} entries to {args.output}", file=sys.stderr)
+    print(f"\nWrote {len(alive)} candidates to {args.output}", file=sys.stderr)
 
-    # 7. Topic breakdown
-    if alive:
-        topic_counts: dict[str, int] = {}
-        for v in alive:
-            for t in v.topics or ["(no-topic)"]:
-                topic_counts[t] = topic_counts.get(t, 0) + 1
-        print("\nTopic breakdown:", file=sys.stderr)
-        for t, n in sorted(topic_counts.items(), key=lambda kv: -kv[1]):
-            print(f"  {n:4d}  {t}", file=sys.stderr)
+    # Cluster breakdown
+    cluster_counts: dict[str, int] = {}
+    for v in alive:
+        cluster_counts[v.cluster] = cluster_counts.get(v.cluster, 0) + 1
+    print("\nCluster breakdown:", file=sys.stderr)
+    for cluster, count in sorted(cluster_counts.items(), key=lambda kv: -kv[1]):
+        print(f"  {count:4d}  {cluster}", file=sys.stderr)
 
-    # 8. Next steps
     print(
-        "\nNext steps:",
-        f"  1. Review {args.output} — drop entries you don't want",
-        "  2. The 'verification' field is debug info; ingest.py should ignore it",
-        "  3. Update ingest.py to read this manifest instead of _CORPUS_URLS",
-        "  4. Smoke test: uv run python -m rra.ingest --limit 5",
+        "\nNext step:",
+        f"  python scripts/review_corpus.py",
+        "to approve/reject entries and produce data/corpus/manifest.json.",
         sep="\n",
         file=sys.stderr,
     )
