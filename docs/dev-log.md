@@ -1,5 +1,134 @@
 # Dev log
 
+## 2026-05-31 — Day 3: Basic RAG, no agents
+
+### Files created
+
+| File | Lines |
+|---|---|
+| `src/rra/schemas.py` | 58 |
+| `src/rra/db.py` | 47 |
+| `src/rra/retrieval.py` | 132 |
+| `src/rra/api.py` | 174 |
+| `tests/test_retrieval.py` | 281 |
+| `tests/test_api.py` | 285 |
+
+### Decisions made unilaterally
+
+1. **`register_vector` called on each `get_conn()` borrow, not in pool `configure` callback.**
+   The pool's `configure` callback fires in a background thread and races the first
+   request when FastAPI's threadpool calls `pool.connection()` before the background
+   setup completes. Moving `register_vector(conn)` into `get_conn()` is idempotent and
+   eliminates the race unconditionally. The configure callback was removed.
+
+2. **Query embedding passed as a pgvector text literal `'[v1,v2,...]'::vector`, not via adapter.**
+   Even with `register_vector` called per-borrow, psycopg3's type adapter for `list[float]`
+   did not serialize correctly through the pool (still sent as `double precision[]`, causing
+   `operator does not exist: vector <=> double precision[]`). Root cause is not fully
+   understood — likely an interaction between psycopg_pool's sync pool, anyio's threadpool,
+   and psycopg3's per-connection adapter maps. The fix: format the embedding as
+   `"[v1,v2,...]"` (pgvector text input) and cast with `::vector` in SQL. Postgres's own
+   text→vector parser is unambiguous and not affected by adapter threading issues.
+
+3. **`_resolve_citations` parses grouped citations `[a:1, b:2]` in addition to `[a:1]`.**
+   Claude occasionally puts multiple citations in one bracket even when instructed
+   to use one per bracket. The parser now splits on `, ` inside any `[...]` bracket
+   and validates each item against `guidance_id:chunk_index` format before resolving.
+   The prompt was also strengthened with an explicit example of correct form.
+
+4. **`quoted_text` = first 150 chars of the chunk text (guaranteed substring, no model
+   involvement).** The model emits `[guidance_id:chunk_index]` and `char_start/char_end`
+   are resolved server-side (ADR 0006). `quoted_text` is a representative excerpt for
+   the critic (Day 5) to use as a starting anchor, not the model's selected quote. Day 5's
+   `check_citation` tool does the actual claim→chunk verification.
+
+### Deferred items
+
+- **Langfuse trace wiring**: `trace_id` is always `None` in Day 3 responses. Wired in Day 4
+  alongside the LangGraph orchestrator (the trace object is naturally tied to a LangGraph run).
+- **Connection pool root cause**: The adapter serialization failure under psycopg_pool + anyio
+  threadpool is not fully diagnosed; the text-literal workaround is robust but not elegant.
+  Worth filing a psycopg_pool issue or pinning to a tested version.
+- **Prompt caching on system prompt**: The system prompt is stable per-session and would
+  benefit from Anthropic's `cache_control` headers. Not implemented in Day 3's single-call
+  path; most valuable on the critic's system prompt in Day 4's multi-call loop.
+- **`app.query_audit` table not populated**: The schema has `app.query_audit` for audit logging.
+  Day 3 does not write to it. Day 4 (session-based orchestrator) is the natural place to add it.
+- **`_voyage_client` lru_cache + pool interaction**: the singleton Voyage client is technically
+  fine (the Voyage SDK is thread-safe), but the lru_cache means test isolation requires clearing
+  the cache between runs. Integration tests do this explicitly.
+
+### Open questions for Day 4
+
+1. **register_vector / psycopg_pool threading**: the text-literal workaround is safe, but
+   the root cause (why the per-connection adapter registration doesn't propagate) should be
+   understood before Day 5 when the MCP server may use the same pool in a different threading
+   context.
+2. **Corpus content gap**: all 20 ingested documents are device-specific 510(k) submission
+   guidelines (suction pumps, tampons, hip systems, etc.). There are no software validation,
+   SaMD, cybersecurity, or De Novo guidances — the topics most relevant to the project
+   narrative. The manifest.json needs a scraper pass to expand the corpus before Day 6 evals.
+3. **Prompt quality**: 9/10 smoke queries produced citations; 1 was out of scope and
+   correctly abstained. Quality on in-corpus queries was "good for lookups, adequate for
+   synthesis." The single-call architecture has no planner/critic, so synthesis quality is
+   limited — this is expected; Day 4 replaces it.
+
+### Surprises / real-world failures
+
+- **`register_vector` adapter threading bug (severity: high)**: The first real-world failure was
+  `operator does not exist: vector <=> double precision[]`. The pool's `configure` callback
+  approach, which is the recommended pgvector usage pattern, did not work here. The workaround
+  (text literal `::vector` cast) took 3 server restarts to diagnose and fix.
+- **Corpus content mismatch**: The 20 ingested docs are narrow 510(k) device guidances, not the
+  broad regulatory-landscape corpus the project narrative implies. Queries about SaMD, software
+  validation, cybersecurity correctly returned "not in corpus" — which is honest but means
+  the smoke tests had to be reoriented toward device-submission questions.
+- **Citation grouping**: The model ignored "one citation per bracket" instructions and emitted
+  `[a:1, b:2, c:3]` grouped citations. Fixed with a more specific prompt and a robust regex parser.
+
+### Token cost (real numbers from smoke tests, analyst_model = claude-sonnet-4-5)
+
+10 queries, each retrieving 5 passages (~2500 tokens of context):
+
+| Stat | Value |
+|---|---|
+| Input tokens (range) | 2,981 – 3,689 |
+| Output tokens (range) | 92 – 841 |
+| Median input | ~3,300 |
+| Median output | ~390 |
+| Voyage embedding | ~$0.0001/query (negligible at free tier) |
+| Voyage rerank-2 | ~100 tokens reranked × $0.05/1M = ~$0.000005/query |
+| Claude claude-sonnet-4-5 input @ $3/MTok | ~$0.010/query |
+| Claude claude-sonnet-4-5 output @ $15/MTok | ~$0.006/query |
+| **Estimated total** | **~$0.016–0.020/query** |
+
+Cost will rise ~4× in Day 4 (4 Sonnet calls per query per spec §4.2) → ~$0.06–0.08/query
+before prompt caching. With caching on stable system prompts, expect ~50% reduction.
+
+### curl example (stop condition)
+
+```bash
+curl -X POST localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: dev-key-change-me" \
+  -d '{"query":"What performance testing is required for spinal systems in 510(k) submissions?"}'
+```
+
+Sample response (truncated):
+```json
+{
+  "answer": "## Performance Testing Requirements...\n- Evaluate the smallest diameter rod [71604:19]",
+  "citations": [{"guidance_id":"71604","chunk_index":19,"char_start":41046,"char_end":43650,"quoted_text":"ified sketches of the major steps\n• identification of each supplemental..."}],
+  "passages": [...5 passages...],
+  "trace_id": null
+}
+```
+
+**Eyeball quality:** Good on device-specific lookup questions (Q1–Q9). Correctly abstains when
+query is outside corpus scope (Q10 biologics). Weak on synthesis across guidances (corpus is
+too narrow for the multi-guidance questions spec §2 envisions — a corpus expansion is needed
+before evals). No hallucinated citations in 10 queries; all cited chunks verified against DB.
+
 ## 2026-05-31 — Day 2 postmortem: schema drift + systemic ingest hardening
 
 ### Root cause
