@@ -8,8 +8,12 @@ What it does:
   2. Filters to CDRH Final guidances with downloadable PDFs
   3. Applies CLUSTER_KEYWORDS to assign each candidate to one of six clusters
      (or 'unclassified' if no match)
-  4. Optionally HEAD-verifies each URL
-  5. Writes data/corpus/manifest.candidates.json — the input to the review tool
+  4. Device-specific filtering: pathway-classification entries whose titles
+     match DEVICE_SPECIFIC_HINTS are reassigned to the pseudo-cluster
+     'device-specific' and excluded by default (use --include-unclassified
+     to keep them for inspection).
+  5. Optionally HEAD-verifies each URL
+  6. Writes data/corpus/manifest.candidates.json — the input to the review tool
 
 What it doesn't do:
   - Replace your judgment. Output is a CANDIDATE list. Use the review tool
@@ -21,8 +25,9 @@ Usage:
     python scripts/scrape_fda_corpus.py                       # full run, all clusters
     python scripts/scrape_fda_corpus.py --limit 30 --debug    # quick test
     python scripts/scrape_fda_corpus.py --clusters software-samd-ai cybersecurity
-    python scripts/scrape_fda_corpus.py --include-unclassified  # keep no-match too
+    python scripts/scrape_fda_corpus.py --include-unclassified  # keep no-match and device-specific too
     python scripts/scrape_fda_corpus.py --no-verify           # skip HEAD checks
+    python scripts/scrape_fda_corpus.py --include-drafts      # include Draft guidances
 
 After this finishes, run:
     python scripts/review_corpus.py
@@ -73,9 +78,14 @@ CLUSTER_KEYWORDS: dict[str, list[str]] = {
         "machine learning",
         "ai-enabled",
         "ai/ml",
+        "ai/ml-based",
+        "ai/ml action plan",
         "predetermined change control",
         "pccp",
         "good machine learning",
+        "good machine learning practice",
+        "gmlp",
+        "lifecycle management",
         "clinical decision support",
         "digital health",
         "computer-assisted detection",
@@ -91,7 +101,10 @@ CLUSTER_KEYWORDS: dict[str, list[str]] = {
     "cybersecurity": [
         "cybersecurity",
         "cyber security",
+        "cyber device",
         "cyber devices",
+        "section 524b",
+        "off-the-shelf software",
     ],
     "modification-decisions": [
         "deciding when to submit",
@@ -104,6 +117,10 @@ CLUSTER_KEYWORDS: dict[str, list[str]] = {
         "135-day pma",
         "75-day humanitarian",
         "device modification",
+        "real-time pma",
+        "annual report",
+        "pma supplement",
+        "enforcement policy",
     ],
     "pathway-classification": [
         "510(k)",
@@ -121,6 +138,14 @@ CLUSTER_KEYWORDS: dict[str, list[str]] = {
         "abbreviated 510",
         "format for traditional",
         "evaluating substantial equivalence",
+        "breakthrough device",
+        "safer technologies",
+        "step program",
+        "513(g)",
+        "request for information",
+        "investigational device exemption",
+        "ide submission",
+        "ide application",
     ],
     "design-controls-qms": [
         "design control",
@@ -136,6 +161,11 @@ CLUSTER_KEYWORDS: dict[str, list[str]] = {
         "recall",
         "product enhancement",
         "manufacturing practice",
+        "qmsr",
+        "quality management system regulation",
+        "iso 13485",
+        "medical device reporting",
+        " mdr ",
     ],
     "clinical-evidence": [
         "real-world evidence",
@@ -160,6 +190,58 @@ SKIP_COMMUNICATION_TYPES = {
     "Industry Letter",
     "Small Entity Compliance Guide",
 }
+
+# Device-type keywords that flag a pathway-classification entry as a
+# single-device-class 510(k) submission guide rather than a cross-cutting
+# topic guide. Entries that match are reassigned to the pseudo-cluster
+# "device-specific" and excluded by default (use --include-unclassified to
+# keep them for inspection).
+DEVICE_SPECIFIC_HINTS: list[str] = [
+    "stent",
+    "catheter",
+    "tampon",
+    "condom",
+    "pacemaker",
+    "infusion pump",
+    "glucose monitor",
+    "wheelchair",
+    "tonometer",
+    "endoscope",
+    "dialysis",
+    "implant",
+    "prosthet",
+    "syringe",
+    "needle",
+    "valve",
+    " lens",
+    "hearing aid",
+    "ventilator",
+    "defibrillator",
+    "x-ray",
+    "ultrasound",
+    " mri ",
+    "brachytherapy",
+    "bone anchor",
+    "atherectomy",
+    "keratome",
+    "dental",
+    "ophthalmic",
+    "surgical mask",
+    "biliary",
+    "urological",
+    "gynecological",
+    "incontinence",
+    "ablation",
+    "morcellation",
+]
+
+# Title prefixes that reliably indicate a single-device-class guide.
+DEVICE_SPECIFIC_PREFIXES: list[str] = [
+    "premarket notification submissions for ",
+    "premarket approval applications for ",
+    "class ii special controls guidance document for ",
+    "guidance for the submission of ",
+]
 
 OUTPUT_PATH = Path(__file__).resolve().parent.parent / "data" / "corpus" / "manifest.candidates.json"
 
@@ -261,6 +343,20 @@ def assign_cluster(title: str) -> tuple[str, list[str], list[str]]:
     return primary, all_matches, matched_keywords
 
 
+def is_device_specific(title: str) -> bool:
+    """Return True if *title* refers to a single device class rather than a
+    cross-cutting regulatory topic.
+
+    Used to demote pathway-classification entries that are really just
+    device-class-specific 510(k) submission guides (tampons, stents, etc.)
+    to the pseudo-cluster 'device-specific'.
+    """
+    t = title.lower()
+    return any(hint in t for hint in DEVICE_SPECIFIC_HINTS) or any(
+        t.startswith(prefix) for prefix in DEVICE_SPECIFIC_PREFIXES
+    )
+
+
 def parse_row(
     row: dict[str, Any],
     *,
@@ -299,6 +395,11 @@ def parse_row(
 
     pdf_url = FDA_PDF_URL_TEMPLATE.format(id=pdf_id)
     cluster, cluster_matches, matched_keywords = assign_cluster(title)
+
+    # Demote single-device-class pathway guides to the "device-specific"
+    # pseudo-cluster so they don't pollute the cross-cutting topic clusters.
+    if cluster == "pathway-classification" and is_device_specific(title):
+        cluster = "device-specific"
 
     issued = row.get("field_issue_datetime") or None
     fda_center = row.get("field_center") or None
@@ -382,7 +483,7 @@ def main() -> int:
     parser.add_argument(
         "--include-unclassified",
         action="store_true",
-        help="include entries that didn't match any cluster",
+        help="include entries that didn't match any cluster, and device-specific entries",
     )
     parser.add_argument("--include-drafts", action="store_true", help="include Draft guidances")
     parser.add_argument(
@@ -416,12 +517,16 @@ def main() -> int:
             candidates.append(c)
     print(f"  → {len(candidates)} CDRH finals with downloadable PDFs", file=sys.stderr)
 
-    # Cluster filter
+    # Cluster filter — drop pseudo-clusters unless caller opts in
+    _excluded_clusters = {"unclassified", "device-specific"}
     if not args.include_unclassified:
         before = len(candidates)
-        candidates = [c for c in candidates if c.cluster != "unclassified"]
+        candidates = [c for c in candidates if c.cluster not in _excluded_clusters]
         dropped = before - len(candidates)
-        print(f"  → dropped {dropped} unclassified entries", file=sys.stderr)
+        print(
+            f"  → dropped {dropped} unclassified/device-specific entries",
+            file=sys.stderr,
+        )
 
     if args.clusters:
         before = len(candidates)
