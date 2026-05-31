@@ -64,3 +64,8 @@ notes.md
 # Personal dev notes — not part of the public repo
 docs/dev-log-future.md
 docs/dev-log-private-notes.md
+.claude/*
+.coverage
+README_UPDATES.MD
+/docs/plan/*
+Scratch

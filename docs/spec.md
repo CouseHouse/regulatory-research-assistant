@@ -182,6 +182,8 @@ Each subsection follows the same shape. Anchors are stable; Claude Code and revi
 
 **Distinctive design choice — `check_citation`:** The researcher and analyst can hallucinate citations; the critic uses `check_citation` to verify that each claimed citation actually appears in the cited guidance, with the cited text returned for the critic to score against the claim. This is a real reliability pattern from regulated-domain RAG, not boilerplate.
 
+**Span addressing:** In `check_citation(claim, guidance_id, span)` and the inline citation form `[guidance_id:span]` (§5), `span` is a `chunk_index` in v1; the model copies a discrete chunk key it was shown rather than computing character offsets. Resolved character offsets and verified quoted text travel in the structured `Citation`, not the inline form. See ADR 0006 for rationale.
+
 **Rejected:**
 - *Direct Python function calls* — works but loses reusability and the dev-time debugging benefit.
 - *Wrapping a generic search API in MCP* — would satisfy the requirement but adds no project distinctiveness. `check_citation` is the differentiator.
