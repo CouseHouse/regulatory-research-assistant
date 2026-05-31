@@ -19,11 +19,11 @@ import pypdf
 import structlog
 import tiktoken
 import voyageai
+import voyageai.error as _voyageai_error
 from pgvector.psycopg import register_vector
 from tenacity import (
     retry,
     retry_if_exception,
-    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
 )
@@ -46,12 +46,13 @@ DATA_DIR: Final[Path] = PROJECT_ROOT / "data" / "corpus"
 class Chunk:
     """A single text chunk produced by the chunking stage."""
 
-    guidance_id: str     # stable doc ID; equals the source PDF filename stem
-    chunk_index: int     # 0-based ordinal; ORDER BY chunk_index reconstructs the doc
-    text: str            # chunk body
-    char_start: int      # inclusive offset into the parsed full-text string
-    char_end: int        # exclusive offset into the parsed full-text string
-    token_count: int     # tiktoken cl100k_base count (for cost reporting)
+    guidance_id: str        # stable doc ID; equals the manifest `id` field
+    guidance_title: str     # human-readable title from the manifest
+    chunk_index: int        # 0-based ordinal; ORDER BY chunk_index reconstructs the doc
+    text: str               # chunk body
+    char_start: int         # inclusive offset into the parsed full-text string
+    char_end: int           # exclusive offset into the parsed full-text string
+    token_count: int        # tiktoken cl100k_base count (for cost reporting)
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,51 +63,71 @@ class EmbeddedChunk:
     embedding: list[float]  # length == settings.embedding_dim (1024)
 
 
+@dataclass(frozen=True, slots=True)
+class DownloadedDoc:
+    """Result of a successful _download_one call."""
+
+    path: Path
+    guidance_id: str
+    guidance_title: str
+
+
 # ─── Download ──────────────────────────────────────────────────────────────────
 
-def _urls_from_manifest() -> list[str]:
-    """Load download URLs from data/corpus/manifest.json.
+def _entries_from_manifest() -> list[dict[str, Any]]:
+    """Load entries from data/corpus/manifest.json.
 
     Skips entries where verification.ok is explicitly False.
     """
-    entries = json.loads((DATA_DIR / "manifest.json").read_text())
+    entries: list[dict[str, Any]] = json.loads(
+        (DATA_DIR / "manifest.json").read_text()
+    )
     return [
-        e["url"]
+        e
         for e in entries
         if not (e.get("verification", {}).get("ok") is False)
     ]
 
 
-def download_guidances(limit: int | None = None) -> list[Path]:
+def download_guidances(limit: int | None = None) -> list[DownloadedDoc]:
     """Download up to *limit* FDA guidance PDFs into DATA_DIR.
 
     Already-cached files are skipped. If one document fails after retries,
     the failure is logged and the rest of the batch continues. Returns only
-    successful paths.
+    successful docs.
     """
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    urls = _urls_from_manifest()
+    entries = _entries_from_manifest()
     if limit is not None:
-        urls = urls[:limit]
+        entries = entries[:limit]
 
-    paths: list[Path] = []
+    docs: list[DownloadedDoc] = []
     failures: list[str] = []
     with httpx.Client(timeout=60.0, follow_redirects=True) as client:
-        for url in urls:
+        for entry in entries:
+            url: str = entry["url"]
+            guidance_id: str = entry["id"]
+            guidance_title: str = entry["title"]
             try:
-                path = _download_one(client, url, DATA_DIR)
+                path = _download_one(client, url, guidance_id, DATA_DIR)
                 if path is not None:
-                    paths.append(path)
+                    docs.append(
+                        DownloadedDoc(
+                            path=path,
+                            guidance_id=guidance_id,
+                            guidance_title=guidance_title,
+                        )
+                    )
             except Exception:
-                log.error("corpus.download.failed", url=url)
+                log.error("corpus.download.failed", url=url, guidance_id=guidance_id)
                 failures.append(url)
 
     log.info(
         "corpus.download.summary",
-        succeeded=len(paths),
+        succeeded=len(docs),
         failed=len(failures),
     )
-    return paths
+    return docs
 
 
 def _is_retryable(exc: BaseException) -> bool:
@@ -123,10 +144,11 @@ def _is_retryable(exc: BaseException) -> bool:
     stop=stop_after_attempt(4),
     reraise=True,
 )
-def _download_one(client: httpx.Client, url: str, dest_dir: Path) -> Path | None:
+def _download_one(
+    client: httpx.Client, url: str, guidance_id: str, dest_dir: Path
+) -> Path | None:
     """Download a single PDF; return the local path or None on permanent failure."""
-    stem = url.rstrip("/").split("/")[-2]  # .../media/{id}/download → id
-    dest = dest_dir / f"{stem}.pdf"
+    dest = dest_dir / f"{guidance_id}.pdf"
 
     if dest.exists():
         log.info("corpus.download.cached", path=str(dest))
@@ -150,7 +172,7 @@ def parse_pdf(path: Path) -> str:
 
 # ─── Chunk ─────────────────────────────────────────────────────────────────────
 
-def chunk_text(text: str, guidance_id: str) -> list[Chunk]:
+def chunk_text(text: str, guidance_id: str, guidance_title: str) -> list[Chunk]:
     """Split *text* into overlapping token-bounded chunks.
 
     Uses a tiktoken sliding window (cl100k_base encoding) with
@@ -192,6 +214,7 @@ def chunk_text(text: str, guidance_id: str) -> list[Chunk]:
         result.append(
             Chunk(
                 guidance_id=guidance_id,
+                guidance_title=guidance_title,
                 chunk_index=len(result),
                 text=chunk_str,
                 char_start=char_start,
@@ -218,7 +241,7 @@ def embed_chunks(chunks: list[Chunk]) -> list[EmbeddedChunk]:
         texts = [c.text for c in batch]
         embeddings = _embed_batch(texts)
         if len(embeddings) != len(batch):
-            raise NotImplementedError(  # TODO(day3): surface as a typed error
+            raise RuntimeError(
                 f"Voyage returned {len(embeddings)} embeddings for {len(batch)} inputs"
             )
         for chunk, emb in zip(batch, embeddings):
@@ -227,9 +250,25 @@ def embed_chunks(chunks: list[Chunk]) -> list[EmbeddedChunk]:
     return result
 
 
+def _is_embed_retryable(exc: BaseException) -> bool:
+    # Retry on transient Voyage errors: rate limits, server errors, timeouts,
+    # connection issues. AuthenticationError and InvalidRequestError are
+    # permanent — retrying wastes up to 4 minutes and still fails.
+    return isinstance(
+        exc,
+        (
+            _voyageai_error.RateLimitError,
+            _voyageai_error.ServerError,
+            _voyageai_error.ServiceUnavailableError,
+            _voyageai_error.APIConnectionError,
+            _voyageai_error.TryAgain,
+            _voyageai_error.Timeout,
+        ),
+    )
+
+
 @retry(
-    # voyageai error types have no public stubs; catch broadly and reraise after backoff
-    retry=retry_if_exception_type(Exception),
+    retry=retry_if_exception(_is_embed_retryable),
     wait=wait_exponential(multiplier=1, min=2, max=60),
     stop=stop_after_attempt(4),
     reraise=True,
@@ -249,16 +288,17 @@ def _embed_batch(texts: list[str]) -> list[list[float]]:
 
 _UPSERT_SQL: Final[str] = """
 INSERT INTO corpus.chunks
-    (guidance_id, chunk_index, text, char_start, char_end, token_count, embedding)
+    (guidance_id, guidance_title, chunk_index, text, char_start, char_end, token_count, embedding)
 VALUES
-    (%(guidance_id)s, %(chunk_index)s, %(text)s, %(char_start)s, %(char_end)s,
-     %(token_count)s, %(embedding)s)
+    (%(guidance_id)s, %(guidance_title)s, %(chunk_index)s, %(text)s,
+     %(char_start)s, %(char_end)s, %(token_count)s, %(embedding)s)
 ON CONFLICT (guidance_id, chunk_index) DO UPDATE SET
-    text        = EXCLUDED.text,
-    char_start  = EXCLUDED.char_start,
-    char_end    = EXCLUDED.char_end,
-    token_count = EXCLUDED.token_count,
-    embedding   = EXCLUDED.embedding
+    guidance_title = EXCLUDED.guidance_title,
+    text           = EXCLUDED.text,
+    char_start     = EXCLUDED.char_start,
+    char_end       = EXCLUDED.char_end,
+    token_count    = EXCLUDED.token_count,
+    embedding      = EXCLUDED.embedding
 """
 
 
@@ -279,6 +319,7 @@ def write_to_postgres(chunks: list[EmbeddedChunk]) -> None:
         rows: list[dict[str, Any]] = [
             {
                 "guidance_id": ec.chunk.guidance_id,
+                "guidance_title": ec.chunk.guidance_title,
                 "chunk_index": ec.chunk.chunk_index,
                 "text": ec.chunk.text,
                 "char_start": ec.chunk.char_start,
@@ -300,23 +341,33 @@ def write_to_postgres(chunks: list[EmbeddedChunk]) -> None:
 
 
 def _ensure_schema(conn: psycopg.Connection[Any]) -> None:
-    """Create the corpus schema and chunks table if they don't exist."""
+    """Create the corpus schema and chunks table if they don't exist.
+
+    DDL mirrors init-db/01-init.sql exactly — update both together.
+    """
     dim = settings.embedding_dim
     ddl = f"""
     CREATE EXTENSION IF NOT EXISTS vector;
     CREATE SCHEMA IF NOT EXISTS corpus;
+    CREATE SCHEMA IF NOT EXISTS app;
     CREATE TABLE IF NOT EXISTS corpus.chunks (
-        id           bigserial    PRIMARY KEY,
-        guidance_id  text         NOT NULL,
-        chunk_index  int          NOT NULL,
-        text         text         NOT NULL,
-        char_start   int          NOT NULL,
-        char_end     int          NOT NULL,
-        token_count  int          NOT NULL,
-        embedding    vector({dim}) NOT NULL,
+        id              bigserial    PRIMARY KEY,
+        guidance_id     text         NOT NULL,
+        guidance_title  text         NOT NULL,
+        section         text,
+        chunk_index     int          NOT NULL,
+        text            text         NOT NULL,
+        char_start      int          NOT NULL,
+        char_end        int          NOT NULL,
+        token_count     int          NOT NULL,
+        embedding       vector({dim}) NOT NULL,
+        metadata        jsonb        DEFAULT '{{}}'::jsonb,
+        created_at      timestamptz  NOT NULL DEFAULT now(),
         UNIQUE (guidance_id, chunk_index)
     );
-    CREATE INDEX IF NOT EXISTS chunks_hnsw
+    CREATE INDEX IF NOT EXISTS chunks_guidance_id_idx
+        ON corpus.chunks (guidance_id);
+    CREATE INDEX IF NOT EXISTS chunks_embedding_hnsw_idx
         ON corpus.chunks USING hnsw (embedding vector_cosine_ops);
     """
     with conn.cursor() as cur:
@@ -336,32 +387,63 @@ def main() -> int:
         default=None,
         help="Maximum number of documents to ingest (default: all)",
     )
+    parser.add_argument(
+        "--truncate",
+        action="store_true",
+        help=(
+            "Truncate corpus.chunks before ingesting. "
+            "Use after schema changes to start with a clean slate."
+        ),
+    )
     args = parser.parse_args()
 
-    paths = download_guidances(args.limit)
-    if not paths:
+    # Bootstrap schema — and optionally truncate — before any download or
+    # embedding work. This surfaces schema problems immediately rather than
+    # after expensive Voyage API calls have already been made.
+    with psycopg.connect(settings.pg_dsn) as conn:
+        _ensure_schema(conn)
+        if args.truncate:
+            with conn.cursor() as cur:
+                cur.execute("TRUNCATE TABLE corpus.chunks RESTART IDENTITY")
+            log.info("corpus.truncated")
+
+    docs = download_guidances(args.limit)
+    if not docs:
         log.error("corpus.ingest.no_files_downloaded")
         return 1
 
     ingested = 0
-    for path in paths:
-        guidance_id = path.stem
-        text = parse_pdf(path)
+    ingest_failures = 0
+    for doc in docs:
+        try:
+            text = parse_pdf(doc.path)
 
-        if len(text) < PDF_MIN_TEXT_LEN:
-            log.warning(
-                "corpus.parse.scanned_pdf_skipped",
-                filename=path.name,
-                text_len=len(text),
+            if len(text) < PDF_MIN_TEXT_LEN:
+                log.warning(
+                    "corpus.parse.scanned_pdf_skipped",
+                    filename=doc.path.name,
+                    text_len=len(text),
+                )
+                continue
+
+            chunks = chunk_text(text, doc.guidance_id, doc.guidance_title)
+            embedded = embed_chunks(chunks)
+            write_to_postgres(embedded)
+            ingested += 1
+        except Exception:
+            log.error(
+                "corpus.ingest.doc_failed",
+                path=str(doc.path),
+                guidance_id=doc.guidance_id,
             )
-            continue
+            ingest_failures += 1
 
-        chunks = chunk_text(text, guidance_id)
-        embedded = embed_chunks(chunks)
-        write_to_postgres(embedded)
-        ingested += 1
-
-    log.info("corpus.ingest.complete", ingested=ingested, total=len(paths))
+    log.info(
+        "corpus.ingest.complete",
+        ingested=ingested,
+        failed=ingest_failures,
+        total=len(docs),
+    )
     return 0 if ingested > 0 else 1
 
 
