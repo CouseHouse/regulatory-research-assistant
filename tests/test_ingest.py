@@ -330,6 +330,7 @@ def test_write_to_postgres_upsert_fields_present(
         "char_end",
         "token_count",
         "embedding",
+        "metadata",
     }
 
     mock_cursor = MagicMock()
@@ -350,6 +351,81 @@ def test_write_to_postgres_upsert_fields_present(
 
     _sql, rows = mock_cursor.executemany.call_args.args
     assert required_keys == set(rows[0].keys())
+
+
+def test_write_to_postgres_cluster_in_metadata() -> None:
+    """Chunk.cluster lands as metadata->>'cluster' in the row dict passed to executemany."""
+    from psycopg.types.json import Jsonb
+
+    chunk = Chunk(
+        guidance_id=GUIDANCE_ID,
+        guidance_title=GUIDANCE_TITLE,
+        chunk_index=0,
+        text="text",
+        char_start=0,
+        char_end=4,
+        token_count=1,
+        cluster="software-samd-ai",
+    )
+    ec = EmbeddedChunk(chunk=chunk, embedding=[0.0] * 1024)
+
+    mock_cursor = MagicMock()
+    mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
+    mock_cursor.__exit__ = MagicMock(return_value=False)
+
+    mock_conn = MagicMock()
+    mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+    mock_conn.__exit__ = MagicMock(return_value=False)
+    mock_conn.cursor.return_value = mock_cursor
+
+    with (
+        patch("psycopg.connect", return_value=mock_conn),
+        patch("rra.ingest.register_vector"),
+        patch("rra.ingest._ensure_schema"),
+    ):
+        write_to_postgres([ec])
+
+    _sql, rows = mock_cursor.executemany.call_args.args
+    meta = rows[0]["metadata"]
+    assert isinstance(meta, Jsonb)
+    assert meta.obj == {"cluster": "software-samd-ai"}
+
+
+def test_write_to_postgres_no_cluster_metadata_null() -> None:
+    """Chunk with no cluster produces metadata with cluster=None (JSON null)."""
+    from psycopg.types.json import Jsonb
+
+    chunk = Chunk(
+        guidance_id=GUIDANCE_ID,
+        guidance_title=GUIDANCE_TITLE,
+        chunk_index=0,
+        text="text",
+        char_start=0,
+        char_end=4,
+        token_count=1,
+    )
+    ec = EmbeddedChunk(chunk=chunk, embedding=[0.0] * 1024)
+
+    mock_cursor = MagicMock()
+    mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
+    mock_cursor.__exit__ = MagicMock(return_value=False)
+
+    mock_conn = MagicMock()
+    mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+    mock_conn.__exit__ = MagicMock(return_value=False)
+    mock_conn.cursor.return_value = mock_cursor
+
+    with (
+        patch("psycopg.connect", return_value=mock_conn),
+        patch("rra.ingest.register_vector"),
+        patch("rra.ingest._ensure_schema"),
+    ):
+        write_to_postgres([ec])
+
+    _sql, rows = mock_cursor.executemany.call_args.args
+    meta = rows[0]["metadata"]
+    assert isinstance(meta, Jsonb)
+    assert meta.obj == {"cluster": None}
 
 
 # ─── _entries_from_manifest ────────────────────────────────────────────────────

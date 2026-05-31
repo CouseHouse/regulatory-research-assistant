@@ -21,6 +21,7 @@ import tiktoken
 import voyageai
 import voyageai.error as _voyageai_error
 from pgvector.psycopg import register_vector
+from psycopg.types.json import Jsonb
 from tenacity import (
     retry,
     retry_if_exception,
@@ -53,6 +54,7 @@ class Chunk:
     char_start: int         # inclusive offset into the parsed full-text string
     char_end: int           # exclusive offset into the parsed full-text string
     token_count: int        # tiktoken cl100k_base count (for cost reporting)
+    cluster: str | None = None  # manifest cluster label; stored in metadata JSONB
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +72,7 @@ class DownloadedDoc:
     path: Path
     guidance_id: str
     guidance_title: str
+    cluster: str | None = None  # propagated from manifest; None for legacy manifests
 
 
 # ─── Download ──────────────────────────────────────────────────────────────────
@@ -116,6 +119,7 @@ def download_guidances(limit: int | None = None) -> list[DownloadedDoc]:
                             path=path,
                             guidance_id=guidance_id,
                             guidance_title=guidance_title,
+                            cluster=entry.get("cluster"),
                         )
                     )
             except Exception:
@@ -172,7 +176,12 @@ def parse_pdf(path: Path) -> str:
 
 # ─── Chunk ─────────────────────────────────────────────────────────────────────
 
-def chunk_text(text: str, guidance_id: str, guidance_title: str) -> list[Chunk]:
+def chunk_text(
+    text: str,
+    guidance_id: str,
+    guidance_title: str,
+    cluster: str | None = None,
+) -> list[Chunk]:
     """Split *text* into overlapping token-bounded chunks.
 
     Uses a tiktoken sliding window (cl100k_base encoding) with
@@ -220,6 +229,7 @@ def chunk_text(text: str, guidance_id: str, guidance_title: str) -> list[Chunk]:
                 char_start=char_start,
                 char_end=char_end,
                 token_count=end - start,
+                cluster=cluster,
             )
         )
 
@@ -288,17 +298,18 @@ def _embed_batch(texts: list[str]) -> list[list[float]]:
 
 _UPSERT_SQL: Final[str] = """
 INSERT INTO corpus.chunks
-    (guidance_id, guidance_title, chunk_index, text, char_start, char_end, token_count, embedding)
+    (guidance_id, guidance_title, chunk_index, text, char_start, char_end, token_count, embedding, metadata)
 VALUES
     (%(guidance_id)s, %(guidance_title)s, %(chunk_index)s, %(text)s,
-     %(char_start)s, %(char_end)s, %(token_count)s, %(embedding)s)
+     %(char_start)s, %(char_end)s, %(token_count)s, %(embedding)s, %(metadata)s)
 ON CONFLICT (guidance_id, chunk_index) DO UPDATE SET
     guidance_title = EXCLUDED.guidance_title,
     text           = EXCLUDED.text,
     char_start     = EXCLUDED.char_start,
     char_end       = EXCLUDED.char_end,
     token_count    = EXCLUDED.token_count,
-    embedding      = EXCLUDED.embedding
+    embedding      = EXCLUDED.embedding,
+    metadata       = EXCLUDED.metadata
 """
 
 
@@ -326,6 +337,7 @@ def write_to_postgres(chunks: list[EmbeddedChunk]) -> None:
                 "char_end": ec.chunk.char_end,
                 "token_count": ec.chunk.token_count,
                 "embedding": ec.embedding,
+                "metadata": Jsonb({"cluster": ec.chunk.cluster}),
             }
             for ec in chunks
         ]
@@ -426,7 +438,7 @@ def main() -> int:
                 )
                 continue
 
-            chunks = chunk_text(text, doc.guidance_id, doc.guidance_title)
+            chunks = chunk_text(text, doc.guidance_id, doc.guidance_title, doc.cluster)
             embedded = embed_chunks(chunks)
             write_to_postgres(embedded)
             ingested += 1

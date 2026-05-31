@@ -389,3 +389,9 @@ The Day 3 commit left `trace_id=None  # Langfuse wired in Day 4` in the response
 ### Lesson
 
 A `# TODO: wire in Day N` comment in shipped code is invisible to future-work planning. If a feature is genuinely deferred, it belongs in `docs/future-work.md` with a reopen trigger, not in a code comment that no one scans at planning time. The rule going forward: either ship the instrumentation with the feature, or add an explicit entry to `future-work.md` — comments in code don't count as tracking.
+
+---
+
+## 2026-05-31 — cluster field propagation through ingest pipeline
+
+Added `cluster: str | None = None` to `Chunk` and `DownloadedDoc` dataclasses; updated `chunk_text` to accept and thread it; updated `download_guidances` to extract it from each manifest entry with `.get("cluster")` so runs against older manifests (no `cluster` key) produce `None` without error. In `write_to_postgres`, cluster lands as a top-level key in the existing `metadata` JSONB column — `Jsonb({"cluster": ec.chunk.cluster})` — rather than as a new dedicated column. Chose JSONB key to avoid another schema migration and the schema/code drift class of bug documented in the day-2.5 postmortem; the column already exists with default `'{}'::jsonb`, so no DDL change is needed. Queries against it use `metadata->>'cluster'` or `(metadata->>'cluster') = 'software-samd-ai'`. Corpus re-ingest (with the new manifest) is required to populate existing rows.
