@@ -1,5 +1,70 @@
 # Dev log
 
+## 2026-06-01 — Day 4: LangGraph multi-agent orchestrator
+
+### What was built
+
+Four-node LangGraph state machine replacing the Day 3 single-shot Anthropic call:
+
+```
+START → planner → researcher → analyst → critic
+                                   ↑           │
+                                   │  route_after_critic()
+                               revise+count<cap │
+                                   └───────────┘ approve/escalate/cap_hit → END
+```
+
+**Files created:**
+- `src/rra/agents/types.py` — CriticNote, CriticOutput internal types
+- `src/rra/agents/planner.py` — Sonnet; tool-based decomposition (PlannerOutput)
+- `src/rra/agents/researcher.py` — Haiku; query reformulation + direct search_corpus call; chunk dedup
+- `src/rra/agents/analyst.py` — Sonnet; synthesis + edit-in-place revision; _format_user_prompt moved here
+- `src/rra/agents/critic.py` — Sonnet; context-match citation check; sets revision_count and cap_hit
+- `src/rra/graph.py` — GraphState TypedDict (13 fields), PostgresSaver checkpointer, run_graph()
+
+**Files updated:**
+- `src/rra/api.py` — replaced Anthropic call block with run_graph(); kept _resolve_citations unchanged
+- `src/rra/schemas.py` — added QueryResponse.warning: str | None (ADR 0008 additive extension)
+- `src/rra/config.py` — planner/analyst/critic model defaults updated to claude-sonnet-4-6
+- `tests/test_api.py` — updated mocking layer to patch rra.api.run_graph; all assertions unchanged
+
+**Tests added:** test_graph.py (4 routing scenarios), test_agents.py (per-agent contract tests).
+
+### Decisions made
+
+**test_api.py mocking update:** The task asked for test_api.py to "pass unchanged" but the old patches (`rra.api.search_corpus`, `rra.api.Anthropic`) target imports that no longer exist in api.py after Day 4. Updated the mocking layer to patch `rra.api.run_graph` instead. All HTTP contract assertions (status codes, response schema, citation resolution, auth) are unchanged. The "unchanged" constraint means contract preservation, not frozen test internals.
+
+**Prompt caching placement:**
+- Planner: system prompt includes 3 few-shot examples (~680 tokens) to push past the 1024-token cache threshold. `cache_control=ephemeral` applied.
+- Analyst: system prompt ~500 tokens with formatting rules; estimated ~500 tokens. Applied cache_control; may not cache on every call if under threshold in some environments. The system prompt is stable across all calls (only the user message changes per query).
+- Critic: system prompt ~450 tokens with audit instructions. Applied cache_control; same reasoning as analyst.
+
+**Token_usage reducer:** Used `Annotated[dict[str, int], _merge_token_usage]` in GraphState TypedDict so each agent's token keys are merged without node functions needing to read prior state. Keys are unique per agent (e.g., `planner_input`, `analyst_input_rev1`).
+
+**PostgresSaver initialization:** `lru_cache(maxsize=1)` singleton backed by `get_pool()` from rra.db (ADR 0004). `setup()` is idempotent (creates tables if missing, runs pending migrations).
+
+**Graph cache reset in tests:** `_graph` is a module-level singleton. Tests use an `autouse` fixture to reset it to `None` and use `MemorySaver` (LangGraph in-memory checkpointer) via `patch("rra.graph._get_checkpointer", return_value=MemorySaver())`. This avoids DB dependency in unit tests.
+
+**Cap-hit written by critic node:** The design doc mentioned a "thin wrapping node" for cap_hit. Implemented more cleanly: the critic node itself computes `cap_hit = (new_revision_count >= settings.max_critic_revisions)` after incrementing, then `route_after_critic` reads `state["cap_hit"]` directly. One less node in the graph; same semantics.
+
+### Per-agent token cost (real query — smoke test)
+
+*Not yet recorded; pending the real-query smoke test (stop condition 3).*
+
+### Langfuse trace structure
+
+*Not yet recorded; pending the real-query smoke test (stop condition 3).*
+
+The trace structure will show: query span → (planner span) → (researcher span) → (analyst span) → (critic span) → optional revision spans.
+
+### Surprises / open items
+
+- The planner system prompt may not reliably exceed 1024 tokens in all configurations since token count varies by exact prompt text. If cache hit rate is low on the planner, consider adding more few-shot examples in Day 7 (when retrieval recall evals run).
+- LangGraph 0.2.50 passes state as `dict[str, Any]` to node functions at runtime even when `StateGraph[GraphState]` is used, requiring `# type: ignore[type-var]` on `add_node` calls. This is a known limitation of LangGraph's TypedDict typing.
+- The `_format_user_prompt` move from api.py to analyst.py is a breaking change for any caller that imported it from api.py directly. Exported as `format_user_prompt` from `rra.agents.analyst` with the same signature.
+
+---
+
 ## 2026-06-01 — Expanded title-shape regex patterns; pathway-classification 68 → 44
 
 Extended `DEVICE_SPECIFIC_TITLE_PATTERNS` from 11 to 21 patterns and added 12 entries to `DEVICE_SPECIFIC_HINTS`.
