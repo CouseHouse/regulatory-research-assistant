@@ -1,23 +1,21 @@
 """FastAPI gateway: POST /query endpoint.
 
-Day 3: single-shot retrieval + one Anthropic call. No agents yet.
-Day 4 replaces the Anthropic call block with the LangGraph orchestrator;
-the endpoint signature and response schema are stable.
+Day 3: single-shot retrieval + one Anthropic call.
+Day 4: replaces the Anthropic call block with the LangGraph orchestrator.
+       The endpoint signature and response schema are stable (ADR 0006, 0008).
 """
 from __future__ import annotations
 
 import contextlib
 import re
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
 import structlog
-from anthropic import Anthropic
-from anthropic.types import TextBlock
 from fastapi import FastAPI, Header, HTTPException, status
 
 from rra.config import settings
-from rra.retrieval import search_corpus
+from rra.graph import run_graph
 from rra.schemas import Citation, QueryRequest, QueryResponse, RetrievedPassage
 from rra.tracing import get_langfuse
 
@@ -37,6 +35,21 @@ def _verify_api_key(x_api_key: str | None) -> None:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing API key",
         )
+
+
+def _build_warning(final_state: dict[str, Any]) -> str | None:
+    """Return a human-readable warning string for non-clean graph exits."""
+    if final_state.get("cap_hit"):
+        return (
+            "Analysis reached the maximum revision limit. "
+            "Citations may not be fully verified."
+        )
+    if final_state.get("verdict") == "escalate":
+        return (
+            "Query could not be fully grounded in available guidance. "
+            "Answer is best-effort."
+        )
+    return None
 
 
 @app.post("/query", response_model=QueryResponse)
@@ -64,113 +77,44 @@ def query(
     with trace_cm as trace_span:
         trace_id = lf.get_current_trace_id() if lf is not None else None
 
-        passages = search_corpus(request.query, k=settings.rerank_top_k, lf=lf)
-
-        if not passages:
-            log.info("query.no_passages", session_id=session_id)
-            if trace_span is not None:
-                trace_span.update(output={"answer": "", "citation_count": 0})
-            if lf is not None:
-                lf.flush()
-            return QueryResponse(
-                answer="", citations=[], passages=[], trace_id=trace_id
-            )
-
-        system_prompt = (
-            "You are a regulatory research assistant specializing in FDA guidance documents. "
-            "Answer questions based solely on the provided passages. "
-            "When citing a passage, place ONE citation bracket immediately after the claim: "
-            "[guidance_id:chunk_index]. Copy guidance_id and chunk_index exactly as shown in "
-            "each <passage> tag. Never put multiple citations in the same bracket. "
-            "Example of correct form: 'The device must meet X [abc123:4] and Y [abc123:7].' "
-            "Be precise and concise. Do not invent citations or facts not found in the passages."
+        final_state = run_graph(
+            {
+                "query": request.query,
+                "product_context": request.product_context,
+                "session_id": session_id,
+                "trace_id": trace_id,
+            }
         )
 
-        user_prompt = _format_user_prompt(request, passages)
+        draft: str = final_state.get("draft", "")
+        passages: list[RetrievedPassage] = final_state.get("passages", [])
+        citations = _resolve_citations(draft, passages)
+        warning = _build_warning(final_state)
 
-        # Day 3: single Anthropic call, no agents. Day 4 replaces this block.
-        gen_cm = (
-            lf.start_as_current_observation(
-                name="anthropic-call",
-                as_type="generation",
-                model=settings.analyst_model,
-                input=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-            )
-            if lf is not None
-            else contextlib.nullcontext(None)
+        log.info(
+            "query.complete",
+            session_id=session_id,
+            verdict=final_state.get("verdict"),
+            cap_hit=final_state.get("cap_hit"),
+            revision_count=final_state.get("revision_count", 0),
+            citation_count=len(citations),
+            total_tokens=sum(final_state.get("token_usage", {}).values()),
         )
-
-        with gen_cm as gen_span:
-            anthropic_client = Anthropic(
-                api_key=settings.anthropic_api_key.get_secret_value()
-            )
-            message = anthropic_client.messages.create(
-                model=settings.analyst_model,
-                max_tokens=1024,
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_prompt}],
-            )
-
-            answer = next(
-                (block.text for block in message.content if isinstance(block, TextBlock)),
-                "",
-            )
-
-            log.info(
-                "query.complete",
-                session_id=session_id,
-                input_tokens=message.usage.input_tokens,
-                output_tokens=message.usage.output_tokens,
-            )
-
-            if gen_span is not None:
-                gen_span.update(
-                    output=answer,
-                    usage_details={
-                        "input": message.usage.input_tokens,
-                        "output": message.usage.output_tokens,
-                    },
-                )
-
-        citations = _resolve_citations(answer, passages)
 
         if trace_span is not None:
             trace_span.update(
-                output={"answer": answer, "citation_count": len(citations)}
+                output={"answer": draft[:200], "citation_count": len(citations)}
             )
         if lf is not None:
             lf.flush()
 
         return QueryResponse(
-            answer=answer,
+            answer=draft,
             citations=citations,
             passages=passages,
-            trace_id=trace_id,
+            trace_id=final_state.get("trace_id") or trace_id,
+            warning=warning,
         )
-
-
-def _format_user_prompt(request: QueryRequest, passages: list[RetrievedPassage]) -> str:
-    parts = ["<passages>"]
-    for p in passages:
-        parts.append(
-            f'<passage guidance_id="{p.guidance_id}" chunk_index="{p.chunk_index}">\n'
-            f"<title>{p.guidance_title}</title>\n"
-            f"<text>{p.text}</text>\n"
-            f"</passage>"
-        )
-    parts.append("</passages>")
-    parts.append("")
-    parts.append(f"Question: {request.query}")
-    if request.product_context:
-        parts.append(f"Product context: {request.product_context}")
-    parts.append(
-        "\nAnswer based on the passages above. "
-        "Cite sources as [guidance_id:chunk_index]."
-    )
-    return "\n".join(parts)
 
 
 def _parse_citation_pairs(answer: str) -> list[tuple[str, int]]:
