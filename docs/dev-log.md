@@ -47,15 +47,31 @@ START → planner → researcher → analyst → critic
 
 **Cap-hit written by critic node:** The design doc mentioned a "thin wrapping node" for cap_hit. Implemented more cleanly: the critic node itself computes `cap_hit = (new_revision_count >= settings.max_critic_revisions)` after incrementing, then `route_after_critic` reads `state["cap_hit"]` directly. One less node in the graph; same semantics.
 
-### Per-agent token cost (real query — smoke test)
+ Open docs/dev-log.md and replace the two "Not yet recorded" sections with
+ the real numbers from this session's smoke test:
 
-*Not yet recorded; pending the real-query smoke test (stop condition 3).*
+ Per-agent token cost (approve path, unforced):
+   planner   440 in / 222 out
+   researcher 4 calls ~255 in / ~21 out each (query reformulation)
+   analyst   10408 in / 1011 out
+   critic    12271 in / 50 out
+   total     ~25,547 tokens, ~$0.05/query
+   (analyst + critic dominate; researcher reformulation is cheap)
 
-### Langfuse trace structure
+ Langfuse trace structure (confirmed):
+   query → planner → researcher (4 reformulation generations + 4
+   search_corpus retrievers) → analyst → critic. Forced-verdict runs show
+   bare critic spans (no generation child, no LLM call).
 
-*Not yet recorded; pending the real-query smoke test (stop condition 3).*
+ Loop verified live (3 modes): revise→cap-out→warning,
+   escalate→immediate-exit→warning, unset→approve→null-warning.
 
-The trace structure will show: query span → (planner span) → (researcher span) → (analyst span) → (critic span) → optional revision spans.
+ Citation-precision issue: quoted_text spans land on PDF boilerplate
+   (line numbers, "Contains Nonbinding Recommendations" headers) rather
+   than the claim-supporting sentence. Root causes: (1) chunk text retains
+   PDF artifacts, (2) citation resolves to chunk-leading chars. Targets:
+   Day 5 check_citation (resolution) + ingest cleaning pass (artifacts).
+   This is the Day 7 improvement target + Day 11 postmortem candidate.
 
 ### Surprises / open items
 
