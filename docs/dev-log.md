@@ -1,5 +1,9 @@
 # Dev log
 
+## 2026-05-31 — Shared token-bucket rate limiter
+
+Added `src/rra/rate_limit.py` — a stdlib-only token-bucket limiter (`RateLimiter` + `RateLimitStats`) with thread safety via `threading.Lock`, structlog observability, and a read-only `stats` property for end-of-run reporting. Wired to two callers: the scraper (`scripts/scrape_fda_corpus.py`, replacing the flat `INTER_REQUEST_DELAY = 0.15` constant with a proper 5 rps / burst-10 limiter and two new CLI flags `--rate-per-second` / `--burst`), and the ingest pipeline (`src/rra/ingest.py`, which previously had no limiting at all). The ingest limiter is constructed in `main()` and passed as a parameter to `download_guidances()` — parameter over module-level for testability. Rate is configurable via `DOWNLOAD_RATE_PER_SECOND` and `DOWNLOAD_BURST` env vars (no prefix; pydantic_settings maps field names directly). Default of 5 rps / 10 burst was chosen to be polite to FDA's public endpoints while still completing a 100-doc corpus ingest in ~20 s. Motivation: defensive against accidental retry storms from parallel runs and future callers; also forecloses the per-caller duplication drift the project already paid once (schema-code drift postmortem). One unexpected finding: the pre-existing `# type: ignore[call-arg]` on the `Settings()` singleton was now flagged as unused by mypy strict — the pydantic mypy plugin in the current version handles it cleanly, so it was removed.
+
 ## 2026-05-31 — Day 3: Basic RAG, no agents
 
 ### Files created

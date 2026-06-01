@@ -117,6 +117,12 @@ class Settings(BaseSettings):
     chunk_size_tokens: int = Field(default=512, ge=64, le=4096)
     chunk_overlap_tokens: int = Field(default=50, ge=0, le=512)
 
+    # ─── Download rate limiting ──────────────────────────────────────────────
+    # Governs the ingest pipeline's HTTP download rate.  Override via
+    # DOWNLOAD_RATE_PER_SECOND and DOWNLOAD_BURST env vars.
+    download_rate_per_second: float = 5.0
+    download_burst: int = 10
+
     # ─── Cost guardrails ────────────────────────────────────────────────────
     # Hard caps that the agent layer should refuse to exceed. Belt-and-
     # suspenders against runaway loops; the LangGraph max_critic_revisions
@@ -127,4 +133,4 @@ class Settings(BaseSettings):
 
 # Module-level singleton. Importing `settings` from anywhere gives the same
 # instance, so the .env file is read exactly once per process.
-settings = Settings()  # type: ignore[call-arg]
+settings = Settings()

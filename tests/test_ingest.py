@@ -467,6 +467,33 @@ def test_download_one_no_retry_on_404(tmp_path: Path) -> None:
     assert mock_client.get.call_count == 1
 
 
+# ─── download_guidances rate limiting ─────────────────────────────────────────
+
+def test_download_guidances_limiter_invoked_per_doc(tmp_path: Path) -> None:
+    """limiter.acquire() is called exactly once per document in the batch."""
+    manifest_entries = [
+        {"id": "1", "title": "Doc One", "url": "https://www.fda.gov/media/1/download"},
+        {"id": "2", "title": "Doc Two", "url": "https://www.fda.gov/media/2/download"},
+        {"id": "3", "title": "Doc Three", "url": "https://www.fda.gov/media/3/download"},
+    ]
+
+    def fake_download(client: Any, url: str, guidance_id: str, dest_dir: Path) -> Path:
+        p = dest_dir / f"{guidance_id}.pdf"
+        p.write_bytes(b"%PDF fake")
+        return p
+
+    mock_limiter = MagicMock()
+
+    with (
+        patch("rra.ingest.DATA_DIR", tmp_path),
+        patch("rra.ingest._entries_from_manifest", return_value=manifest_entries),
+        patch("rra.ingest._download_one", side_effect=fake_download),
+    ):
+        download_guidances(limiter=mock_limiter)
+
+    assert mock_limiter.acquire.call_count == 3
+
+
 # ─── download_guidances fault tolerance ───────────────────────────────────────
 
 def test_download_guidances_continues_on_failure(tmp_path: Path) -> None:

@@ -30,6 +30,7 @@ from tenacity import (
 )
 
 from rra.config import PROJECT_ROOT, settings
+from rra.rate_limit import RateLimiter
 
 log = structlog.get_logger(__name__)
 
@@ -92,13 +93,24 @@ def _entries_from_manifest() -> list[dict[str, Any]]:
     ]
 
 
-def download_guidances(limit: int | None = None) -> list[DownloadedDoc]:
+def download_guidances(
+    limit: int | None = None,
+    limiter: RateLimiter | None = None,
+) -> list[DownloadedDoc]:
     """Download up to *limit* FDA guidance PDFs into DATA_DIR.
 
     Already-cached files are skipped. If one document fails after retries,
     the failure is logged and the rest of the batch continues. Returns only
     successful docs.
+
+    *limiter* throttles every download attempt (not manifest loading or
+    embedding calls). Defaults to a fresh limiter at the rate configured
+    in settings.
     """
+    _limiter: RateLimiter = limiter if limiter is not None else RateLimiter(
+        rate_per_second=settings.download_rate_per_second,
+        burst=settings.download_burst,
+    )
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     entries = _entries_from_manifest()
     if limit is not None:
@@ -106,12 +118,22 @@ def download_guidances(limit: int | None = None) -> list[DownloadedDoc]:
 
     docs: list[DownloadedDoc] = []
     failures: list[str] = []
-    with httpx.Client(timeout=60.0, follow_redirects=True) as client:
+    with httpx.Client(
+        timeout=60.0,
+        follow_redirects=True,
+        headers={
+            "User-Agent": (
+                "rra-ingest/0.3 (portfolio project; "
+                "github.com/CouseHouse/regulatory-research-assistant)"
+            )
+        },
+    ) as client:
         for entry in entries:
             url: str = entry["url"]
             guidance_id: str = entry["id"]
             guidance_title: str = entry["title"]
             try:
+                _limiter.acquire()
                 path = _download_one(client, url, guidance_id, DATA_DIR)
                 if path is not None:
                     docs.append(
@@ -130,6 +152,13 @@ def download_guidances(limit: int | None = None) -> list[DownloadedDoc]:
         "corpus.download.summary",
         succeeded=len(docs),
         failed=len(failures),
+    )
+    s = _limiter.stats
+    log.info(
+        "corpus.download.rate_limit_stats",
+        requests=s.requests_made,
+        total_wait_seconds=round(s.total_wait_seconds, 2),
+        longest_wait_seconds=round(s.longest_wait_seconds, 3),
     )
     return docs
 
@@ -419,7 +448,11 @@ def main() -> int:
                 cur.execute("TRUNCATE TABLE corpus.chunks RESTART IDENTITY")
             log.info("corpus.truncated")
 
-    docs = download_guidances(args.limit)
+    limiter = RateLimiter(
+        rate_per_second=settings.download_rate_per_second,
+        burst=settings.download_burst,
+    )
+    docs = download_guidances(args.limit, limiter)
     if not docs:
         log.error("corpus.ingest.no_files_downloaded")
         return 1
