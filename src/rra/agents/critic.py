@@ -146,65 +146,6 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
     query: str = state.get("query", "")
     revision_count: int = state.get("revision_count", 0)
 
-    # ── Force-verdict gate (TEST/EVAL ONLY) ───────────────────────────────────
-    # When set, skip the LLM call and emit the configured verdict directly.
-    # Downstream logic (revision_count increment, cap_hit, routing) is unchanged.
-    force_verdict = settings.critic_force_verdict
-    if force_verdict is not None:
-        log.warning(
-            "critic.force_verdict",
-            verdict=force_verdict,
-            session_id=state.get("session_id"),
-        )
-        forced_notes: list[CriticNote] = (
-            [CriticNote(citation_key=None, issue="forced verdict for testing", severity="soft")]
-            if force_verdict == "revise"
-            else []
-        )
-        new_revision_count = revision_count
-        cap_hit = False
-        if force_verdict == "revise":
-            new_revision_count = revision_count + 1
-            if new_revision_count >= settings.max_critic_revisions:
-                cap_hit = True
-        suffix = "" if revision_count == 0 else f"_rev{revision_count}"
-        return {
-            "verdict": force_verdict,
-            "critic_notes": forced_notes,
-            "revision_count": new_revision_count,
-            "cap_hit": cap_hit,
-            "token_usage": {
-                f"critic_input{suffix}": 0,
-                f"critic_output{suffix}": 0,
-            },
-        }
-
-    # Build the set of valid (guidance_id, chunk_index) pairs from provided passages.
-    valid_keys = {(p.guidance_id, p.chunk_index) for p in passages}
-    passage_map = {(p.guidance_id, p.chunk_index): p for p in passages}
-
-    # Build passage summary for the critic prompt.
-    passage_summary_parts = ["<passages>"]
-    for p in passages:
-        passage_summary_parts.append(
-            f'<passage guidance_id="{p.guidance_id}" chunk_index="{p.chunk_index}">\n'
-            f"<title>{p.guidance_title}</title>\n"
-            f"<text>{p.text}</text>\n"
-            f"</passage>"
-        )
-    passage_summary_parts.append("</passages>")
-    passage_xml = "\n".join(passage_summary_parts)
-
-    user_content = (
-        f"{passage_xml}\n\n"
-        f"<query>{query}</query>\n\n"
-        f"<draft>\n{draft}\n</draft>\n\n"
-        "Audit every citation in the draft against the provided passages and "
-        "return your verdict via the submit_verdict tool."
-    )
-
-    client = Anthropic(api_key=settings.anthropic_api_key.get_secret_value())
-
     lf = get_langfuse()
     span_cm = (
         lf.start_as_current_observation(
@@ -216,6 +157,70 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
         else contextlib.nullcontext(None)
     )
     with span_cm as span:
+        # ── Force-verdict gate (TEST/EVAL ONLY) ───────────────────────────────
+        # When set, skip the LLM call and emit the configured verdict directly.
+        # Downstream logic (revision_count increment, cap_hit, routing) is unchanged.
+        # The critic span is still emitted so forced-run traces show the loop.
+        force_verdict = settings.critic_force_verdict
+        if force_verdict is not None:
+            log.warning(
+                "critic.force_verdict",
+                verdict=force_verdict,
+                session_id=state.get("session_id"),
+            )
+            forced_notes: list[CriticNote] = (
+                [CriticNote(citation_key=None, issue="forced verdict for testing", severity="soft")]
+                if force_verdict == "revise"
+                else []
+            )
+            new_revision_count = revision_count
+            cap_hit = False
+            if force_verdict == "revise":
+                new_revision_count = revision_count + 1
+                if new_revision_count >= settings.max_critic_revisions:
+                    cap_hit = True
+            if span is not None:
+                span.update(
+                    output={"verdict": force_verdict, "forced": True, "cap_hit": cap_hit},
+                )
+            suffix = "" if revision_count == 0 else f"_rev{revision_count}"
+            return {
+                "verdict": force_verdict,
+                "critic_notes": forced_notes,
+                "revision_count": new_revision_count,
+                "cap_hit": cap_hit,
+                "token_usage": {
+                    f"critic_input{suffix}": 0,
+                    f"critic_output{suffix}": 0,
+                },
+            }
+
+        # Build the set of valid (guidance_id, chunk_index) pairs from provided passages.
+        valid_keys = {(p.guidance_id, p.chunk_index) for p in passages}
+        passage_map = {(p.guidance_id, p.chunk_index): p for p in passages}
+
+        # Build passage summary for the critic prompt.
+        passage_summary_parts = ["<passages>"]
+        for p in passages:
+            passage_summary_parts.append(
+                f'<passage guidance_id="{p.guidance_id}" chunk_index="{p.chunk_index}">\n'
+                f"<title>{p.guidance_title}</title>\n"
+                f"<text>{p.text}</text>\n"
+                f"</passage>"
+            )
+        passage_summary_parts.append("</passages>")
+        passage_xml = "\n".join(passage_summary_parts)
+
+        user_content = (
+            f"{passage_xml}\n\n"
+            f"<query>{query}</query>\n\n"
+            f"<draft>\n{draft}\n</draft>\n\n"
+            "Audit every citation in the draft against the provided passages and "
+            "return your verdict via the submit_verdict tool."
+        )
+
+        client = Anthropic(api_key=settings.anthropic_api_key.get_secret_value())
+
         gen_cm = (
             span.start_as_current_observation(
                 name="anthropic:critic",
