@@ -40,12 +40,13 @@ import argparse
 import json
 import re
 import sys
-import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 import httpx
+
+from rra.rate_limit import RateLimiter
 
 # ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -53,8 +54,8 @@ FDA_INDEX_URL = "https://www.fda.gov/files/api/datatables/static/search-for-guid
 
 FDA_HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+        "rra-corpus-scraper/0.2 (portfolio project; "
+        "github.com/CouseHouse/regulatory-research-assistant)"
     ),
     "Accept": "application/json, text/javascript, */*; q=0.01",
     "X-Requested-With": "XMLHttpRequest",
@@ -246,7 +247,6 @@ DEVICE_SPECIFIC_PREFIXES: list[str] = [
 OUTPUT_PATH = Path(__file__).resolve().parent.parent / "data" / "corpus" / "manifest.candidates.json"
 
 REQUEST_TIMEOUT = 30.0
-INTER_REQUEST_DELAY = 0.15
 
 # ─── Data shapes ────────────────────────────────────────────────────────────
 
@@ -496,10 +496,27 @@ def main() -> int:
     parser.add_argument(
         "--output", type=Path, default=OUTPUT_PATH, help=f"output (default: {OUTPUT_PATH})"
     )
+    parser.add_argument(
+        "--rate-per-second",
+        type=float,
+        default=5.0,
+        metavar="N",
+        help="token-bucket refill rate in requests/second (default: 5)",
+    )
+    parser.add_argument(
+        "--burst",
+        type=int,
+        default=10,
+        metavar="N",
+        help="token-bucket burst capacity (default: 10)",
+    )
     args = parser.parse_args()
+
+    limiter = RateLimiter(rate_per_second=args.rate_per_second, burst=args.burst)
 
     print("Fetching FDA guidance index...", file=sys.stderr)
     try:
+        limiter.acquire()
         rows = fetch_fda_index()
     except Exception as e:
         print(f"  ✗ Failed: {e}", file=sys.stderr)
@@ -571,6 +588,7 @@ def main() -> int:
         verified = []
         with httpx.Client(headers=FDA_HEADERS) as client:
             for i, candidate in enumerate(candidates, 1):
+                limiter.acquire()
                 result = verify_url(client, candidate)
                 verified.append(result)
                 if args.debug or not result.verification["ok"]:
@@ -578,7 +596,6 @@ def main() -> int:
                     reason = result.verification.get("reason", "")
                     suffix = f" — {reason}" if reason else ""
                     print(f"  {marker} [{i}/{len(candidates)}] {result.id}{suffix}", file=sys.stderr)
-                time.sleep(INTER_REQUEST_DELAY)
 
     alive = [v for v in verified if v.verification["ok"]]
     dead = [v for v in verified if not v.verification["ok"]]
@@ -598,6 +615,14 @@ def main() -> int:
     print("\nCluster breakdown:", file=sys.stderr)
     for cluster, count in sorted(cluster_counts.items(), key=lambda kv: -kv[1]):
         print(f"  {count:4d}  {cluster}", file=sys.stderr)
+
+    s = limiter.stats
+    print(
+        f"\nRate-limit stats: {s.requests_made} requests, "
+        f"{s.total_wait_seconds:.2f}s total wait, "
+        f"{s.longest_wait_seconds:.3f}s longest wait",
+        file=sys.stderr,
+    )
 
     print(
         "\nNext step:",
