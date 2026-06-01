@@ -27,7 +27,7 @@ We define `GraphState` with the fields below, each owned by exactly one writer. 
 | `verdict` | `Literal["approve","revise","escalate"] \| None` | critic | router |
 | `critic_notes` | `list[CriticNote]` | critic | analyst |
 | `revision_count` | `int` | critic | critic (reads prior), router |
-| `cap_hit` | `bool` | router node | api.py |
+| `cap_hit` | `bool` | critic node | api.py |
 | `token_usage` | `dict[str, int]` | each agent (accumulated) | api.py (logging) |
 
 **`QueryResponse` extension:** Add `warning: str | None = None`. Populated when `cap_hit` or verdict is `escalate`; `None` on normal exits. This is an additive optional field, permitted by the frozen-contract policy in `schemas.py`.

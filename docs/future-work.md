@@ -152,6 +152,23 @@ This document is the companion to [`spec.md`](spec.md). The spec records *what i
 
 **Cost:** 2–3 days.
 
+
+## 11. Retrieval deduplication at the retrieval layer.
+
+
+**Cap chunks per guidance_id at 2, take top-5 across distinct guidances. 
+This is a known RAG technique (sometimes called "MMR" for 
+maximal marginal relevance, or "diversity reranking").
+
+## 12. Integration tests run by default. 
+Your pytest -q includes @pytest.mark.integration tests. Most projects configure 
+pytest.ini/pyproject.toml to exclude integration markers from the default run 
+(addopts = -m "not integration") so pytest is fast and key-independent, 
+with integration run explicitly in CI or on demand. One-line config fix, Day 5 or later.
+Why the test-env Voyage key is invalid when the runtime key works. 
+Probably .env resolution differs under pytest, or there's a test-specific key. 
+Worth understanding before Day 8 CI work, since CI will hit the same wall. Not urgent.
+
 ---
 
 ## How to use this document

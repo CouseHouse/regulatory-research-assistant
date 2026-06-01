@@ -63,6 +63,39 @@ The trace structure will show: query span → (planner span) → (researcher spa
 - LangGraph 0.2.50 passes state as `dict[str, Any]` to node functions at runtime even when `StateGraph[GraphState]` is used, requiring `# type: ignore[type-var]` on `add_node` calls. This is a known limitation of LangGraph's TypedDict typing.
 - The `_format_user_prompt` move from api.py to analyst.py is a breaking change for any caller that imported it from api.py directly. Exported as `format_user_prompt` from `rra.agents.analyst` with the same signature.
 
+### checkpointer autocommit bug
+
+First real query 500'd: PostgresSaver.setup() runs CREATE INDEX
+CONCURRENTLY, which Postgres forbids inside a transaction. The checkpointer
+connection was in psycopg3's default transaction mode.
+
+Two fixes: (1) dedicated autocommit connection for the checkpointer,
+separate from the ADR-0004 request pool; (2) cache the checkpointer as a
+process singleton so setup() runs once, not per request.
+
+Class of bug: same family as the Day 2.5 ingest failures — code passes
+unit tests (which mock the checkpointer) but the real-infrastructure
+integration surfaces a constraint the mocks can't model. Reinforces why
+the live smoke test is a stop condition, not the mocked test suite.
+
+### citation precision observation
+
+The four-agent pipeline works end-to-end (CardioWatch query produced a
+correct cross-document synthesis, critic approved, warning=null). But the
+resolved quoted_text spans often land on PDF boilerplate (line numbers,
+"Contains Nonbinding Recommendations" headers, "contact FDA staff"
+footers) rather than the specific sentence supporting each claim.
+
+Two root causes for Day 6/7:
+1. Chunk text retains PDF extraction artifacts (line numbers, headers,
+   footers) — a cleaning pass during ingest would help.
+2. Citation resolves to the chunk's leading chars, not the
+   claim-supporting sentence within the chunk. The check_citation MCP
+   tool (Day 5) + tighter span resolution is the fix.
+
+This is the kind of thing the citation_validity eval scorer will catch
+and quantify on Day 6. Logging now as a known issue, not fixing in Day 4.
+
 ---
 
 ## 2026-06-01 — Expanded title-shape regex patterns; pathway-classification 68 → 44
