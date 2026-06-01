@@ -1,7 +1,8 @@
 """Tests for rra.api: FastAPI endpoint behaviour.
 
-Unit tests mock search_corpus and the Anthropic client so no network or DB
-calls are made.
+Day 4 note: api.py now delegates to run_graph() instead of calling
+search_corpus + Anthropic directly. The mocking layer has been updated
+to patch rra.api.run_graph; all assertions are unchanged (contract preserved).
 """
 from __future__ import annotations
 
@@ -11,7 +12,7 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "sk-ant-test")
 os.environ.setdefault("VOYAGE_API_KEY", "pa-test")
 
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -46,31 +47,39 @@ def sample_passage() -> RetrievedPassage:
     )
 
 
-def _make_anthropic_mock(answer_text: str) -> Any:
-    """Fake Anthropic client whose messages.create() returns *answer_text*."""
-    from anthropic.types import TextBlock
-
-    text_block = TextBlock(type="text", text=answer_text)
-    mock_msg = MagicMock()
-    mock_msg.content = [text_block]
-    mock_msg.usage = MagicMock(input_tokens=600, output_tokens=120)
-
-    mock_anthropic = MagicMock()
-    mock_anthropic.messages.create.return_value = mock_msg
-    return mock_anthropic
+def _make_graph_state(
+    draft: str,
+    passages: list[RetrievedPassage],
+    verdict: str = "approve",
+    cap_hit: bool = False,
+) -> dict[str, Any]:
+    """Build a minimal final-state dict as returned by run_graph()."""
+    return {
+        "query": "",
+        "product_context": "",
+        "session_id": "test-session",
+        "trace_id": None,
+        "sub_questions": ["test sub-question"],
+        "outline": "",
+        "passages": passages,
+        "draft": draft,
+        "verdict": verdict,
+        "critic_notes": [],
+        "revision_count": 0,
+        "cap_hit": cap_hit,
+        "token_usage": {},
+    }
 
 
 @pytest.fixture
 def mocked_stack(sample_passage: RetrievedPassage) -> Any:
-    """Patch search_corpus and Anthropic so no real I/O occurs."""
+    """Patch run_graph so no real I/O occurs."""
     answer = (
         "SaMD requires a risk-based approach to validation. [72674:3] "
         "The intended use drives the safety classification."
     )
-    with (
-        patch("rra.api.search_corpus", return_value=[sample_passage]),
-        patch("rra.api.Anthropic", return_value=_make_anthropic_mock(answer)),
-    ):
+    mock_state = _make_graph_state(answer, [sample_passage])
+    with patch("rra.api.run_graph", return_value=mock_state):
         yield
 
 
@@ -186,13 +195,8 @@ def test_unresolvable_citation_skipped(client: TestClient) -> None:
     # Answer cites a passage NOT in the retrieved set
     answer = "Some answer. [real-doc:0] And a phantom citation. [ghost-doc:99]"
 
-    with (
-        patch("rra.api.search_corpus", return_value=[passage]),
-        patch(
-            "rra.api.Anthropic",
-            return_value=_make_anthropic_mock(answer),
-        ),
-    ):
+    mock_state = _make_graph_state(answer, [passage])
+    with patch("rra.api.run_graph", return_value=mock_state):
         resp = client.post(
             "/query",
             json={"query": "test"},
@@ -219,10 +223,8 @@ def test_duplicate_citations_deduplicated(client: TestClient) -> None:
     )
     answer = "Point one [doc-a:1] and point two also [doc-a:1]."
 
-    with (
-        patch("rra.api.search_corpus", return_value=[passage]),
-        patch("rra.api.Anthropic", return_value=_make_anthropic_mock(answer)),
-    ):
+    mock_state = _make_graph_state(answer, [passage])
+    with patch("rra.api.run_graph", return_value=mock_state):
         resp = client.post(
             "/query",
             json={"query": "test"},
@@ -238,7 +240,8 @@ def test_duplicate_citations_deduplicated(client: TestClient) -> None:
 
 def test_empty_corpus_returns_200_not_500(client: TestClient) -> None:
     """No retrieved passages → 200 with empty answer and lists."""
-    with patch("rra.api.search_corpus", return_value=[]):
+    mock_state = _make_graph_state("", [])
+    with patch("rra.api.run_graph", return_value=mock_state):
         resp = client.post(
             "/query",
             json={"query": "anything"},
