@@ -1,5 +1,18 @@
 # Dev log
 
+## 2026-05-31 — Title-shape regex patterns for device-specific filtering
+
+Added `DEVICE_SPECIFIC_TITLE_PATTERNS` (10 compiled `re.IGNORECASE` patterns) to `scripts/scrape_fda_corpus.py` and updated `is_device_specific()` to check them before the keyword/prefix checks. Patterns target the structural shapes that FDA uses for single-device-class 510(k) submission guides: "Premarket Notification [510(k)] Submissions for X", "Guidance Document for X 510(k)s", "510(k) Submissions for X", "Submission Guidance for a 510(k)", etc. Compiled at module load; `search()` short-circuits before the keyword scan.
+
+**Why:** Keyword-only matching (`DEVICE_SPECIFIC_HINTS`) peaked at ~57% noise in `pathway-classification` (80 of 141 candidates). Many older 510(k) submission guides use obscure clinical device names (keratoprosthesis, phacofragmentation, embolic protection, biological indicator) that no keyword list would enumerate exhaustively. Structural patterns capture the class regardless of device name.
+
+**Before/after (no-verify, live FDA index, 2026-05-31):**
+- Before: 141 total candidates, 80 pathway-classification, 351 dropped to device-specific/unclassified
+- After: 129 total candidates, 68 pathway-classification, 363 dropped to device-specific/unclassified
+- Net: 12 additional entries demoted by structural patterns; foundational docs (The 510(k) Program, Abbreviated 510(k), De Novo Classification Process, Refuse-to-Accept, Q-Submission, Special 510(k)) all survived in pathway-classification or modification-decisions.
+
+**Note:** Two entries named in the task spec as expected-to-filter did not match the specified patterns and remain in pathway-classification: "Guidance on 510(k) Submissions for Keratoprostheses" (title uses "510(k) Submissions" not "Premarket Notification") and "Pulse Oximeters - Premarket Notification Submissions [510(k)s]" (device name leads the title). The structural patterns are additive; these can be caught in a future pass with broader patterns or by adding "pulse oximeter" / "keratoprosth" to `DEVICE_SPECIFIC_HINTS`.
+
 ## 2026-05-31 — Shared token-bucket rate limiter
 
 Added `src/rra/rate_limit.py` — a stdlib-only token-bucket limiter (`RateLimiter` + `RateLimitStats`) with thread safety via `threading.Lock`, structlog observability, and a read-only `stats` property for end-of-run reporting. Wired to two callers: the scraper (`scripts/scrape_fda_corpus.py`, replacing the flat `INTER_REQUEST_DELAY = 0.15` constant with a proper 5 rps / burst-10 limiter and two new CLI flags `--rate-per-second` / `--burst`), and the ingest pipeline (`src/rra/ingest.py`, which previously had no limiting at all). The ingest limiter is constructed in `main()` and passed as a parameter to `download_guidances()` — parameter over module-level for testability. Rate is configurable via `DOWNLOAD_RATE_PER_SECOND` and `DOWNLOAD_BURST` env vars (no prefix; pydantic_settings maps field names directly). Default of 5 rps / 10 burst was chosen to be polite to FDA's public endpoints while still completing a 100-doc corpus ingest in ~20 s. Motivation: defensive against accidental retry storms from parallel runs and future callers; also forecloses the per-caller duplication drift the project already paid once (schema-code drift postmortem). One unexpected finding: the pre-existing `# type: ignore[call-arg]` on the `Settings()` singleton was now flagged as unused by mypy strict — the pydantic mypy plugin in the current version handles it cleanly, so it was removed.

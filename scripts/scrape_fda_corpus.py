@@ -9,7 +9,8 @@ What it does:
   3. Applies CLUSTER_KEYWORDS to assign each candidate to one of six clusters
      (or 'unclassified' if no match)
   4. Device-specific filtering: pathway-classification entries whose titles
-     match DEVICE_SPECIFIC_HINTS are reassigned to the pseudo-cluster
+     match DEVICE_SPECIFIC_TITLE_PATTERNS (structural regex) or
+     DEVICE_SPECIFIC_HINTS (keyword list) are reassigned to the pseudo-cluster
      'device-specific' and excluded by default (use --include-unclassified
      to keep them for inspection).
   5. Optionally HEAD-verifies each URL
@@ -244,6 +245,23 @@ DEVICE_SPECIFIC_PREFIXES: list[str] = [
     "guidance for the submission of ",
 ]
 
+# Structural title patterns that reliably identify single-device-class 510(k)
+# submission guides regardless of the specific device name in the title.
+# Compiled at module load time; applied before DEVICE_SPECIFIC_HINTS in
+# is_device_specific() for short-circuit efficiency.
+DEVICE_SPECIFIC_TITLE_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"^Premarket Notification \[?510\(k\)\]? Submissions? for ", re.IGNORECASE),
+    re.compile(r"^Guidance Document for .+ 510\(k\)s?", re.IGNORECASE),
+    re.compile(r"^Guidance for (the )?(Content |Preparation of )?(a )?Premarket Notification.+for .+", re.IGNORECASE),
+    re.compile(r"^Content (and Format )?of Premarket Notification \[?510\(k\)\]? Submissions? for ", re.IGNORECASE),
+    re.compile(r"^510\(k\) Submissions? for ", re.IGNORECASE),
+    re.compile(r"^Submission Guidance for a 510\(k\)", re.IGNORECASE),
+    re.compile(r"^Guidance on (the )?(Content )?Premarket Notification.+for ", re.IGNORECASE),
+    re.compile(r"^Guidance Document for Premarket Notification Submissions? for ", re.IGNORECASE),
+    re.compile(r"^Guidance for the Content of Premarket Notifications? for ", re.IGNORECASE),
+    re.compile(r"^Guidance for Industry and (the )?FDA.+for .+ 510\(k\)s?", re.IGNORECASE),
+]
+
 OUTPUT_PATH = Path(__file__).resolve().parent.parent / "data" / "corpus" / "manifest.candidates.json"
 
 REQUEST_TIMEOUT = 30.0
@@ -351,6 +369,8 @@ def is_device_specific(title: str) -> bool:
     device-class-specific 510(k) submission guides (tampons, stents, etc.)
     to the pseudo-cluster 'device-specific'.
     """
+    if any(pat.search(title) for pat in DEVICE_SPECIFIC_TITLE_PATTERNS):
+        return True
     t = title.lower()
     return any(hint in t for hint in DEVICE_SPECIFIC_HINTS) or any(
         t.startswith(prefix) for prefix in DEVICE_SPECIFIC_PREFIXES
