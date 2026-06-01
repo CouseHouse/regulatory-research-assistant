@@ -235,6 +235,19 @@ DEVICE_SPECIFIC_HINTS: list[str] = [
     "incontinence",
     "ablation",
     "morcellation",
+    # Additional hints for device-specific entries not caught by title-structure patterns:
+    "biological indicator",
+    "intravascular administration",
+    "spinal system",
+    "chorionic gonadotropin",
+    "phacofragmentation",
+    "retinal prosth",
+    "pulse oximeter",
+    "artificial pancreas",
+    " gown",
+    "hypothermic",
+    "total artificial disc",
+    "medical laser",
 ]
 
 # Title prefixes that reliably indicate a single-device-class guide.
@@ -250,8 +263,9 @@ DEVICE_SPECIFIC_PREFIXES: list[str] = [
 # Compiled at module load time; applied before DEVICE_SPECIFIC_HINTS in
 # is_device_specific() for short-circuit efficiency.
 DEVICE_SPECIFIC_TITLE_PATTERNS: list[re.Pattern[str]] = [
+    # Core structural patterns (bracket variant — e.g. "... [510(k)] Submissions for X"):
     re.compile(r"^Premarket Notification \[?510\(k\)\]? Submissions? for ", re.IGNORECASE),
-    re.compile(r"^Guidance Document for .+ 510\(k\)s?", re.IGNORECASE),
+    re.compile(r"^Guidance Document for .+ 510\(k\)s?\b", re.IGNORECASE),
     re.compile(r"^Guidance for (the )?(Content |Preparation of )?(a )?Premarket Notification.+for .+", re.IGNORECASE),
     re.compile(r"^Content (and Format )?of Premarket Notification \[?510\(k\)\]? Submissions? for ", re.IGNORECASE),
     re.compile(r"^510\(k\) Submissions? for ", re.IGNORECASE),
@@ -259,7 +273,27 @@ DEVICE_SPECIFIC_TITLE_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"^Guidance on (the )?(Content )?Premarket Notification.+for ", re.IGNORECASE),
     re.compile(r"^Guidance Document for Premarket Notification Submissions? for ", re.IGNORECASE),
     re.compile(r"^Guidance for the Content of Premarket Notifications? for ", re.IGNORECASE),
-    re.compile(r"^Guidance for Industry and (the )?FDA.+for .+ 510\(k\)s?", re.IGNORECASE),
+    re.compile(r" - (Premarket Notification \[?510\(k\)\]?|510\(k\)) Submissions?\b", re.IGNORECASE),
+    re.compile(r"^Review Criteria [Ff]or Premarket Approval of .+ for ", re.IGNORECASE),
+    # FDA frequently uses "(510(k))" with parentheses instead of "[510(k)]" — handle both:
+    re.compile(r"^Premarket Notification \(?510\(k\)\)? Submissions? for ", re.IGNORECASE),
+    re.compile(r" - Premarket Notification \(?510\(k\)\)? Submissions?\b", re.IGNORECASE),
+    # "Guidance Document for the Preparation of Premarket Notification for X":
+    re.compile(r"^Guidance Document for (the )?Preparation of Premarket Notification", re.IGNORECASE),
+    # "Guidance on 510(k) Submissions for X" (device name after "for", not "Premarket Notification"):
+    re.compile(r"^Guidance on 510\(k\) Submissions? for ", re.IGNORECASE),
+    # "Guidance on the Content and Organization of a Premarket Notification for X":
+    re.compile(r"^Guidance on .+of a Premarket Notification for ", re.IGNORECASE),
+    # "Submission of Premarket Notifications for X" / "Recommendations for Premarket Notifications for X":
+    re.compile(r"^Submission of Premarket Notifications? for ", re.IGNORECASE),
+    re.compile(r"^Recommendations for Premarket Notifications? for ", re.IGNORECASE),
+    # "X - Submission Guidance for a 510(k)" (device name leads the title):
+    re.compile(r" - Submission Guidance for a 510\(k\)\b", re.IGNORECASE),
+    # Unanchored form catches mid-title "Premarket Notification [510(k)] Submissions for X"
+    # (e.g. "Policy Clarification and Premarket Notification [510(k)] Submissions for Ultrasonic..."):
+    re.compile(r"Premarket Notification \[?510\(k\)\]? Submissions? for ", re.IGNORECASE),
+    # "Content and Format for Abbreviated 510(k)s for X" (device-specific abbreviated-510k guides):
+    re.compile(r"^Content and Format for Abbreviated 510\(k\)s for ", re.IGNORECASE),
 ]
 
 OUTPUT_PATH = Path(__file__).resolve().parent.parent / "data" / "corpus" / "manifest.candidates.json"

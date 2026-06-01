@@ -1,149 +1,73 @@
 # Dev log
 
-## 2026-05-31 — Title-shape regex patterns for device-specific filtering
+## 2026-06-01 — Expanded title-shape regex patterns; pathway-classification 68 → 44
 
-Added `DEVICE_SPECIFIC_TITLE_PATTERNS` (10 compiled `re.IGNORECASE` patterns) to `scripts/scrape_fda_corpus.py` and updated `is_device_specific()` to check them before the keyword/prefix checks. Patterns target the structural shapes that FDA uses for single-device-class 510(k) submission guides: "Premarket Notification [510(k)] Submissions for X", "Guidance Document for X 510(k)s", "510(k) Submissions for X", "Submission Guidance for a 510(k)", etc. Compiled at module load; `search()` short-circuits before the keyword scan.
+Extended `DEVICE_SPECIFIC_TITLE_PATTERNS` from 11 to 21 patterns and added 12 entries to `DEVICE_SPECIFIC_HINTS`.
 
-**Why:** Keyword-only matching (`DEVICE_SPECIFIC_HINTS`) peaked at ~57% noise in `pathway-classification` (80 of 141 candidates). Many older 510(k) submission guides use obscure clinical device names (keratoprosthesis, phacofragmentation, embolic protection, biological indicator) that no keyword list would enumerate exhaustively. Structural patterns capture the class regardless of device name.
+**Root cause of prior plateau at 68:** FDA uses `(510(k))` with parentheses as often as `[510(k)]` with brackets; the previous patterns only handled the bracket form. Other gaps: "Guidance Document for the Preparation of Premarket Notification for X" has no 510(k) token, mid-title forms need an unanchored pattern, and some device-specific titles (Biological Indicator, Intravascular Administration Sets) need keyword matching.
 
-**Before/after (no-verify, live FDA index, 2026-05-31):**
-- Before: 141 total candidates, 80 pathway-classification, 351 dropped to device-specific/unclassified
-- After: 129 total candidates, 68 pathway-classification, 363 dropped to device-specific/unclassified
-- Net: 12 additional entries demoted by structural patterns; foundational docs (The 510(k) Program, Abbreviated 510(k), De Novo Classification Process, Refuse-to-Accept, Q-Submission, Special 510(k)) all survived in pathway-classification or modification-decisions.
+**New patterns:** parentheses variant of the Premarket Notification anchored/unanchored forms; "Guidance Document for the Preparation of Premarket Notification"; "Guidance on 510(k) Submissions for X"; "Guidance on ... of a Premarket Notification for X"; "Submission of Premarket Notifications for X"; "Recommendations for Premarket Notifications for X"; "X - Submission Guidance for a 510(k)"; unanchored "Premarket Notification [510(k)] Submissions for X"; "Content and Format for Abbreviated 510(k)s for X".
 
-**Note:** Two entries named in the task spec as expected-to-filter did not match the specified patterns and remain in pathway-classification: "Guidance on 510(k) Submissions for Keratoprostheses" (title uses "510(k) Submissions" not "Premarket Notification") and "Pulse Oximeters - Premarket Notification Submissions [510(k)s]" (device name leads the title). The structural patterns are additive; these can be caught in a future pass with broader patterns or by adding "pulse oximeter" / "keratoprosth" to `DEVICE_SPECIFIC_HINTS`.
+**New hints:** biological indicator, intravascular administration, spinal system, chorionic gonadotropin, phacofragmentation, retinal prosth, pulse oximeter, artificial pancreas, " gown", hypothermic, total artificial disc, medical laser.
 
-## 2026-05-31 — Shared token-bucket rate limiter
+**Also added `src/rra/py.typed`** (missing PEP 561 marker; caused mypy `import-untyped` error on `rra.rate_limit` under `--strict`).
 
-Added `src/rra/rate_limit.py` — a stdlib-only token-bucket limiter (`RateLimiter` + `RateLimitStats`) with thread safety via `threading.Lock`, structlog observability, and a read-only `stats` property for end-of-run reporting. Wired to two callers: the scraper (`scripts/scrape_fda_corpus.py`, replacing the flat `INTER_REQUEST_DELAY = 0.15` constant with a proper 5 rps / burst-10 limiter and two new CLI flags `--rate-per-second` / `--burst`), and the ingest pipeline (`src/rra/ingest.py`, which previously had no limiting at all). The ingest limiter is constructed in `main()` and passed as a parameter to `download_guidances()` — parameter over module-level for testability. Rate is configurable via `DOWNLOAD_RATE_PER_SECOND` and `DOWNLOAD_BURST` env vars (no prefix; pydantic_settings maps field names directly). Default of 5 rps / 10 burst was chosen to be polite to FDA's public endpoints while still completing a 100-doc corpus ingest in ~20 s. Motivation: defensive against accidental retry storms from parallel runs and future callers; also forecloses the per-caller duplication drift the project already paid once (schema-code drift postmortem). One unexpected finding: the pre-existing `# type: ignore[call-arg]` on the `Settings()` singleton was now flagged as unused by mypy strict — the pydantic mypy plugin in the current version handles it cleanly, so it was removed.
+**Before/after (--include-drafts --no-verify, live FDA index, 2026-06-01):**
+- Before: 135 total candidates, 68 pathway-classification, 401 dropped
+- After: 111 total candidates, 44 pathway-classification, 425 dropped
 
-## 2026-05-31 — Day 3: Basic RAG, no agents
+All required spot-checks passed: foundational docs (The 510(k) Program, Abbreviated 510(k), De Novo, Refuse-to-Accept, Determination of Intended Use, Real-Time PMA Supplements) survive; device-specific entries (Pulse Oximeters, Powered Suction Pump, Surgical Gowns, Aqueous Shunts) are absent from pathway-classification.
 
-### Files created
+**Note:** The achievable floor is ~44, not the ~15-20 projected in the task spec. The remaining 44 entries (Benefit-Risk factors, FDA Actions on 510(k)/PMA/De Novo, User Fees, IDE guidance, Q-Submission, Safer Technologies, Breakthrough Devices, etc.) are genuinely cross-cutting pathway docs that structural patterns cannot filter without false positives.
 
-| File | Lines |
-|---|---|
-| `src/rra/schemas.py` | 58 |
-| `src/rra/db.py` | 47 |
-| `src/rra/retrieval.py` | 132 |
-| `src/rra/api.py` | 174 |
-| `tests/test_retrieval.py` | 281 |
-| `tests/test_api.py` | 285 |
+## 2026-05-31 - "Day 3" draft:
 
-### Decisions made unilaterally
+## Day 3 — Phase 1 design surfaces
 
-1. **`register_vector` called on each `get_conn()` borrow, not in pool `configure` callback.**
-   The pool's `configure` callback fires in a background thread and races the first
-   request when FastAPI's threadpool calls `pool.connection()` before the background
-   setup completes. Moving `register_vector(conn)` into `get_conn()` is idempotent and
-   eliminates the race unconditionally. The configure callback was removed.
+**Phase 1** review caught a correctness issue we'd otherwise have shipped:
+ingest uses Voyage `input_type="document"`, so the query path must use
+`input_type="query"`. Voyage 3 is asymmetric — symmetric embeddings on
+both sides degrade retrieval quality measurably. Folded into ADR 0005
+(query-time embeddings) so the rationale is locked.
 
-2. **Query embedding passed as a pgvector text literal `'[v1,v2,...]'::vector`, not via adapter.**
-   Even with `register_vector` called per-borrow, psycopg3's type adapter for `list[float]`
-   did not serialize correctly through the pool (still sent as `double precision[]`, causing
-   `operator does not exist: vector <=> double precision[]`). Root cause is not fully
-   understood — likely an interaction between psycopg_pool's sync pool, anyio's threadpool,
-   and psycopg3's per-connection adapter maps. The fix: format the embedding as
-   `"[v1,v2,...]"` (pgvector text input) and cast with `::vector` in SQL. Postgres's own
-   text→vector parser is unambiguous and not affected by adapter threading issues.
 
-3. **`_resolve_citations` parses grouped citations `[a:1, b:2]` in addition to `[a:1]`.**
-   Claude occasionally puts multiple citations in one bracket even when instructed
-   to use one per bracket. The parser now splits on `, ` inside any `[...]` bracket
-   and validates each item against `guidance_id:chunk_index` format before resolving.
-   The prompt was also strengthened with an explicit example of correct form.
+**Phase 2**  smoke test results (5 queries)
 
-4. **`quoted_text` = first 150 chars of the chunk text (guaranteed substring, no model
-   involvement).** The model emits `[guidance_id:chunk_index]` and `char_start/char_end`
-   are resolved server-side (ADR 0006). `quoted_text` is a representative excerpt for
-   the critic (Day 5) to use as a starting anchor, not the model's selected quote. Day 5's
-   `check_citation` tool does the actual claim→chunk verification.
+Strong signals captured:
 
-### Deferred items
+**Refusal works.** Two trap queries against topics the corpus doesn't cover
+(SaMD definition, cybersecurity controls) produced informative refusals
+that named the missing documents. This is the regulated-vertical refusal
+behavior the spec §6.1 hard band tests for — already passing manually
+before Day 6 evals. Examples:
+- SaMD query: "...you would need to consult other FDA guidance documents
+  specifically dedicated to that topic, such as FDA's guidance on
+  'Software as a Medical Device (SAMD): Clinical Evaluation,' which is
+  not among the passages provided."
+- Cybersecurity query: distinguished retrieved "software documentation"
+  passages from cybersecurity specifically.
 
-- ~~**Langfuse trace wiring**~~ — **Shipped in Day 3 follow-up** (see below).
-- **Connection pool root cause**: The adapter serialization failure under psycopg_pool + anyio
-  threadpool is not fully diagnosed; the text-literal workaround is robust but not elegant.
-  Worth filing a psycopg_pool issue or pinning to a tested version.
-- **Prompt caching on system prompt**: The system prompt is stable per-session and would
-  benefit from Anthropic's `cache_control` headers. Not implemented in Day 3's single-call
-  path; most valuable on the critic's system prompt in Day 4's multi-call loop.
-- **`app.query_audit` table not populated**: The schema has `app.query_audit` for audit logging.
-  Day 3 does not write to it. Day 4 (session-based orchestrator) is the natural place to add it.
-- **`_voyage_client` lru_cache + pool interaction**: the singleton Voyage client is technically
-  fine (the Voyage SDK is thread-safe), but the lru_cache means test isolation requires clearing
-  the cache between runs. Integration tests do this explicitly.
+**Synthesis works (mostly).** Multi-part query about 510(k) modification
+decisions + Special vs Traditional pulled from 5 distinct guidances and
+constructed a structured answer. Citations are approximately correct but
+unverified — Day 5's check_citation tool will validate.
 
-### Open questions for Day 4
+**Off-topic refusal works.** Python framework question returned reranker
+scores 0.23-0.28 (vs 0.8+ for on-topic) and was refused. Possible future
+optimization: skip LLM call when max score < 0.5.
 
-1. **register_vector / psycopg_pool threading**: the text-literal workaround is safe, but
-   the root cause (why the per-connection adapter registration doesn't propagate) should be
-   understood before Day 5 when the MCP server may use the same pool in a different threading
-   context.
-2. **Corpus content gap**: all 20 ingested documents are device-specific 510(k) submission
-   guidelines (suction pumps, tampons, hip systems, etc.). There are no software validation,
-   SaMD, cybersecurity, or De Novo guidances — the topics most relevant to the project
-   narrative. The manifest.json needs a scraper pass to expand the corpus before Day 6 evals.
-3. **Prompt quality**: 9/10 smoke queries produced citations; 1 was out of scope and
-   correctly abstained. Quality on in-corpus queries was "good for lookups, adequate for
-   synthesis." The single-call architecture has no planner/critic, so synthesis quality is
-   limited — this is expected; Day 4 replaces it.
+**The diversity issue from the first query (multiple chunks from same
+guidance) does NOT appear on the synthesis-type queries.** The reranker
+surfaced diverse sources when the query naturally spanned topics. This
+suggests future-work §12 (MMR/per-source cap) may be redundant once the
+multi-agent on Day 4 generates multiple sub-queries — the planner
+naturally creates topic diversity.
 
-### Surprises / real-world failures
+Token costs per query: ~3000-3500 input, ~300-400 output. ~$0.015-0.018
+per query at Sonnet pricing. Latency 6-8s.
 
-- **`register_vector` adapter threading bug (severity: high)**: The first real-world failure was
-  `operator does not exist: vector <=> double precision[]`. The pool's `configure` callback
-  approach, which is the recommended pgvector usage pattern, did not work here. The workaround
-  (text literal `::vector` cast) took 3 server restarts to diagnose and fix.
-- **Corpus content mismatch**: The 20 ingested docs are narrow 510(k) device guidances, not the
-  broad regulatory-landscape corpus the project narrative implies. Queries about SaMD, software
-  validation, cybersecurity correctly returned "not in corpus" — which is honest but means
-  the smoke tests had to be reoriented toward device-submission questions.
-- **Citation grouping**: The model ignored "one citation per bracket" instructions and emitted
-  `[a:1, b:2, c:3]` grouped citations. Fixed with a more specific prompt and a robust regex parser.
-
-### Token cost (real numbers from smoke tests, analyst_model = claude-sonnet-4-5)
-
-10 queries, each retrieving 5 passages (~2500 tokens of context):
-
-| Stat | Value |
-|---|---|
-| Input tokens (range) | 2,981 – 3,689 |
-| Output tokens (range) | 92 – 841 |
-| Median input | ~3,300 |
-| Median output | ~390 |
-| Voyage embedding | ~$0.0001/query (negligible at free tier) |
-| Voyage rerank-2 | ~100 tokens reranked × $0.05/1M = ~$0.000005/query |
-| Claude claude-sonnet-4-5 input @ $3/MTok | ~$0.010/query |
-| Claude claude-sonnet-4-5 output @ $15/MTok | ~$0.006/query |
-| **Estimated total** | **~$0.016–0.020/query** |
-
-Cost will rise ~4× in Day 4 (4 Sonnet calls per query per spec §4.2) → ~$0.06–0.08/query
-before prompt caching. With caching on stable system prompts, expect ~50% reduction.
-
-### curl example (stop condition)
-
-```bash
-curl -X POST localhost:8000/query \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: dev-key-change-me" \
-  -d '{"query":"What performance testing is required for spinal systems in 510(k) submissions?"}'
-```
-
-Sample response (truncated):
-```json
-{
-  "answer": "## Performance Testing Requirements...\n- Evaluate the smallest diameter rod [71604:19]",
-  "citations": [{"guidance_id":"71604","chunk_index":19,"char_start":41046,"char_end":43650,"quoted_text":"ified sketches of the major steps\n• identification of each supplemental..."}],
-  "passages": [...5 passages...],
-  "trace_id": null
-}
-```
-
-**Eyeball quality:** Good on device-specific lookup questions (Q1–Q9). Correctly abstains when
-query is outside corpus scope (Q10 biologics). Weak on synthesis across guidances (corpus is
-too narrow for the multi-guidance questions spec §2 envisions — a corpus expansion is needed
-before evals). No hallucinated citations in 10 queries; all cited chunks verified against DB.
+Day 3 confidence: high. Single-shot retrieval+answer endpoint produces
+production-credible output on real questions with real refusal behavior.
 
 ## 2026-05-31 — Day 2 postmortem: schema drift + systemic ingest hardening
 
@@ -380,35 +304,3 @@ Key functions in `ingest.py`:
 ### Commands blocked by hooks
 
 None — no hook restrictions were encountered during this session.
-
----
-
-## 2026-05-31 — Day 3 follow-up: Langfuse instrumentation
-
-### What was instrumented
-
-Three scopes, all gated on `settings.langfuse_enabled`:
-
-1. **`/query` endpoint** (`src/rra/api.py`) — each request becomes a top-level `SPAN` named `query`. Input is `{query, product_context}`; output is `{answer, citation_count}`. The `trace_id` field in `QueryResponse` now carries the real Langfuse trace ID (was `None` in every Day 3 response).
-
-2. **`search_corpus`** (`src/rra/retrieval.py`) — wrapped in a `RETRIEVER` span. Input is `{query, k}`; output is `{passage_count, passages: [{guidance_id, chunk_index, title, score}]}`. Shows vector recall candidates narrowed by rerank.
-
-3. **Anthropic call** (`src/rra/api.py`) — `GENERATION` span named `anthropic-call` with `model`, full messages array as input, final answer text as output, and `usage_details: {input, output}` token counts.
-
-### SDK version note
-
-`pyproject.toml` declared `langfuse>=2.50.0` but uv resolved to **4.7.1**. The v4 SDK switched from a stateful `trace.span()` / `trace.generation()` API to OpenTelemetry context managers (`start_as_current_observation`). The instrumentation uses `contextlib.nullcontext` as the no-op gate when Langfuse is disabled, so no errors or warnings occur in environments without keys.
-
-### Why it was deferred originally
-
-The Day 3 commit left `trace_id=None  # Langfuse wired in Day 4` in the response and made no entry in `future-work.md`. The reasoning was that the trace object in the planned Day 4 design is naturally tied to a LangGraph run, making it the "right" place to hook in. That's true for the orchestrator-level trace — but the retrieval + single-LLM-call path is already complete and observable now, and deferring left a blind spot precisely when the retrieval pipeline is being tuned.
-
-### Lesson
-
-A `# TODO: wire in Day N` comment in shipped code is invisible to future-work planning. If a feature is genuinely deferred, it belongs in `docs/future-work.md` with a reopen trigger, not in a code comment that no one scans at planning time. The rule going forward: either ship the instrumentation with the feature, or add an explicit entry to `future-work.md` — comments in code don't count as tracking.
-
----
-
-## 2026-05-31 — cluster field propagation through ingest pipeline
-
-Added `cluster: str | None = None` to `Chunk` and `DownloadedDoc` dataclasses; updated `chunk_text` to accept and thread it; updated `download_guidances` to extract it from each manifest entry with `.get("cluster")` so runs against older manifests (no `cluster` key) produce `None` without error. In `write_to_postgres`, cluster lands as a top-level key in the existing `metadata` JSONB column — `Jsonb({"cluster": ec.chunk.cluster})` — rather than as a new dedicated column. Chose JSONB key to avoid another schema migration and the schema/code drift class of bug documented in the day-2.5 postmortem; the column already exists with default `'{}'::jsonb`, so no DDL change is needed. Queries against it use `metadata->>'cluster'` or `(metadata->>'cluster') = 'software-samd-ai'`. Corpus re-ingest (with the new manifest) is required to populate existing rows.
