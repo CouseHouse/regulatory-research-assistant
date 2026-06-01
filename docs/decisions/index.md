@@ -10,7 +10,9 @@ A flat list of all ADRs with status and one-line summary. Keep current — updat
 | 0004  | [Data-access layer: psycopg3 + pool, no ORM](0004-data-access-layer-psycopg-pool.md) | Active | 2026-05-31 | Day 3 |
 | 0005  | [Query-time embeddings: singleton client + input_type=query](0005-query-time-embeddings.md) | Active | 2026-05-31 | Day 3 |
 | 0006  | [Citation span addressing: guidance_id:chunk_index](0006-citation-span-addressing.md) | Active | 2026-05-31 | Day 3 |
-| 0007  | [Corpus scope and methodology](0007-corpus-scope-and-methodology.md) | Active | 2026-05-31 | Day 3
+| 0007  | [Corpus scope and methodology](0007-corpus-scope-and-methodology.md) | Active | 2026-05-31 | Day 3 |
+| 0008  | [LangGraph state shape and agent contracts](0008-langgraph-state-shape.md) | Active | 2026-06-01 | Day 4 |
+| 0009  | [Critic-loop policy](0009-critic-loop-policy.md) | Active | 2026-06-01 | Day 4 |
 
 
 ## Conventions for this file
