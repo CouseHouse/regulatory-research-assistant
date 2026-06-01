@@ -56,3 +56,11 @@ class QueryResponse(BaseModel):
         default=None,
         description="Langfuse trace ID. Populated when settings.langfuse_enabled is True.",
     )
+    warning: str | None = Field(
+        default=None,
+        description=(
+            "Set when the graph exits with a non-clean condition: cap_hit=True "
+            "(max revisions reached) or verdict=escalate (corpus coverage gap). "
+            "None on normal approve exits. Additive optional field per ADR 0008."
+        ),
+    )

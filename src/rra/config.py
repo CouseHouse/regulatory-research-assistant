@@ -98,9 +98,10 @@ class Settings(BaseSettings):
 
     # ─── Model selection ────────────────────────────────────────────────────
     # Role-to-model mapping rationale lives in docs/spec.md §4.2.
-    planner_model: str = "claude-sonnet-4-5"
-    analyst_model: str = "claude-sonnet-4-5"
-    critic_model: str = "claude-sonnet-4-5"
+    # Updated Day 4: planner/analyst/critic → claude-sonnet-4-6.
+    planner_model: str = "claude-sonnet-4-6"
+    analyst_model: str = "claude-sonnet-4-6"
+    critic_model: str = "claude-sonnet-4-6"
     researcher_model: str = "claude-haiku-4-5"
     judge_model: str = "claude-haiku-4-5"
 
