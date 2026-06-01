@@ -6,6 +6,7 @@ exceed the 1024-token Sonnet caching threshold).
 """
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import Any
 
@@ -20,6 +21,7 @@ from anthropic.types import (
 from pydantic import BaseModel, Field
 
 from rra.config import settings
+from rra.tracing import get_langfuse
 
 log = structlog.get_logger(__name__)
 
@@ -137,58 +139,91 @@ def run_planner(state: dict[str, Any]) -> dict[str, Any]:
 
     client = Anthropic(api_key=settings.anthropic_api_key.get_secret_value())
 
-    message = client.messages.create(
-        model=settings.planner_model,
-        max_tokens=512,
-        system=[
-            TextBlockParam(
-                type="text",
-                text=_SYSTEM_PROMPT,
-                cache_control=CacheControlEphemeralParam(type="ephemeral"),
-            )
-        ],
-        messages=[{"role": "user", "content": user_content}],
-        tools=_PLAN_TOOL,
-        tool_choice=ToolChoiceToolParam(type="tool", name="plan_query"),
+    lf = get_langfuse()
+    span_cm = (
+        lf.start_as_current_observation(
+            name="planner",
+            as_type="span",
+            input={"query": query, "product_context": product_context},
+        )
+        if lf is not None
+        else contextlib.nullcontext(None)
     )
+    with span_cm as span:
+        gen_cm = (
+            span.start_as_current_observation(
+                name="anthropic:planner",
+                as_type="generation",
+                model=settings.planner_model,
+            )
+            if span is not None
+            else contextlib.nullcontext(None)
+        )
+        with gen_cm as gen:
+            message = client.messages.create(
+                model=settings.planner_model,
+                max_tokens=512,
+                system=[
+                    TextBlockParam(
+                        type="text",
+                        text=_SYSTEM_PROMPT,
+                        cache_control=CacheControlEphemeralParam(type="ephemeral"),
+                    )
+                ],
+                messages=[{"role": "user", "content": user_content}],
+                tools=_PLAN_TOOL,
+                tool_choice=ToolChoiceToolParam(type="tool", name="plan_query"),
+            )
+            if gen is not None:
+                gen.update(
+                    usage_details={
+                        "input": message.usage.input_tokens,
+                        "output": message.usage.output_tokens,
+                    },
+                )
 
-    # Extract tool-use block
-    tool_input: dict[str, Any] = {}
-    for block in message.content:
-        if block.type == "tool_use" and block.name == "plan_query":
-            tool_input = dict(block.input)
-            break
+        # Extract tool-use block
+        tool_input: dict[str, Any] = {}
+        for block in message.content:
+            if block.type == "tool_use" and block.name == "plan_query":
+                tool_input = dict(block.input)
+                break
 
-    if not tool_input:
-        log.warning("planner.no_tool_output", query=query[:80])
-        tool_input = {"sub_questions": [query], "outline": ""}
+        if not tool_input:
+            log.warning("planner.no_tool_output", query=query[:80])
+            tool_input = {"sub_questions": [query], "outline": ""}
 
-    try:
-        output = PlannerOutput.model_validate(tool_input)
-    except Exception:
-        log.warning("planner.parse_error", raw=json.dumps(tool_input)[:200])
-        output = PlannerOutput(sub_questions=[query], outline="")
+        try:
+            output = PlannerOutput.model_validate(tool_input)
+        except Exception:
+            log.warning("planner.parse_error", raw=json.dumps(tool_input)[:200])
+            output = PlannerOutput(sub_questions=[query], outline="")
 
-    # Truncate to 4 if model exceeded the limit (shouldn't happen with tool schema)
-    if len(output.sub_questions) > 4:
-        log.warning("planner.too_many_sub_questions", count=len(output.sub_questions))
-        output = PlannerOutput(
-            sub_questions=output.sub_questions[:4], outline=output.outline
+        # Truncate to 4 if model exceeded the limit (shouldn't happen with tool schema)
+        if len(output.sub_questions) > 4:
+            log.warning("planner.too_many_sub_questions", count=len(output.sub_questions))
+            output = PlannerOutput(
+                sub_questions=output.sub_questions[:4], outline=output.outline
+            )
+
+        log.info(
+            "planner.complete",
+            session_id=state.get("session_id"),
+            sub_question_count=len(output.sub_questions),
+            input_tokens=message.usage.input_tokens,
+            output_tokens=message.usage.output_tokens,
         )
 
-    log.info(
-        "planner.complete",
-        session_id=state.get("session_id"),
-        sub_question_count=len(output.sub_questions),
-        input_tokens=message.usage.input_tokens,
-        output_tokens=message.usage.output_tokens,
-    )
+        if span is not None:
+            span.update(
+                output={"sub_questions": output.sub_questions, "outline": output.outline},
+            )
 
-    return {
-        "sub_questions": output.sub_questions,
-        "outline": output.outline,
-        "token_usage": {
-            "planner_input": message.usage.input_tokens,
-            "planner_output": message.usage.output_tokens,
-        },
-    }
+        return {
+            "sub_questions": output.sub_questions,
+            "outline": output.outline,
+            "token_usage": {
+                "planner_input": message.usage.input_tokens,
+                "planner_output": message.usage.output_tokens,
+            },
+        }

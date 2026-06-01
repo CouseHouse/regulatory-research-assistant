@@ -42,7 +42,7 @@ dependencies = [
     "mcp>=1.0.0",                             # official Anthropic MCP SDK
 
     # ─── Observability + evals ──────────────────────────────────────────────
-    "langfuse>=2.50.0",
+    "langfuse>=4.0,<5",
 
     # ─── Config + utilities ─────────────────────────────────────────────────
     "pydantic>=2.9.0",

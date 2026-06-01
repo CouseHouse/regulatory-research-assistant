@@ -20,6 +20,7 @@ Prompt caching applied to system prompt (exceeds 1024-token threshold).
 """
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import Any
 
@@ -35,6 +36,7 @@ from anthropic.types import (
 from rra.agents.types import CriticNote, CriticOutput
 from rra.config import settings
 from rra.schemas import RetrievedPassage
+from rra.tracing import get_langfuse
 
 log = structlog.get_logger(__name__)
 
@@ -170,102 +172,139 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
 
     client = Anthropic(api_key=settings.anthropic_api_key.get_secret_value())
 
-    message = client.messages.create(
-        model=settings.critic_model,
-        max_tokens=512,
-        system=[
-            TextBlockParam(
-                type="text",
-                text=_SYSTEM_PROMPT,
-                cache_control=CacheControlEphemeralParam(type="ephemeral"),
-            )
-        ],
-        messages=[{"role": "user", "content": user_content}],
-        tools=_VERDICT_TOOL,
-        tool_choice=ToolChoiceToolParam(type="tool", name="submit_verdict"),
+    lf = get_langfuse()
+    span_cm = (
+        lf.start_as_current_observation(
+            name="critic",
+            as_type="span",
+            input={"draft_preview": draft[:200], "revision_count": revision_count},
+        )
+        if lf is not None
+        else contextlib.nullcontext(None)
     )
-
-    # Extract tool-use block.
-    tool_input: dict[str, Any] = {}
-    for block in message.content:
-        if block.type == "tool_use" and block.name == "submit_verdict":
-            tool_input = dict(block.input)
-            break
-
-    if not tool_input:
-        # Malformed output: treat as approve to avoid infinite loop (ADR 0009).
-        log.error(
-            "critic.no_tool_output",
-            session_id=state.get("session_id"),
-            draft_preview=draft[:120],
+    with span_cm as span:
+        gen_cm = (
+            span.start_as_current_observation(
+                name="anthropic:critic",
+                as_type="generation",
+                model=settings.critic_model,
+            )
+            if span is not None
+            else contextlib.nullcontext(None)
         )
-        tool_input = {"verdict": "approve", "notes": []}
-
-    try:
-        critic_output = CriticOutput.model_validate(tool_input)
-    except Exception:
-        log.error(
-            "critic.parse_error",
-            session_id=state.get("session_id"),
-            raw=json.dumps(tool_input)[:200],
-        )
-        critic_output = CriticOutput(verdict="approve", notes=[])
-
-    # Validate notes — drop any that reference non-existent passages.
-    validated_notes: list[CriticNote] = []
-    for note in critic_output.notes:
-        if note.citation_key is not None:
-            parts_split = note.citation_key.rsplit(":", 1)
-            if len(parts_split) == 2:
-                try:
-                    key: tuple[str, int] = (parts_split[0], int(parts_split[1]))
-                except ValueError:
-                    key = ("", -1)
-                if key not in valid_keys and key not in passage_map:
-                    log.debug(
-                        "critic.note_references_unknown_passage",
-                        citation_key=note.citation_key,
+        with gen_cm as gen:
+            message = client.messages.create(
+                model=settings.critic_model,
+                max_tokens=512,
+                system=[
+                    TextBlockParam(
+                        type="text",
+                        text=_SYSTEM_PROMPT,
+                        cache_control=CacheControlEphemeralParam(type="ephemeral"),
                     )
-        validated_notes.append(note)
+                ],
+                messages=[{"role": "user", "content": user_content}],
+                tools=_VERDICT_TOOL,
+                tool_choice=ToolChoiceToolParam(type="tool", name="submit_verdict"),
+            )
+            if gen is not None:
+                gen.update(
+                    usage_details={
+                        "input": message.usage.input_tokens,
+                        "output": message.usage.output_tokens,
+                    },
+                )
 
-    if critic_output.verdict == "revise" and not validated_notes:
-        log.warning(
-            "critic.revise_with_no_notes",
-            session_id=state.get("session_id"),
-        )
+        # Extract tool-use block.
+        tool_input: dict[str, Any] = {}
+        for block in message.content:
+            if block.type == "tool_use" and block.name == "submit_verdict":
+                tool_input = dict(block.input)
+                break
 
-    # Increment revision_count when issuing a revise verdict.
-    new_revision_count = revision_count
-    cap_hit = False
-    if critic_output.verdict == "revise":
-        new_revision_count = revision_count + 1
-        if new_revision_count >= settings.max_critic_revisions:
-            cap_hit = True
-            log.info(
-                "critic.cap_hit",
+        if not tool_input:
+            # Malformed output: treat as approve to avoid infinite loop (ADR 0009).
+            log.error(
+                "critic.no_tool_output",
                 session_id=state.get("session_id"),
-                revision_count=new_revision_count,
+                draft_preview=draft[:120],
+            )
+            tool_input = {"verdict": "approve", "notes": []}
+
+        try:
+            critic_output = CriticOutput.model_validate(tool_input)
+        except Exception:
+            log.error(
+                "critic.parse_error",
+                session_id=state.get("session_id"),
+                raw=json.dumps(tool_input)[:200],
+            )
+            critic_output = CriticOutput(verdict="approve", notes=[])
+
+        # Validate notes — drop any that reference non-existent passages.
+        validated_notes: list[CriticNote] = []
+        for note in critic_output.notes:
+            if note.citation_key is not None:
+                parts_split = note.citation_key.rsplit(":", 1)
+                if len(parts_split) == 2:
+                    try:
+                        key: tuple[str, int] = (parts_split[0], int(parts_split[1]))
+                    except ValueError:
+                        key = ("", -1)
+                    if key not in valid_keys and key not in passage_map:
+                        log.debug(
+                            "critic.note_references_unknown_passage",
+                            citation_key=note.citation_key,
+                        )
+            validated_notes.append(note)
+
+        if critic_output.verdict == "revise" and not validated_notes:
+            log.warning(
+                "critic.revise_with_no_notes",
+                session_id=state.get("session_id"),
             )
 
-    log.info(
-        "critic.complete",
-        session_id=state.get("session_id"),
-        verdict=critic_output.verdict,
-        note_count=len(validated_notes),
-        revision_count=new_revision_count,
-        cap_hit=cap_hit,
-        input_tokens=message.usage.input_tokens,
-        output_tokens=message.usage.output_tokens,
-    )
+        # Increment revision_count when issuing a revise verdict.
+        new_revision_count = revision_count
+        cap_hit = False
+        if critic_output.verdict == "revise":
+            new_revision_count = revision_count + 1
+            if new_revision_count >= settings.max_critic_revisions:
+                cap_hit = True
+                log.info(
+                    "critic.cap_hit",
+                    session_id=state.get("session_id"),
+                    revision_count=new_revision_count,
+                )
 
-    suffix = "" if revision_count == 0 else f"_rev{revision_count}"
-    return {
-        "verdict": critic_output.verdict,
-        "critic_notes": validated_notes,
-        "revision_count": new_revision_count,
-        "cap_hit": cap_hit,
-        "token_usage": {
-            f"critic_input{suffix}": message.usage.input_tokens,
-            f"critic_output{suffix}": message.usage.output_tokens,
-        },
-    }
+        log.info(
+            "critic.complete",
+            session_id=state.get("session_id"),
+            verdict=critic_output.verdict,
+            note_count=len(validated_notes),
+            revision_count=new_revision_count,
+            cap_hit=cap_hit,
+            input_tokens=message.usage.input_tokens,
+            output_tokens=message.usage.output_tokens,
+        )
+
+        if span is not None:
+            span.update(
+                output={
+                    "verdict": critic_output.verdict,
+                    "note_count": len(validated_notes),
+                    "cap_hit": cap_hit,
+                },
+            )
+
+        suffix = "" if revision_count == 0 else f"_rev{revision_count}"
+        return {
+            "verdict": critic_output.verdict,
+            "critic_notes": validated_notes,
+            "revision_count": new_revision_count,
+            "cap_hit": cap_hit,
+            "token_usage": {
+                f"critic_input{suffix}": message.usage.input_tokens,
+                f"critic_output{suffix}": message.usage.output_tokens,
+            },
+        }

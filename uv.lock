@@ -3117,7 +3117,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "langchain-anthropic", specifier = ">=0.3.0" },
     { name = "langchain-core", specifier = ">=0.3.0" },
-    { name = "langfuse", specifier = ">=2.50.0" },
+    { name = "langfuse", specifier = ">=4.0,<5" },
     { name = "langgraph", specifier = ">=0.2.50" },
     { name = "langgraph-checkpoint-postgres", specifier = ">=2.0.0" },
     { name = "mcp", specifier = ">=1.0.0" },

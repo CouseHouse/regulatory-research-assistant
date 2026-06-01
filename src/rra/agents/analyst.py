@@ -14,6 +14,7 @@ Prompt caching applied to the system prompt (exceeds the 1024-token threshold).
 """
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 import structlog
@@ -23,6 +24,7 @@ from anthropic.types import CacheControlEphemeralParam, TextBlockParam
 from rra.agents.types import CriticNote
 from rra.config import settings
 from rra.schemas import QueryRequest, RetrievedPassage
+from rra.tracing import get_langfuse
 
 log = structlog.get_logger(__name__)
 
@@ -172,38 +174,70 @@ def run_analyst(state: dict[str, Any]) -> dict[str, Any]:
             query, product_context, passages, prior_draft, critic_notes, outline
         )
 
-    message = client.messages.create(
-        model=settings.analyst_model,
-        max_tokens=1500,
-        system=[
-            TextBlockParam(
-                type="text",
-                text=_SYSTEM_PROMPT,
-                cache_control=CacheControlEphemeralParam(type="ephemeral"),
+    lf = get_langfuse()
+    span_name = "analyst" if revision_count == 0 else f"analyst:rev{revision_count}"
+    span_cm = (
+        lf.start_as_current_observation(
+            name=span_name,
+            as_type="span",
+            input={"query": query, "revision_count": revision_count, "passage_count": len(passages)},
+        )
+        if lf is not None
+        else contextlib.nullcontext(None)
+    )
+    with span_cm as span:
+        gen_cm = (
+            span.start_as_current_observation(
+                name="anthropic:analyst",
+                as_type="generation",
+                model=settings.analyst_model,
             )
-        ],
-        messages=[{"role": "user", "content": user_message}],
-    )
+            if span is not None
+            else contextlib.nullcontext(None)
+        )
+        with gen_cm as gen:
+            message = client.messages.create(
+                model=settings.analyst_model,
+                max_tokens=1500,
+                system=[
+                    TextBlockParam(
+                        type="text",
+                        text=_SYSTEM_PROMPT,
+                        cache_control=CacheControlEphemeralParam(type="ephemeral"),
+                    )
+                ],
+                messages=[{"role": "user", "content": user_message}],
+            )
+            if gen is not None:
+                gen.update(
+                    usage_details={
+                        "input": message.usage.input_tokens,
+                        "output": message.usage.output_tokens,
+                    },
+                )
 
-    draft = ""
-    for block in message.content:
-        if hasattr(block, "text"):
-            draft = block.text
-            break
+        draft = ""
+        for block in message.content:
+            if hasattr(block, "text"):
+                draft = block.text
+                break
 
-    log.info(
-        "analyst.complete",
-        session_id=state.get("session_id"),
-        revision_count=revision_count,
-        input_tokens=message.usage.input_tokens,
-        output_tokens=message.usage.output_tokens,
-    )
+        log.info(
+            "analyst.complete",
+            session_id=state.get("session_id"),
+            revision_count=revision_count,
+            input_tokens=message.usage.input_tokens,
+            output_tokens=message.usage.output_tokens,
+        )
 
-    suffix = "" if revision_count == 0 else f"_rev{revision_count}"
-    return {
-        "draft": draft,
-        "token_usage": {
-            f"analyst_input{suffix}": message.usage.input_tokens,
-            f"analyst_output{suffix}": message.usage.output_tokens,
-        },
-    }
+        if span is not None:
+            span.update(output={"draft_preview": draft[:200], "revision_count": revision_count})
+
+        suffix = "" if revision_count == 0 else f"_rev{revision_count}"
+        return {
+            "draft": draft,
+            "token_usage": {
+                f"analyst_input{suffix}": message.usage.input_tokens,
+                f"analyst_output{suffix}": message.usage.output_tokens,
+            },
+        }
