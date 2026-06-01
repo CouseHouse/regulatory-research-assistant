@@ -47,71 +47,52 @@ START → planner → researcher → analyst → critic
 
 **Cap-hit written by critic node:** The design doc mentioned a "thin wrapping node" for cap_hit. Implemented more cleanly: the critic node itself computes `cap_hit = (new_revision_count >= settings.max_critic_revisions)` after incrementing, then `route_after_critic` reads `state["cap_hit"]` directly. One less node in the graph; same semantics.
 
- Open docs/dev-log.md and replace the two "Not yet recorded" sections with
- the real numbers from this session's smoke test:
-
- Per-agent token cost (approve path, unforced):
-   planner   440 in / 222 out
-   researcher 4 calls ~255 in / ~21 out each (query reformulation)
-   analyst   10408 in / 1011 out
-   critic    12271 in / 50 out
-   total     ~25,547 tokens, ~$0.05/query
-   (analyst + critic dominate; researcher reformulation is cheap)
-
- Langfuse trace structure (confirmed):
-   query → planner → researcher (4 reformulation generations + 4
-   search_corpus retrievers) → analyst → critic. Forced-verdict runs show
-   bare critic spans (no generation child, no LLM call).
-
- Loop verified live (3 modes): revise→cap-out→warning,
-   escalate→immediate-exit→warning, unset→approve→null-warning.
-
- Citation-precision issue: quoted_text spans land on PDF boilerplate
-   (line numbers, "Contains Nonbinding Recommendations" headers) rather
-   than the claim-supporting sentence. Root causes: (1) chunk text retains
-   PDF artifacts, (2) citation resolves to chunk-leading chars. Targets:
-   Day 5 check_citation (resolution) + ingest cleaning pass (artifacts).
-   This is the Day 7 improvement target + Day 11 postmortem candidate.
-
 ### Surprises / open items
 
 - The planner system prompt may not reliably exceed 1024 tokens in all configurations since token count varies by exact prompt text. If cache hit rate is low on the planner, consider adding more few-shot examples in Day 7 (when retrieval recall evals run).
 - LangGraph 0.2.50 passes state as `dict[str, Any]` to node functions at runtime even when `StateGraph[GraphState]` is used, requiring `# type: ignore[type-var]` on `add_node` calls. This is a known limitation of LangGraph's TypedDict typing.
 - The `_format_user_prompt` move from api.py to analyst.py is a breaking change for any caller that imported it from api.py directly. Exported as `format_user_prompt` from `rra.agents.analyst` with the same signature.
 
-### checkpointer autocommit bug
+Per-agent token cost (real query — unforced approve path)
+Measured from Langfuse trace 7a0cc767... (query: "When does a software
+change to a cleared device require a new 510(k)?", Class II SaMD context).
+Approved first pass, 7 citations, warning=null.
+AgentModelInputOutputCostplannerSonnet 4.621225$0.00344researcher (4×)Haiku 4.51,01599$0.00151analystSonnet 4.67,1701,017$0.03677criticSonnet 4.68,97150$0.02766total—17,1771,391$0.069
+Trace latency: 34.2s end-to-end.
+Cost shape: analyst + critic are ~93% of spend; the Haiku researcher
+(4 reformulation calls) is ~2%. The planner's input is only 21 tokens —
+prompt caching is working: the ~680-token few-shot system prompt is cached,
+so only the per-query delta is billed as fresh input. The critic is
+expensive because it ingests the full draft + all retrieved passages to
+verify citations (8,971 input tokens) but emits almost nothing (50 output).
+Note: forced-verdict (CRITIC_FORCE_VERDICT) runs show the critic at 0
+tokens (no LLM call) — never use forced-run traces for cost modeling.
+This unforced trace is the canonical cost datum for the Day 10 model.
+Langfuse trace structure (confirmed)
+query (root span, 34.2s)
+├── planner    (span → anthropic:planner generation, Sonnet)
+├── researcher (span → 4× anthropic:researcher generations [Haiku] +
+│                4× search_corpus RETRIEVER observations)
+├── analyst    (span → anthropic:analyst generation, Sonnet)
+└── critic     (span → anthropic:critic generation, Sonnet)
+Each agent node is a SPAN; each LLM call is a nested GENERATION with token
+usage; retrieval calls are RETRIEVER observations. The researcher's 4
+reformulation+retrieval pairs are visible as distinct children — confirming
+the Haiku query-reformulation design (not a Python passthrough).
+Forced-verdict runs produce a bare critic SPAN with no GENERATION child
+(no model call) — the loop is still visible, the cost is correctly zero.
+Loop verified live (3 modes)
 
-First real query 500'd: PostgresSaver.setup() runs CREATE INDEX
-CONCURRENTLY, which Postgres forbids inside a transaction. The checkpointer
-connection was in psycopg3's default transaction mode.
+revise   → analyst runs 3× (initial + 2 revisions) → cap_hit at
+revision_count=2 → warning "Analysis reached the maximum revision limit."
+escalate → single analyst pass → immediate exit → warning "Query could
+not be fully grounded in available guidance. Answer is best-effort."
+unset      → normal first-pass approve → warning=null (gate is
+production-invisible; enforced by test_force_verdict_default_is_none).
 
-Two fixes: (1) dedicated autocommit connection for the checkpointer,
-separate from the ADR-0004 request pool; (2) cache the checkpointer as a
-process singleton so setup() runs once, not per request.
-
-Class of bug: same family as the Day 2.5 ingest failures — code passes
-unit tests (which mock the checkpointer) but the real-infrastructure
-integration surfaces a constraint the mocks can't model. Reinforces why
-the live smoke test is a stop condition, not the mocked test suite.
-
-### citation precision observation
-
-The four-agent pipeline works end-to-end (CardioWatch query produced a
-correct cross-document synthesis, critic approved, warning=null). But the
-resolved quoted_text spans often land on PDF boilerplate (line numbers,
-"Contains Nonbinding Recommendations" headers, "contact FDA staff"
-footers) rather than the specific sentence supporting each claim.
-
-Two root causes for Day 6/7:
-1. Chunk text retains PDF extraction artifacts (line numbers, headers,
-   footers) — a cleaning pass during ingest would help.
-2. Citation resolves to the chunk's leading chars, not the
-   claim-supporting sentence within the chunk. The check_citation MCP
-   tool (Day 5) + tighter span resolution is the fix.
-
-This is the kind of thing the citation_validity eval scorer will catch
-and quantify on Day 6. Logging now as a known issue, not fixing in Day 4.
-
+Revision passes cost more than the initial (the analyst receives prior
+draft + critic notes on top of passages), confirming the edit-in-place
+design from ADR 0009.
 ---
 
 ## 2026-06-01 — Expanded title-shape regex patterns; pathway-classification 68 → 44
