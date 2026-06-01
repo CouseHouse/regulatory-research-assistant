@@ -15,9 +15,9 @@ trace and the Postgres checkpoint share a single identifier.
 """
 from __future__ import annotations
 
-from functools import lru_cache
 from typing import Annotated, Any, Literal
 
+import psycopg
 import structlog
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.graph import END, StateGraph
@@ -29,7 +29,6 @@ from rra.agents.researcher import run_researcher
 from rra.agents.analyst import run_analyst
 from rra.agents.types import CriticNote
 from rra.config import settings
-from rra.db import get_pool
 from rra.schemas import RetrievedPassage
 
 log = structlog.get_logger(__name__)
@@ -99,17 +98,32 @@ def route_after_critic(state: GraphState) -> str:
 
 # ─── Checkpointer singleton ───────────────────────────────────────────────────
 
-@lru_cache(maxsize=1)
-def _get_checkpointer() -> PostgresSaver:
-    """Process-lifetime PostgresSaver backed by the shared connection pool.
+# Dedicated connection for the checkpointer — separate from the request-path
+# pool (ADR 0004) so that autocommit=True doesn't bleed into query connections.
+_checkpointer: PostgresSaver | None = None
 
-    setup() is idempotent — creates langgraph schema tables if they don't
-    exist and runs pending migrations. Safe to call on every process start.
+
+def _get_checkpointer() -> PostgresSaver:
+    """Return the process-lifetime PostgresSaver, creating it on first call.
+
+    CREATE INDEX CONCURRENTLY (run by setup()) requires autocommit mode —
+    Postgres forbids it inside a transaction block, which is psycopg3's
+    default. prepare_threshold=0 is the LangGraph-recommended psycopg3
+    compatibility setting.
     """
-    checkpointer = PostgresSaver(get_pool())
-    checkpointer.setup()
-    log.info("graph.checkpointer_ready")
-    return checkpointer
+    global _checkpointer
+    if _checkpointer is None:
+        conn = psycopg.connect(
+            settings.pg_dsn,
+            autocommit=True,
+            prepare_threshold=0,
+            row_factory=psycopg.rows.dict_row,
+        )
+        cp = PostgresSaver(conn)
+        cp.setup()
+        log.info("graph.checkpointer_ready")
+        _checkpointer = cp
+    return _checkpointer
 
 
 # ─── Graph construction ───────────────────────────────────────────────────────
