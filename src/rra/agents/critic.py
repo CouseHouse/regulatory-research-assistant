@@ -146,6 +146,39 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
     query: str = state.get("query", "")
     revision_count: int = state.get("revision_count", 0)
 
+    # ── Force-verdict gate (TEST/EVAL ONLY) ───────────────────────────────────
+    # When set, skip the LLM call and emit the configured verdict directly.
+    # Downstream logic (revision_count increment, cap_hit, routing) is unchanged.
+    force_verdict = settings.critic_force_verdict
+    if force_verdict is not None:
+        log.warning(
+            "critic.force_verdict",
+            verdict=force_verdict,
+            session_id=state.get("session_id"),
+        )
+        forced_notes: list[CriticNote] = (
+            [CriticNote(citation_key=None, issue="forced verdict for testing", severity="soft")]
+            if force_verdict == "revise"
+            else []
+        )
+        new_revision_count = revision_count
+        cap_hit = False
+        if force_verdict == "revise":
+            new_revision_count = revision_count + 1
+            if new_revision_count >= settings.max_critic_revisions:
+                cap_hit = True
+        suffix = "" if revision_count == 0 else f"_rev{revision_count}"
+        return {
+            "verdict": force_verdict,
+            "critic_notes": forced_notes,
+            "revision_count": new_revision_count,
+            "cap_hit": cap_hit,
+            "token_usage": {
+                f"critic_input{suffix}": 0,
+                f"critic_output{suffix}": 0,
+            },
+        }
+
     # Build the set of valid (guidance_id, chunk_index) pairs from provided passages.
     valid_keys = {(p.guidance_id, p.chunk_index) for p in passages}
     passage_map = {(p.guidance_id, p.chunk_index): p for p in passages}

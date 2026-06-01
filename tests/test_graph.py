@@ -265,3 +265,82 @@ def test_escalate_path_exits_immediately(sample_passage: RetrievedPassage) -> No
     # Analyst called exactly once; escalate exits immediately without revision.
     assert len(analyst_calls) == 1
     assert len(critic_calls) == 1
+
+
+# ─── Force-verdict gate tests ──────────────────────────────────────────────────
+
+def test_force_verdict_default_is_none() -> None:
+    """critic_force_verdict must be None by default — gate is off in production."""
+    from rra.config import settings
+
+    assert settings.critic_force_verdict is None
+
+
+def test_force_verdict_revise_hits_cap(
+    monkeypatch: Any, sample_passage: RetrievedPassage
+) -> None:
+    """force_verdict='revise' drives the full revision loop until the cap fires.
+
+    With max_critic_revisions=2 (default):
+      - analyst[0]: revision_count=0 → critic forces revise, new_count=1, cap=False
+      - analyst[1]: revision_count=1 → critic forces revise, new_count=2, cap=True → END
+    Analyst is called exactly max_critic_revisions times (cap fires before a third call).
+    """
+    from rra.config import settings
+
+    monkeypatch.setattr(settings, "critic_force_verdict", "revise")
+
+    draft = "Draft answer. [gd-001:2]"
+    analyst_calls: list[int] = []
+
+    def mock_analyst(state: dict[str, Any]) -> dict[str, Any]:
+        analyst_calls.append(state.get("revision_count", 0))
+        return _analyst_output(draft)
+
+    with (
+        patch("rra.graph.run_planner", return_value=_planner_output()),
+        patch("rra.graph.run_researcher", return_value=_researcher_output([sample_passage])),
+        patch("rra.graph.run_analyst", side_effect=mock_analyst),
+        patch("rra.graph._get_checkpointer", return_value=MemorySaver()),
+    ):
+        from rra.graph import run_graph
+
+        result = run_graph(INITIAL_STATE)
+
+    assert result["cap_hit"] is True
+    assert result["verdict"] == "revise"
+    assert result["revision_count"] == settings.max_critic_revisions
+    assert result["draft"] == draft
+    # Cap fires after max_critic_revisions revise verdicts; analyst called once per verdict.
+    assert len(analyst_calls) == settings.max_critic_revisions
+
+
+def test_force_verdict_escalate_exits_immediately(
+    monkeypatch: Any, sample_passage: RetrievedPassage
+) -> None:
+    """force_verdict='escalate' exits after a single analyst+critic pass."""
+    from rra.config import settings
+
+    monkeypatch.setattr(settings, "critic_force_verdict", "escalate")
+
+    analyst_calls: list[int] = []
+
+    def mock_analyst(state: dict[str, Any]) -> dict[str, Any]:
+        analyst_calls.append(0)
+        return _analyst_output("Refusal text.")
+
+    with (
+        patch("rra.graph.run_planner", return_value=_planner_output()),
+        patch("rra.graph.run_researcher", return_value=_researcher_output([sample_passage])),
+        patch("rra.graph.run_analyst", side_effect=mock_analyst),
+        patch("rra.graph._get_checkpointer", return_value=MemorySaver()),
+    ):
+        from rra.graph import run_graph
+
+        result = run_graph(INITIAL_STATE)
+
+    assert result["verdict"] == "escalate"
+    assert result["cap_hit"] is False
+    assert result["revision_count"] == 0
+    # Escalate exits immediately — analyst is called exactly once.
+    assert len(analyst_calls) == 1

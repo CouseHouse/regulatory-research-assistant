@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from functools import cached_property
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, SecretStr, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -130,6 +131,11 @@ class Settings(BaseSettings):
     # is the primary control.
     max_tokens_per_query: int = Field(default=200_000, ge=1000)
     max_tool_calls_per_query: int = Field(default=20, ge=1, le=100)
+
+    # ─── Test / eval gates ──────────────────────────────────────────────────
+    # critic_force_verdict: skip the LLM call and emit this verdict instead.
+    # Enables deterministic loop testing without live queries. None = production.
+    critic_force_verdict: Literal["approve", "revise", "escalate"] | None = None
 
 
 # Module-level singleton. Importing `settings` from anywhere gives the same
