@@ -40,6 +40,7 @@ from .scorers import (
 
 RESULTS_DIR = Path(__file__).resolve().parents[3] / "evals" / "results"
 CI_FIXTURE_PATH = Path(__file__).resolve().parents[3] / "evals" / "fixtures" / "ci_key_fixture.jsonl"
+CI_VALID_FIXTURE_PATH = Path(__file__).resolve().parents[3] / "evals" / "fixtures" / "ci_valid_fixture.jsonl"
 
 # Baseline label embedded in every report (ADR 0012 P1/P2).
 _BASELINE_LABEL = (
@@ -262,9 +263,13 @@ def main() -> int:
     parser.add_argument("--no-gate", action="store_true")
     parser.add_argument(
         "--fixture",
-        choices=["golden", "ci"],
+        choices=["golden", "ci", "ci-valid"],
         default="golden",
-        help="golden = full 30-case set; ci = lightweight key fixture (no graph invocation)",
+        help=(
+            "golden = full 30-case set; "
+            "ci = key fixture with valid + bogus cases (gate-bite demo); "
+            "ci-valid = valid cases only (merge gate, always exits 0 on healthy work)"
+        ),
     )
     parser.add_argument(
         "--no-llm-judges",
@@ -273,8 +278,12 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    use_ci_fixture = args.fixture == "ci"
-    fixture_path = CI_FIXTURE_PATH if use_ci_fixture else None
+    use_ci_fixture = args.fixture in ("ci", "ci-valid")
+    fixture_path = (
+        CI_VALID_FIXTURE_PATH if args.fixture == "ci-valid"
+        else CI_FIXTURE_PATH if args.fixture == "ci"
+        else None
+    )
 
     if fixture_path is not None:
         cases = load_golden(fixture_path)

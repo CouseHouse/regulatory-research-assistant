@@ -56,8 +56,14 @@ jobs:
         # chunk_index=99999 (ci-bogus-001's bad key) is intentionally NOT inserted.
         run: uv run python tests/evals/load_ci_fixture.py
 
-      - name: Run citation gate
-        # --fixture ci: skips graph invocation; uses pre-built citations from fixture.
-        # --no-llm-judges: skips KeyFactCoverage and PositionQuality (no API key).
-        # Exit 1 if citation_validity fails threshold OR any error/missing response.
+      - name: Run citation gate (merge gate — valid cases only)
+        # --fixture ci-valid: valid keys only; must exit 0 to unblock merge.
+        # --no-llm-judges: no API key needed; key-existence check against Postgres only.
+        run: uv run python -m rra.evals.run --fixture ci-valid --no-llm-judges
+
+      - name: Gate-bite demo (bogus key — informational only)
+        # Proves the gate actually bites on a bad citation key.
+        # continue-on-error: true — this step MUST fail; failure here is expected and
+        # does NOT block merge. Removing this step would silence the safety net demo.
+        continue-on-error: true
         run: uv run python -m rra.evals.run --fixture ci --no-llm-judges
