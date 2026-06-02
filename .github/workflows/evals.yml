@@ -1,0 +1,63 @@
+name: eval-gate
+
+# Runs on every PR. Checks only citation_validity (the hard gate, ADR 0012 D2).
+# No ANTHROPIC_API_KEY needed — key-existence resolution hits Postgres only.
+# The planted bogus case in ci_key_fixture.jsonl proves the gate actually bites
+# (ADR 0012 D4). Full eval (all three scorers, golden 30-case set) runs manually
+# or on a nightly schedule — not here.
+
+on:
+  pull_request:
+
+jobs:
+  citation-gate:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: rra
+          POSTGRES_PASSWORD: rra_dev_password
+          POSTGRES_DB: rra
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://rra:rra_dev_password@localhost:5432/rra
+      # Stub values — Anthropic/Voyage keys are not needed for CI gate.
+      # Pydantic Settings will fail without them; provide empty stubs.
+      ANTHROPIC_API_KEY: stub-not-used-in-ci
+      VOYAGE_API_KEY: stub-not-used-in-ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Apply database schema
+        # init-db/01-init.sql creates the corpus schema, chunks table, and pgvector extension.
+        # This is what docker-compose mounts as docker-entrypoint-initdb.d in local dev.
+        run: |
+          PGPASSWORD=rra_dev_password psql \
+            -h localhost -U rra -d rra \
+            -f init-db/01-init.sql
+
+      - name: Load CI key fixture
+        # Inserts guidance_id=184856 chunk_index=1 and 2 (valid keys for ci-valid-001).
+        # chunk_index=99999 (ci-bogus-001's bad key) is intentionally NOT inserted.
+        run: uv run python tests/evals/load_ci_fixture.py
+
+      - name: Run citation gate
+        # --fixture ci: skips graph invocation; uses pre-built citations from fixture.
+        # --no-llm-judges: skips KeyFactCoverage and PositionQuality (no API key).
+        # Exit 1 if citation_validity fails threshold OR any error/missing response.
+        run: uv run python -m rra.evals.run --fixture ci --no-llm-judges

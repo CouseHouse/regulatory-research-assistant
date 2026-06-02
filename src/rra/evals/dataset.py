@@ -37,6 +37,9 @@ class GoldenCase:
     expected_facts: tuple[str, ...]
     expected_guidance_ids: tuple[str, ...]
     notes: str = ""
+    # Non-empty only in CI-fixture cases. Pre-built (guidance_id, chunk_index)
+    # pairs used by the runner instead of invoking run_agent (ADR 0012 D2).
+    ci_citations: tuple[tuple[str, int], ...] = ()
 
     @classmethod
     def from_dict(cls, d: dict) -> "GoldenCase":
@@ -48,6 +51,10 @@ class GoldenCase:
             expected_facts=tuple(d.get("expected_facts", [])),
             expected_guidance_ids=tuple(d.get("expected_guidance_ids", [])),
             notes=d.get("notes", ""),
+            ci_citations=tuple(
+                (str(pair[0]), int(pair[1]))
+                for pair in d.get("_ci_citations", [])
+            ),
         )
 
 

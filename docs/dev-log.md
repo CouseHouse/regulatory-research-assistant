@@ -1,5 +1,33 @@
 # Dev log
 
+## 2026-06-02 — Day 6 pre-work: eval-harness scoring and CI policy (ADR 0012)
+
+### What was decided (no code written)
+
+Four scoring and CI decisions locked in ADR 0012 before implementation, so they are fixed and reviewable. All four govern concrete touchpoints in `src/rra/evals/`.
+
+**D1 — Zero-citation answers are N/A for `citation_validity`, excluded from the mean.**
+The current stub (`scorers.py:70`) returns 0.0 for zero-citation answers; that punishes correct hard-refusal answers. Exclusion is safe only because (a) the runner emits a prominent "N of 30 had zero citations" count, and (b) `key_fact_coverage` catches the non-citing failure mode. Without both backstops, a degraded analyst that stops citing would show a falsely *rising* `citation_validity` mean.
+
+**D2 — CI runs `citation_validity` only, against a lightweight key fixture.**
+No embeddings, no judge API calls in CI. Key-existence is deterministic and fast; judge scorers are non-deterministic, token-expensive, and need `ANTHROPIC_API_KEY` — wrong for per-PR gating. Full eval (both judges + full corpus) runs manually or nightly.
+
+**D3 — `PositionQualityScorer` reads `POSITION_JUDGE_MODEL`, not `ANALYST_MODEL`.**
+`run.py:191` currently stubs `model=os.environ["ANALYST_MODEL"]`. That must be corrected: the judge must be pinned independently of the system under test. Known caveat: Sonnet-judges-Sonnet has mild self-preference bias, mitigated (not eliminated) by passages-in-context design.
+
+**D4 — The "watch CI fail" demo uses a planted bogus case in a CI-only fixture, never in `golden.jsonl`.**
+The key-existence baseline is expected to be high (≥ 0.95) because well-behaved analysts rarely hallucinate chunk indices — the gate may pass naturally. A planted known-invalid `chunk_index` proves the gate bites without corrupting the ground-truth golden set.
+
+### Two predictions to read Day 6 numbers correctly
+
+**P1 — A passing Day 6 gate is not good news.** Key-existence only catches hallucinated chunk indices. An analyst that cites real chunks but quotes them unfaithfully will score near 1.0. The entire point of Day 7 is that a passing Day 6 gate reveals the ruler's limit, not that citations are fine.
+
+**P2 — Day 6 → Day 7 comparison is triple-confounded.** Day 7 changes the ruler (activates quote-faithfulness), the substrate (re-chunk → new `chunk_index` values), and the corpus (boilerplate cleaning). These are not isolated. The only honest comparison re-runs the full harness on Day 7. Do not compare Day 6 and Day 7 numbers directly.
+
+See ADR 0012 for full rationale and the related ADRs (0010 matching contract, 0006 span addressing, 0009 critic-loop policy).
+
+---
+
 ## 2026-06-01 — Day 5: MCP server + check_citation
 
 ### What was built

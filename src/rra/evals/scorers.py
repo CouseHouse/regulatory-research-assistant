@@ -2,25 +2,29 @@
 
 Design notes:
 
-1. Citation validity is DETERMINISTIC, not LLM-graded. String match against
-   the source corpus. This catches hallucinated citations cleanly and
-   doesn't drift between eval runs. It is the only HARD gate (CI blocks
-   merges on it).
+1. Citation validity is DETERMINISTIC, not LLM-graded. Key-existence check
+   against corpus.chunks via check_citation (ADR 0010 key-existence mode).
+   Day 6 baseline: verifies guidance_id:chunk_index resolves to a real row —
+   does NOT check quote faithfulness (activated Day 7, per ADR 0010).
+   This is the only HARD gate (CI blocks merges on it).
 
 2. Key fact coverage uses an LLM-as-judge (Haiku). Cheap, fast, runs on
-   every change.
+   every change. Warn-only.
 
 3. Position quality uses Sonnet WITH the retrieved passages in the judge's
    context. This is the reward-hacking fix — without source context the
    judge agrees with anything confident. With source context, hedged-but-
-   accurate beats confident-but-wrong.
+   accurate beats confident-but-wrong. Warn-only.
 
 Every scorer returns the same shape so the runner can iterate uniformly.
+ScoreResult.score is float | None; None means N/A (zero-citation answer,
+excluded from mean per ADR 0012 D1).
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from .dataset import GoldenCase
@@ -29,9 +33,9 @@ from .dataset import GoldenCase
 @dataclass(frozen=True)
 class ScoreResult:
     scorer: str
-    score: float                # 0.0–1.0 (or 0.0–5.0 for likert; normalize in reporting)
-    passed: bool                # against this scorer's own threshold
-    detail: dict                # arbitrary scorer-specific detail for the report
+    score: float | None          # None = N/A — excluded from mean (ADR 0012 D1)
+    passed: bool                 # against this scorer's own threshold
+    detail: dict                 # arbitrary scorer-specific detail for the report
 
 
 @dataclass(frozen=True)
@@ -39,8 +43,8 @@ class AgentResponse:
     """What the agent under test returns. Mirror the FastAPI response shape."""
 
     answer_text: str
-    citations: list[dict]        # [{"guidance_id": "...", "span": "...", "char_start": ..., "char_end": ...}]
-    retrieved_passages: list[dict]  # [{"guidance_id": "...", "text": "...", ...}]
+    citations: list[dict]        # [{"guidance_id": str, "chunk_index": int}] — raw parsed pairs
+    retrieved_passages: list[dict]  # [{"guidance_id": str, "text": str, ...}]
     raw_trace_id: str | None = None
 
 
@@ -55,33 +59,41 @@ class Scorer(Protocol):
 # ─── Scorer 1: Citation validity (deterministic, HARD GATE) ─────────────────
 
 class CitationValidityScorer:
-    """For every cited (guidance_id, span) pair, verify the span appears in
-    the named guidance. Returns the fraction of valid citations."""
+    """For every cited (guidance_id, chunk_index) pair, verify the key exists in
+    corpus.chunks via check_citation key-existence mode (ADR 0010 Day 6 baseline).
+    Returns the fraction of valid citations.
+
+    Zero-citation answers return score=None (N/A) — excluded from mean, never 0.0
+    (ADR 0012 D1). The runner emits a separate zero-citation count in every report.
+    """
 
     name = "citation_validity"
     threshold = 0.95
     gate = True
 
-    def __init__(self, corpus_lookup):
-        # corpus_lookup(guidance_id) -> full guidance text, or None
-        self._lookup = corpus_lookup
+    def __init__(self, resolves):
+        # resolves(guidance_id, chunk_index) -> bool
+        # Backed by check_citation key-existence mode; True iff corpus row exists.
+        self._resolves = resolves
 
     def score(self, case: GoldenCase, response: AgentResponse) -> ScoreResult:
         if not response.citations:
-            return ScoreResult(self.name, 0.0, False, {"reason": "no citations"})
+            # N/A sentinel — correct refusal answers may legitimately cite nothing.
+            # Never scored 0.0; excluded from mean by the runner (ADR 0012 D1).
+            return ScoreResult(
+                self.name,
+                None,
+                False,
+                {"reason": "zero citations — N/A, excluded from mean (ADR 0012 D1)"},
+            )
 
         valid = 0
         invalid_details = []
         for c in response.citations:
-            text = self._lookup(c["guidance_id"])
-            if text is None:
-                invalid_details.append({"citation": c, "reason": "unknown guidance_id"})
-                continue
-            # Exact substring match — strict by design
-            if c["span"] in text:
+            if self._resolves(c["guidance_id"], c["chunk_index"]):
                 valid += 1
             else:
-                invalid_details.append({"citation": c, "reason": "span not in source"})
+                invalid_details.append({"citation": c, "reason": "key not found in corpus"})
 
         score = valid / len(response.citations)
         return ScoreResult(
@@ -130,11 +142,30 @@ class KeyFactCoverageScorer:
             answer=response.answer_text,
             n=len(facts),
         )
-        # TODO(day 6): actual judge call + JSON parsing with retry on malformed output
-        # judgment = self._judge.complete(self._model, prompt)
-        # parsed = json.loads(judgment)
-        # present = parsed["present"]
-        raise NotImplementedError("Wire up judge client on day 6")
+
+        parsed = None
+        for attempt in range(2):
+            raw = self._judge(self._model, prompt)
+            try:
+                parsed = json.loads(raw)
+                break
+            except json.JSONDecodeError:
+                if attempt == 1:
+                    return ScoreResult(
+                        self.name,
+                        None,
+                        False,
+                        {"reason": "judge returned non-JSON after 2 attempts", "raw": raw[:200]},
+                    )
+
+        present = parsed["present"]
+        score = sum(present) / len(present)
+        return ScoreResult(
+            self.name,
+            score,
+            score >= self.threshold,
+            {"present": present, "notes": parsed.get("notes", ""), "facts": list(facts)},
+        )
 
 
 # ─── Scorer 3: Position quality (LLM-as-judge with source context, Sonnet) ──
@@ -172,7 +203,7 @@ Respond with ONLY a JSON object: {{"score": <1-5 integer>, "reasoning": "..."}}
 
 class PositionQualityScorer:
     name = "position_quality"
-    threshold = 4.0   # on the 1-5 scale; normalize for reporting
+    threshold = 4.0   # on the 1-5 raw scale; passed check uses raw score
     gate = False
 
     def __init__(self, judge_client, model: str):
@@ -180,14 +211,38 @@ class PositionQualityScorer:
         self._model = model
 
     def score(self, case: GoldenCase, response: AgentResponse) -> ScoreResult:
-        passages = "\n\n---\n\n".join(
+        passages_text = "\n\n---\n\n".join(
             f"[{p['guidance_id']}] {p['text']}" for p in response.retrieved_passages
         )
         prompt = POSITION_QUALITY_PROMPT.format(
             query=case.query,
             product_context=case.product_context or "(none provided)",
-            passages=passages or "(no passages retrieved)",
+            passages=passages_text or "(no passages retrieved)",
             answer=response.answer_text,
         )
-        # TODO(day 6): wire up
-        raise NotImplementedError("Wire up judge client on day 6")
+
+        parsed = None
+        for attempt in range(2):
+            raw = self._judge(self._model, prompt)
+            try:
+                parsed = json.loads(raw)
+                break
+            except json.JSONDecodeError:
+                if attempt == 1:
+                    return ScoreResult(
+                        self.name,
+                        None,
+                        False,
+                        {"reason": "judge returned non-JSON after 2 attempts", "raw": raw[:200]},
+                    )
+
+        raw_score = int(parsed["score"])   # 1-5 integer
+        # passed uses raw 1-5 scale (threshold=4.0); stored score is normalized to 0-1
+        passed = raw_score >= self.threshold
+        normalized = raw_score / 5.0
+        return ScoreResult(
+            self.name,
+            normalized,
+            passed,
+            {"raw_score": raw_score, "reasoning": parsed.get("reasoning", "")},
+        )
