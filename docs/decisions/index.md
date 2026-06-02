@@ -15,6 +15,7 @@ A flat list of all ADRs with status and one-line summary. Keep current — updat
 | 0009  | [Critic-loop policy](0009-critic-loop-policy.md) | Active | 2026-06-01 | Day 4 |
 | 0010  | [`check_citation` matching contract](0010-check-citation-matching-contract.md) | Active | 2026-06-01 | Day 5 |
 | 0011  | [MCP tools as in-process functions; server as exposure layer](0011-mcp-tools-in-process.md) | Active | 2026-06-01 | Day 5 |
+| 0012  | [Day 6 eval-harness scoring and CI policy](0012-eval-harness-scoring-and-ci-policy.md) | Active | 2026-06-02 | Day 6 |
 
 
 ## Conventions for this file

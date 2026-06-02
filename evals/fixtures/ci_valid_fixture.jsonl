@@ -1,0 +1,1 @@
+{"id": "ci-valid-001", "difficulty": "easy", "query": "CI fixture: valid keys for guidance 184856", "product_context": "", "expected_facts": [], "expected_guidance_ids": ["184856"], "notes": "Valid case: both chunk keys are inserted by load_ci_fixture.py. Should score citation_validity=1.0, gate passes.", "_ci_citations": [["184856", 1], ["184856", 2]]}

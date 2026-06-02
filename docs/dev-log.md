@@ -1,5 +1,145 @@
 # Dev log
 
+## 2026-06-02 — Day 6: Eval harness baseline
+
+### Results — run `day06-baseline` (tag), 2026-06-02T17:50:07Z
+
+Full golden set, all 30 cases, 0 errors, 0 zero-citation answers.
+Report: `evals/results/latest.md` → symlink to `20260602T175007Z-day06-baseline.md`.
+
+**Baseline label:** key-existence only (ADR 0010 Day 6). See P1/P2 below before reading these numbers as "good."
+
+| Scorer | Mean | Pass rate | Gate | Threshold |
+|---|---|---|---|---|
+| `citation_validity` | **1.000** | 100.0% | HARD | 0.95 |
+| `key_fact_coverage` | **N/A** | N/A | warn | 0.80 |
+| `position_quality` | **0.947** | 93.3% (28/30) | warn | 4.0 (raw) |
+
+#### Per-difficulty breakdown — `position_quality` (normalized 0–1; threshold 0.800 = 4/5 raw)
+
+| Band | n | Mean | Passes |
+|---|---|---|---|
+| Easy | 10 | 0.940 | 9/10 |
+| Medium | 15 | 0.960 | 15/15 |
+| Hard | 5 | 0.920 | 4/5 |
+
+`citation_validity` and `key_fact_coverage` are uniform across bands (1.000 and N/A respectively for all 30).
+
+### Weakness 1 (critical): `key_fact_coverage` produced zero signal
+
+All 30 cases returned `score=None` (N/A). The scorer is correctly wired; the gap is judge output format: Haiku wraps its JSON reply in prose ("Here is the JSON: ..."), strict `json.loads` rejects it, and both retry attempts fail → `score=None` for every case.
+
+This matters beyond cosmetics. `key_fact_coverage` is the designated D1 backstop for the under-citing failure mode (ADR 0012 D1): if the analyst stops citing, `citation_validity` rises toward 1.0 (fewer citations to check) and the harness goes blind without this scorer to catch the content regression. Today that failure mode is absent (0/30 zero-citation answers) so the non-functional backstop is harmless — but it must be fixed before Day 7 introduces corpus changes that could shift citation behavior.
+
+**Day-7 fix:** prefill the assistant turn with `{` (Anthropic prefill parameter) so the model is forced to open with raw JSON, or add a system-prompt instruction requiring pure JSON output with no surrounding prose.
+
+### Weakness 2 (structural): `citation_validity = 1.000` is a coarse-ruler result, not a success
+
+Key-existence only verifies that `(guidance_id, chunk_index)` resolves to a real `corpus.chunks` row. An analyst that cites real chunks but quotes them unfaithfully — or cites tangentially relevant chunks to pad citation count — scores 1.000 under this ruler. This is the ADR-0012-P1 finding stated explicitly: a passing Day 6 gate means the system doesn't hallucinate chunk indices, not that citations are faithful.
+
+**Day-7 target:** activate quote-faithfulness matching in `check_citation` (ADR 0010), which requires resolving the resolution-vs-verification ordering question (does `_resolve_citations()` at the API layer run before or after the critic's pre-validation pass?). Also tied to the Day-7 re-chunk/boilerplate-cleaning work — corpus changes will reassign `chunk_index` values, so the key-existence baseline is not forward-comparable regardless (see P2 below).
+
+### Example failures — `position_quality`
+
+Two cases scored 3/5 (normalized 0.600), both well below the 4/5 threshold:
+
+- **easy-003** — "What types of device modifications does FDA consider generally appropriate for inclusion in a PCCP for a non-AI hardware device?" Surprising for an easy case. Worth a Day-7 look at whether the analyst answer is thin/wrong or the judge is miscalibrated on PCCP scope. The general PCCP framework (180978) may produce less crisp answers than AI-specific PCCP (166704).
+- **hard-003** — "What specific interoperability design requirements and consensus standards must InfusePro satisfy to connect to hospital EMR systems?" Score of 3/5 is expected: this is a deliberate gap case — the corpus contains only external references to an interoperability guidance that is not ingested (119933 #23 points outward; 153781 #20 asks the submitter to state what standards they use). The correct answer is partial + "dedicated guidance not in corpus." A 3/5 here may mean the analyst didn't flag the gap strongly enough.
+
+Three medium cases (medium-005, medium-008, medium-010) scored 0.800 (4/5 raw) — exactly at threshold, passes.
+
+### Day-7 target (required re-run)
+
+Two items to fix, then a full fresh harness run on the same 30-case golden set:
+
+1. Fix `key_fact_coverage` JSON parsing (prefill or system-prompt force)
+2. Activate quote-faithfulness in `check_citation` (ADR 0010)
+
+The Day-7 re-run must be a full fresh run on the same golden set. Day 6 → Day 7 comparison is triple-confounded: ruler changes (key-existence → quote-faithfulness), substrate changes (re-chunk → new chunk_index values), corpus changes (boilerplate cleaning). Do not compare Day 6 and Day 7 numbers directly (ADR 0012 P2).
+
+**Cosmetic note (no correctness impact):** the `position_quality` aggregate table row shows normalized mean (0–1) against the raw threshold (4.0) — visually confusing but warn-only; gate logic uses the pre-computed `passed` flag, not the displayed mean. Fix in Day 7.
+
+### Stop conditions met (Day 6 DoD)
+
+Harness runs all 30 without crashing ✓. `latest.md` shows real numbers ✓. CI workflow committed (`evals.yml`, gate-only, `--fixture ci --no-llm-judges`) ✓. Per-difficulty breakdown shows non-uniform results (easy/medium/hard variance is real though narrow) ✓. ADR 0012 accepted ✓. Imports clean, golden set loads cleanly ✓.
+
+---
+
+## 2026-06-02 — Day 6: Golden-set design notes
+
+Recorded here so the 30-question set is legible vs. accident when revisited after Day 7 corpus changes.
+
+### Shape and scope
+
+30 questions: 10 easy / 15 medium / 5 hard. Products: CardioWatch (AI/SaMD, 11 questions), InfusePro (connected infusion pump, 9), NeuroPath (digital therapeutic / De Novo, 9), plus 1 cross-cutting (multi-function device). 25 distinct guidances grounded across the set.
+
+**73126 excluded:** confirmed 0 chunks in corpus (failed ingest). Not anchored anywhere.
+
+**Thin tail avoided as anchors:** guidances with ≤7 chunks (89238=4, 72685=6, 72646=7, 72446=7) are excluded as question anchors. All primary anchors have ≥18 chunks; minimum among anchors is 72674 at 18 chunks (De Novo process mechanics, NeuroPath).
+
+**141565 (PRO instrument development, 19 chunks) held optional:** thin doc, not anchored in any of the 30 questions. 77832 (47 chunks) is the PRO anchor. 141565 is in the corpus but plays no role in the current golden set.
+
+### Cold-set rule
+
+Questions were picked before running any query against the answer pipeline. All grounding came from reading `corpus.chunks` text directly via SQL. `run_graph` / the analyst was never invoked during question design. This is the discipline that makes the golden set an honest eval rather than a capability demonstration.
+
+### medium-005 / hard-001 intentional pairing
+
+Both questions use the same scenario: CardioWatch, AI model shows lower sensitivity in elderly patients.
+
+- **medium-005** asks how to *frame the benefit-risk analysis* for that gap. This is answerable from the corpus (184856 + 99769 benefit-risk framework).
+- **hard-001** asks what *quantitative subgroup performance-parity threshold* FDA requires. This is a refusal case: 184856 treats bias qualitatively throughout (recommends evaluating subgroup performance, names race/ethnicity/sex/age as relevant groups, calls for "control of bias" through TPLC) but specifies no numeric threshold anywhere. The correct answer is partial — the guidance expects subgroup evaluation but does not set a quantitative bar.
+
+The pairing was deliberate: it tests whether the analyst distinguishes "I can answer this from the corpus" from "the corpus addresses this qualitatively but never sets the specific number you're asking for."
+
+### Hard-five gap evidence
+
+All five hard cases were verified against actual corpus chunks before being finalized, to confirm the gap is genuine and not "answer hiding in chunk N":
+
+- **hard-001** (subgroup threshold): 184856 #4, #9, #24, #30, #31, #36 read — no numeric criterion anywhere.
+- **hard-002** (generative-AI / LLM validation): probed entire corpus for `generative`, `large language model`, `LLM`, `foundation model` → zero matches. Corpus is silent on generative AI.
+- **hard-003** (interoperability standards): 119933 #23 and 153781 #20 reference an external interoperability guidance not ingested; no corpus chunk states design requirements or consensus standards.
+- **hard-004** (De Novo clinical evidence bar): 152657 is an acceptance checklist; 72674 is procedural. Neither sets a substantive evidence threshold for a digital therapeutic.
+- **hard-005** (RWE as trial substitute): 190201 probed for `in lieu of`, `instead of`, `replace` → no matches. RWE doc frames evidence as supporting/informing decisions, not replacing premarket clinical investigation.
+
+### Anti-trap check logged
+
+PCCP-for-intended-use-change was considered as a hard candidate and **rejected**: 166704 #11 and #18 explicitly say major intended-use changes fall outside a PCCP and require a new submission, making it *answerable*, not a refusal case. Logged here so it isn't reintroduced as a "hard" question in a future refresh.
+
+### Product balance (final)
+
+CardioWatch 11 (4E / 5M / 2H), InfusePro 9 (3E / 5M / 1H), NeuroPath 9 (3E / 4M / 2H), cross-cutting 1 (1M). Consistent with the ADR-0007 corpus-scope rationale: CardioWatch anchors the AI/SaMD narrative and gets the heaviest coverage.
+
+---
+
+## 2026-06-02 — Day 6 pre-work: eval-harness scoring and CI policy (ADR 0012)
+
+### What was decided (no code written)
+
+Four scoring and CI decisions locked in ADR 0012 before implementation, so they are fixed and reviewable. All four govern concrete touchpoints in `src/rra/evals/`.
+
+**D1 — Zero-citation answers are N/A for `citation_validity`, excluded from the mean.**
+The current stub (`scorers.py:70`) returns 0.0 for zero-citation answers; that punishes correct hard-refusal answers. Exclusion is safe only because (a) the runner emits a prominent "N of 30 had zero citations" count, and (b) `key_fact_coverage` catches the non-citing failure mode. Without both backstops, a degraded analyst that stops citing would show a falsely *rising* `citation_validity` mean.
+
+**D2 — CI runs `citation_validity` only, against a lightweight key fixture.**
+No embeddings, no judge API calls in CI. Key-existence is deterministic and fast; judge scorers are non-deterministic, token-expensive, and need `ANTHROPIC_API_KEY` — wrong for per-PR gating. Full eval (both judges + full corpus) runs manually or nightly.
+
+**D3 — `PositionQualityScorer` reads `POSITION_JUDGE_MODEL`, not `ANALYST_MODEL`.**
+`run.py:191` currently stubs `model=os.environ["ANALYST_MODEL"]`. That must be corrected: the judge must be pinned independently of the system under test. Known caveat: Sonnet-judges-Sonnet has mild self-preference bias, mitigated (not eliminated) by passages-in-context design.
+
+**D4 — The "watch CI fail" demo uses a planted bogus case in a CI-only fixture, never in `golden.jsonl`.**
+The key-existence baseline is expected to be high (≥ 0.95) because well-behaved analysts rarely hallucinate chunk indices — the gate may pass naturally. A planted known-invalid `chunk_index` proves the gate bites without corrupting the ground-truth golden set.
+
+### Two predictions to read Day 6 numbers correctly
+
+**P1 — A passing Day 6 gate is not good news.** Key-existence only catches hallucinated chunk indices. An analyst that cites real chunks but quotes them unfaithfully will score near 1.0. The entire point of Day 7 is that a passing Day 6 gate reveals the ruler's limit, not that citations are fine.
+
+**P2 — Day 6 → Day 7 comparison is triple-confounded.** Day 7 changes the ruler (activates quote-faithfulness), the substrate (re-chunk → new `chunk_index` values), and the corpus (boilerplate cleaning). These are not isolated. The only honest comparison re-runs the full harness on Day 7. Do not compare Day 6 and Day 7 numbers directly.
+
+See ADR 0012 for full rationale and the related ADRs (0010 matching contract, 0006 span addressing, 0009 critic-loop policy).
+
+---
+
 ## 2026-06-01 — Day 5: MCP server + check_citation
 
 ### What was built

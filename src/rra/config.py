@@ -104,7 +104,13 @@ class Settings(BaseSettings):
     analyst_model: str = "claude-sonnet-4-6"
     critic_model: str = "claude-sonnet-4-6"
     researcher_model: str = "claude-haiku-4-5"
-    judge_model: str = "claude-haiku-4-5"
+    # Key-fact coverage judge: cheap Haiku LLM-as-judge, checks whether the
+    # answer states each expected fact. Runs on every eval. (warn-only scorer)
+    key_fact_judge_model: str = "claude-haiku-4-5"
+    # Position-quality judge: Sonnet LLM-as-judge WITH retrieved passages in
+    # context — the anti-reward-hacking scorer. Hedged-but-grounded must beat
+    # confident-but-unsupported. (warn-only scorer)
+    position_judge_model: str = "claude-sonnet-4-6"
 
     # ─── Retrieval tuning ───────────────────────────────────────────────────
     embedding_model: str = "voyage-3"
