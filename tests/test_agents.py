@@ -138,11 +138,16 @@ class TestPlannerAgent:
 class TestResearcherAgent:
     def test_reformulates_and_retrieves(self, sample_passage: RetrievedPassage) -> None:
         """Haiku reformulates each sub-question; search_corpus returns passages."""
+        from rra.mcp_server.tools import SearchCorpusResult
+
         text_msg = _make_text_message("substantial equivalence 510(k) premarket notification")
 
         with (
             patch("rra.agents.researcher.Anthropic", _make_anthropic_mock(text_msg)),
-            patch("rra.agents.researcher.search_corpus", return_value=[sample_passage]),
+            patch(
+                "rra.agents.researcher._tool_search_corpus",
+                return_value=SearchCorpusResult(passages=[sample_passage]),
+            ),
         ):
             from rra.agents.researcher import run_researcher
 
@@ -166,16 +171,18 @@ class TestResearcherAgent:
 
         call_count = [0]
 
-        def mock_search(query: str, k: int | None = None) -> list[RetrievedPassage]:
+        from rra.mcp_server.tools import SearchCorpusResult
+
+        def mock_search(query: str, k: int | None = None) -> SearchCorpusResult:
             n = call_count[0]
             call_count[0] += 1
-            return [high_score] if n == 0 else [low_score]
+            return SearchCorpusResult(passages=[high_score] if n == 0 else [low_score])
 
         text_msg = _make_text_message("reformulated query")
 
         with (
             patch("rra.agents.researcher.Anthropic", _make_anthropic_mock(text_msg)),
-            patch("rra.agents.researcher.search_corpus", side_effect=mock_search),
+            patch("rra.agents.researcher._tool_search_corpus", side_effect=mock_search),
         ):
             from rra.agents.researcher import run_researcher
 
@@ -201,16 +208,18 @@ class TestResearcherAgent:
 
         call_count = [0]
 
-        def mock_search(query: str, k: int | None = None) -> list[RetrievedPassage]:
+        from rra.mcp_server.tools import SearchCorpusResult
+
+        def mock_search(query: str, k: int | None = None) -> SearchCorpusResult:
             n = call_count[0]
             call_count[0] += 1
-            return [p_low] if n == 0 else [p_high]
+            return SearchCorpusResult(passages=[p_low] if n == 0 else [p_high])
 
         text_msg = _make_text_message("reformulated")
 
         with (
             patch("rra.agents.researcher.Anthropic", _make_anthropic_mock(text_msg)),
-            patch("rra.agents.researcher.search_corpus", side_effect=mock_search),
+            patch("rra.agents.researcher._tool_search_corpus", side_effect=mock_search),
         ):
             from rra.agents.researcher import run_researcher
 

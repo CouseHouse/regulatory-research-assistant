@@ -171,6 +171,40 @@ Worth understanding before Day 8 CI work, since CI will hit the same wall. Not u
 
 ---
 
+## 13. Concurrency and scale
+
+*These are deliberate v1 scope cuts, not oversights. v1 is a single-query demo system. The known limits and the path past them are recorded here so the Day 11 postmortem and Day 13 Loom demo can speak to them honestly.*
+
+**Status in v1:**
+
+- **Sync graph execution.** `run_graph()` is synchronous; FastAPI runs it in a threadpool (`asyncio.get_event_loop().run_in_executor`). Each query pins one thread for its full ~30–60 s duration. Inbound concurrency is threadpool-bounded — by default Python's `ThreadPoolExecutor` caps at `min(32, os.cpu_count() + 4)` workers. At the Fargate task sizes planned for Day 9 (0.5–1 vCPU), that is 3–6 concurrent queries maximum before incoming requests queue.
+
+- **Checkpointer connection.** `PostgresSaver` uses a process-singleton, dedicated autocommit connection (the Day 4 fix — see dev-log). Under concurrent queries, multiple graph runs share that one connection. Whether `PostgresSaver` serializes access internally or whether this is a real contention point is unverified. If it does not serialize, concurrent graph runs will race on the same connection and risk corruption or errors.
+
+- **Checkpointer resilience gap.** Already logged in dev-log: no reconnect logic on Postgres restart. An `AdminShutdown` or transient connection drop kills the singleton connection until the process bounces. In the v1 single-task Fargate deployment this means a Postgres event takes down the whole service until ECS health checks kill and relaunch the task.
+
+- **Single Fargate task, no autoscaling.** Explicit non-goal for Day 8/9. One task, fixed size, no ECS service autoscaling policy.
+
+- **Outbound concurrency IS handled.** The token-bucket rate limiter (`rate_limit.py`) bounds Voyage and Anthropic API call rates. Outbound is not the bottleneck.
+
+**Why deferred:** The portfolio demo is a single-query system. Solving concurrency before demonstrating correctness inverts priorities. The bottleneck for v1 is whether the multi-agent pipeline produces grounded, well-cited answers — not whether it can serve ten of them simultaneously.
+
+**What production would require:**
+
+1. **Async execution or worker/queue model.** Convert `run_graph()` to an async LangGraph invocation (`ainvoke` / `astream_events`) and expose a streaming FastAPI endpoint, OR offload graph execution to a Celery/SQS worker so the API returns a job ID immediately and the client polls or subscribes. The worker model avoids the thread-pinning problem entirely and makes long-running queries robust to connection drops.
+
+2. **Checkpointer connection pooling.** Replace the singleton autocommit connection with a psycopg3 pool (same pattern as `db.py` / ADR 0004). This resolves both the concurrency contention and the reconnect gap — pools re-establish connections automatically.
+
+3. **Horizontal scaling behind the ALB.** ECS service autoscaling (target-tracking on CPU utilization or ALB request count) with multiple Fargate tasks. Requires the checkpointer to be truly stateless per-connection (pooled connections resolve this) and session affinity to be unnecessary (it is — the graph state lives in Postgres, not in-process).
+
+4. **Health-check and reconnect logic.** A `/healthz` endpoint that probes the Postgres checkpointer connection and the pgvector pool; ECS health checks route traffic away from tasks with broken connections rather than waiting for them to timeout.
+
+**Reopen trigger:** Any of: (1) a second user, (2) a load test showing queue depth above 2 under expected demo traffic, (3) a Postgres restart that kills a live demo. For production: all four items above before onboarding real users.
+
+**Cost:** Async conversion + pooled checkpointer: 2–3 days. Worker/queue model: 1 week. Full horizontal scaling story: 2 weeks.
+
+---
+
 ## How to use this document
 
 When closing out v1 and planning v2: read this top to bottom. The trigger section for each item is the part that matters — most should *not* be reopened on a calendar schedule, only when their specific trigger fires.

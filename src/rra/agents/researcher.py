@@ -20,7 +20,7 @@ import structlog
 from anthropic import Anthropic
 
 from rra.config import settings
-from rra.retrieval import search_corpus
+from rra.mcp_server.tools import search_corpus as _tool_search_corpus
 from rra.schemas import RetrievedPassage
 from rra.tracing import get_langfuse
 
@@ -121,8 +121,8 @@ def run_researcher(state: dict[str, Any]) -> dict[str, Any]:
                 reformulated=reformulated[:80],
             )
 
-            # Step 2: Retrieve passages for the reformulated query.
-            passages = search_corpus(reformulated, k=settings.rerank_top_k)
+            # Step 2: Retrieve passages for the reformulated query via the MCP tool layer.
+            passages = _tool_search_corpus(reformulated, k=settings.rerank_top_k).passages
 
             if span is not None:
                 with span.start_as_current_observation(

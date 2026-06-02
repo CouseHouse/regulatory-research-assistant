@@ -1,5 +1,64 @@
 # Dev log
 
+## 2026-06-01 — Day 5: MCP server + check_citation
+
+### What was built
+
+Custom MCP server exposing four tools, wired into the agent pipeline (ADRs 0010, 0011). Tools live in `src/rra/mcp_server/tools.py` as plain importable Python; `server.py` is a thin MCP wrapper registering the same functions for external clients. Agents call the functions in-process — no subprocess-per-query.
+
+Files: `src/rra/mcp_server/tools.py` (four tools + Pydantic models + ToolError), `src/rra/mcp_server/server.py` (FastMCP wrapper), `src/rra/config.py` (citation_match_threshold = 0.85). Wiring: `researcher.py` imports search_corpus from the tool layer; `critic.py` pre-validates every `[guid:idx]` citation via check_citation before the LLM call, injecting `<citation_checks>` XML.
+
+The four tools: search_corpus (semantic retrieval, returns passages with guidance_id:chunk_index addresses), fetch_guidance (raw document reassembly from ordered chunks), check_citation (the distinctive one — verifies a citation address resolves and, when given quoted_text, that the quote faithfully appears via normalized matching), list_recent_guidances (ingest-date proxy for currency).
+
+### Claude Desktop milestone — all four tools verified live
+
+Connected the server to Claude Desktop (WSL2 → Windows via wsl.exe launch). Exercised all four tools by plain-language request; Claude Desktop selected the right tool unprompted each time (tool descriptions pass).
+
+- search_corpus: retrieved the single on-point doc (guidance_id 99785, "Deciding When to Submit a 510(k) for a Software Change to an Existing Device") and synthesized a correctly-cited answer.
+- fetch_guidance: returned the raw reassembled document with PDF artifacts present (raw is deliberate — see below).
+- check_citation valid (chunk_index 4): verified=true, source_text returned, null span/score — key-existence mode, since no quoted_text was passed.
+- check_citation invalid (chunk_index 99999): verified=false, empty source_text, no crash — fails closed (ADR-0010 NOT_FOUND-as-clean-result, verified live).
+- list_recent_guidances: returned the guidance list with ingest dates.
+
+server.py (0% unit coverage — the MCP protocol layer pytest can't reach) is verified by this manual Claude Desktop test, not unit tests.
+
+### Cost / token impact (DoD)
+
+Critic citation pre-validation adds ~2,453 input tokens (~27%, 8,971 → ~11,400) and ~$0.007 to the critic per query, from injecting source_text per citation into the critic's context. Truncating source_text to a window is a lever if cost matters; left full for Day 5.
+
+Two cost profiles captured (for the Day 10 model):
+- Clean approve, planner cached: ~18,568 total tokens, ~$0.07/query.
+- Revise-once, planner cold: ~47,287 total tokens (~2.5× clean) — reruns the analyst + critic. The revise rate across the Day 6 eval set will be a key cost driver.
+
+Cache caveat: the planner's 21-token input only holds on a prompt-cache hit (~5-min TTL). A cold planner is ~443 tokens. The Day 10 cost model must state the cache-hit-rate assumption.
+
+### Matching engine: built but dormant in Day 5
+
+The normalized-matching algorithm (whitespace-normalize → substring + whitespace-flexible regex for document-level span via char_start → SequenceMatcher coverage-ratio fallback ≥ τ) is built and unit-tested but NOT exercised by the live pipeline in Day 5. Reason (per ADR 0010): quoted_text is resolved post-graph by _resolve_citations() at the API layer, so it's unavailable at the critic's point in the graph. Every Day 5 check_citation call runs in key-existence mode (quoted_text=None). The Claude Desktop demo confirmed this directly — valid check returned null span/score because no quote was supplied. Activation is a Day 7 question (resolution-before-critic vs. post-resolution verification pass).
+
+Day 6 interpretation: the first citation_validity run measures key-existence, not quote-faithfulness. Label the baseline accordingly so post-Day-7 comparison isn't a false improvement.
+
+### First live query — clean pre-validation
+
+On the first post-wiring query the critic loop ran normally: one revision (note_count=2, content-driven), resolved on rev1 (note_count=0, approve), no cap_hit. Citations all resolved in key-existence mode; no spurious revises from tool errors. Confirms the citation pre-validation is non-disruptive — the ADR-0010 retryable-error invariant (transient failure → inconclusive, never a forced revise) held.
+
+### Findings worth keeping
+
+- The client masks corpus dirt. Claude Desktop, on its own, cleaned fetch_guidance's raw output into a readable document for presentation. The dirty-corpus problem is therefore invisible at the chat layer — a human eyeballing output would never see it. This is the argument for an automated grounding eval (Day 6): it measures the raw grounding the user's screen hides.
+- The demo independently surfaced the chunk-boundary issue. Claude Desktop noted chunk 4 begins mid-sentence (the boundary split a sentence starting in chunk 3) — the same root cause as the citation-precision problem. Confirms the Day 7 ingest re-chunk targets the right thing.
+- Be wary of client editorializing on retrieved content. Claude Desktop volunteered a QMSR "now in effect" gloss on top of the retrieved text. The tool grounds; the model interprets — keep the distinction clear when framing the demo.
+
+### Known issues
+
+- psycopg_pool DeprecationWarning (`open` parameter default changing) is pre-existing, not introduced in Day 5. Address when pinning psycopg_pool.
+- critic unit tests now reach the connection pool (check_citation queries Postgres before the LLM call), so they have a DB dependency they lacked in Day 4. They pass with Postgres up; consider mocking check_citation in the pure-unit critic tests for offline isolation.
+
+### Stop conditions met
+
+All four tools callable from Claude Desktop ✓. Agents use the MCP tool layer, not direct retrieval calls ✓. Langfuse trace shows check_citation child spans under the critic ✓. 113 tests pass (gate off), mypy clean ✓. ADRs 0010 (matching contract) and 0011 (in-process transport) accepted.
+
+---
+
 ## 2026-06-01 — Day 4: LangGraph multi-agent orchestrator
 
 ### What was built

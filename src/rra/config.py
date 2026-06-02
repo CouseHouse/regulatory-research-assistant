@@ -113,6 +113,7 @@ class Settings(BaseSettings):
     retrieve_top_k: int = Field(default=25, ge=1, le=200)
     rerank_top_k: int = Field(default=5, ge=1, le=50)
     max_critic_revisions: int = Field(default=2, ge=0, le=5)
+    citation_match_threshold: float = Field(default=0.85, ge=0.0, le=1.0)
 
     # ─── Chunking ───────────────────────────────────────────────────────────
     # Picked in docs/spec.md §4.4. Change here, then re-ingest the corpus.

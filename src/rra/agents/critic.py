@@ -2,12 +2,13 @@
 
 Model: claude-sonnet-4-6 (settings.critic_model).
 
-Day 4: context-match check only — verifies that every [guid:idx] citation in
-the draft (a) refers to a passage that was actually provided and (b) the cited
-passage plausibly supports the claim. Does NOT call the check_citation MCP tool
-(that's Day 5).
+Day 5: pre-validates every [guid:idx] citation via check_citation (in-process,
+key-existence mode — ADR 0010/0011) before the LLM call. Results are injected
+as <citation_checks> XML. ToolError(retryable=True) → inconclusive; critic
+instructed not to penalize those. ToolError(retryable=False) and verified=False
+→ evidence for revise note (ADR 0010 retryability invariant).
 
-Verdict semantics (ADR 0009):
+Verdict semantics (ADR 0009 — unchanged):
   approve   — all citations valid; exit graph.
   revise    — specific citations are fixable; route back to analyst.
   escalate  — question cannot be grounded in available corpus; exit immediately.
@@ -22,6 +23,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 from typing import Any
 
 import structlog
@@ -35,6 +37,7 @@ from anthropic.types import (
 
 from rra.agents.types import CriticNote, CriticOutput
 from rra.config import settings
+from rra.mcp_server.tools import CitationCheckResult, ToolError, check_citation
 from rra.schemas import RetrievedPassage
 from rra.tracing import get_langfuse
 
@@ -90,6 +93,20 @@ GROUNDED REFUSAL HANDLING
 ════════════════════════════════════════════
 If the draft contains "The corpus does not contain sufficient evidence", the analyst \
 has already detected a corpus gap. Use verdict "escalate" in this case.
+
+════════════════════════════════════════════
+CITATION CHECKS (deterministic pre-validation)
+════════════════════════════════════════════
+You will receive a <citation_checks> block with one <check> entry per inline citation. \
+Each entry carries verified="true|false|unknown" and inconclusive="true|false".
+
+- verified="true"  — the citation key resolves to a real corpus chunk; source_text \
+is the authoritative stored text. Assess whether source_text supports the claim.
+- verified="false" — the citation key does not exist in the corpus. This is definitive; \
+include a hard-severity CriticNote for this citation.
+- inconclusive="true" (tool error) — the check could not run due to an infrastructure \
+failure. Treat this as if the check was not run — do NOT use it as evidence for a revise \
+verdict, and do NOT penalize the draft for it.
 
 You must call the `submit_verdict` tool. Do not output text outside of the tool call.
 """
@@ -211,12 +228,94 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
         passage_summary_parts.append("</passages>")
         passage_xml = "\n".join(passage_summary_parts)
 
+        # ── check_citation pre-validation (ADR 0010/0011) ────────────────────
+        # Parse all [guidance_id:chunk_index] inline citations from the draft.
+        # Call check_citation in-process for each unique citation (key-existence
+        # mode, quoted_text=None — matching engine built but not yet activated;
+        # see ADR 0010 consequences / Day 7 activation note).
+        _citation_re = re.compile(r"\[([^:\]]+):(\d+)\]")
+        inline_citations: list[tuple[str, int]] = list({
+            (m.group(1), int(m.group(2)))
+            for m in _citation_re.finditer(draft)
+        })
+
+        check_results: dict[str, CitationCheckResult | ToolError] = {}
+        for guidance_id, chunk_index in inline_citations:
+            ckey = f"{guidance_id}:{chunk_index}"
+            cc_cm = (
+                span.start_as_current_observation(
+                    name="check_citation",
+                    as_type="span",
+                    input={"citation_key": ckey},
+                )
+                if span is not None
+                else contextlib.nullcontext(None)
+            )
+            with cc_cm as cc_span:
+                try:
+                    cc_result = check_citation(
+                        claim=query,
+                        guidance_id=guidance_id,
+                        chunk_index=chunk_index,
+                        quoted_text=None,
+                    )
+                    check_results[ckey] = cc_result
+                    if cc_span is not None:
+                        cc_span.update(output={"verified": cc_result.verified})
+                except ToolError as exc:
+                    check_results[ckey] = exc
+                    if cc_span is not None:
+                        cc_span.update(
+                            output={"error": exc.code, "retryable": exc.retryable}
+                        )
+                except Exception as exc:
+                    tool_err = ToolError(
+                        code="UNKNOWN",
+                        message=str(exc),
+                        tool="check_citation",
+                        retryable=True,
+                    )
+                    check_results[ckey] = tool_err
+                    if cc_span is not None:
+                        cc_span.update(output={"error": "UNKNOWN", "retryable": True})
+
+        # Build <citation_checks> XML block.
+        check_parts = ["<citation_checks>"]
+        for ckey, result in check_results.items():
+            if isinstance(result, ToolError):
+                label = "transient" if result.retryable else "permanent"
+                check_parts.append(
+                    f'  <check citation_key="{ckey}" verified="unknown" inconclusive="true">\n'
+                    f"    <reason>tool error: {result.code} ({label})</reason>\n"
+                    f"  </check>"
+                )
+            elif result.verified:
+                check_parts.append(
+                    f'  <check citation_key="{ckey}" verified="true" inconclusive="false">\n'
+                    f"    <source_text>{result.source_text}</source_text>\n"
+                    f"  </check>"
+                )
+            else:
+                check_parts.append(
+                    f'  <check citation_key="{ckey}" verified="false" inconclusive="false">\n'
+                    f"    <source_text>{result.source_text}</source_text>\n"
+                    f"    <reason>chunk not found in corpus</reason>\n"
+                    f"  </check>"
+                )
+        check_parts.append("</citation_checks>")
+        citation_checks_xml = "\n".join(check_parts)
+
         user_content = (
             f"{passage_xml}\n\n"
+            f"{citation_checks_xml}\n\n"
             f"<query>{query}</query>\n\n"
             f"<draft>\n{draft}\n</draft>\n\n"
-            "Audit every citation in the draft against the provided passages and "
-            "return your verdict via the submit_verdict tool."
+            "Audit every citation in the draft. For citations marked verified='true', "
+            "assess whether the source_text supports the claim. For citations marked "
+            "verified='false', they are definitively wrong — note them with hard severity. "
+            "For citations marked inconclusive='true' (tool error), treat as not-run — "
+            "do not penalize the draft for those citations. "
+            "Return your verdict via the submit_verdict tool."
         )
 
         client = Anthropic(api_key=settings.anthropic_api_key.get_secret_value())
