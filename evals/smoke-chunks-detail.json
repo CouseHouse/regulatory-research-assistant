@@ -1,0 +1,4016 @@
+[
+  {
+    "case_id": "easy-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-001",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 0.552,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.552,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 0.995,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.995,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-001",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 0.928,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.928,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 0.995,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.995,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 0.995,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.995,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 0.972,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.972,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-001",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 0.298,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.298,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 0.994,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.994,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 0.588,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.588,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 0.638,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.638,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 0.889,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.889,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-002",
+    "guid": "180978",
+    "table": "chunks",
+    "best_chunk_score": 0.799,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.799,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 0.687,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.687,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-003",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-003",
+    "guid": "180978",
+    "table": "chunks",
+    "best_chunk_score": 0.387,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.387,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-003",
+    "guid": "180978",
+    "table": "chunks",
+    "best_chunk_score": 0.989,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.989,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-003",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 0.434,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.434,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-003",
+    "guid": "180978",
+    "table": "chunks",
+    "best_chunk_score": 0.603,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.603,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-003",
+    "guid": "180978",
+    "table": "chunks",
+    "best_chunk_score": 0.994,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.994,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-003",
+    "guid": "180978",
+    "table": "chunks",
+    "best_chunk_score": 0.986,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.986,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-003",
+    "guid": "180978",
+    "table": "chunks",
+    "best_chunk_score": 0.772,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.772,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-003",
+    "guid": "180978",
+    "table": "chunks",
+    "best_chunk_score": 0.987,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.987,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-003",
+    "guid": "180978",
+    "table": "chunks",
+    "best_chunk_score": 0.473,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.473,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-003",
+    "guid": "180978",
+    "table": "chunks",
+    "best_chunk_score": 0.864,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.864,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-003",
+    "guid": "180978",
+    "table": "chunks",
+    "best_chunk_score": 0.995,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.995,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-003",
+    "guid": "180978",
+    "table": "chunks",
+    "best_chunk_score": 0.521,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.521,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-003",
+    "guid": "180978",
+    "table": "chunks",
+    "best_chunk_score": 0.672,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.672,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-003",
+    "guid": "99812",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-003",
+    "guid": "180978",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-003",
+    "guid": "114034",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-004",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-004",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-004",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 0.994,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.994,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-004",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-004",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-004",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-004",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-004",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-004",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-004",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-004",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 0.994,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.994,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-004",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 0.989,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.989,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-004",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-004",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-004",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 0.598,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.598,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-004",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-004",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 0.532,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.532,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-005",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-005",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 0.726,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.726,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-005",
+    "guid": "80958",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-005",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-005",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-005",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 0.875,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.875,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-005",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-005",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-005",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-005",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-005",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-005",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-005",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-005",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-005",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-005",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-005",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-005",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 0.995,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.995,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 0.911,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.911,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 0.673,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.673,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 0.687,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.687,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 0.615,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.615,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 0.995,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.995,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 0.563,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.563,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 0.994,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.994,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-006",
+    "guid": "112671",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 0.995,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.995,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 0.993,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.993,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-007",
+    "guid": "163694",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-007",
+    "guid": "163694",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-007",
+    "guid": "80481",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-007",
+    "guid": "80481",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-007",
+    "guid": "80481",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-007",
+    "guid": "80481",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-007",
+    "guid": "163694",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-007",
+    "guid": "163694",
+    "table": "chunks",
+    "best_chunk_score": 0.994,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.994,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-007",
+    "guid": "80481",
+    "table": "chunks",
+    "best_chunk_score": 0.54,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.54,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-007",
+    "guid": "163694",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-007",
+    "guid": "163694",
+    "table": "chunks",
+    "best_chunk_score": 0.989,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.989,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-007",
+    "guid": "80481",
+    "table": "chunks",
+    "best_chunk_score": 0.508,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.508,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-007",
+    "guid": "80481",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-007",
+    "guid": "171855",
+    "table": "chunks",
+    "best_chunk_score": 0.635,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.635,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-007",
+    "guid": "171855",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-007",
+    "guid": "80481",
+    "table": "chunks",
+    "best_chunk_score": 0.988,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.988,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-007",
+    "guid": "163694",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-008",
+    "guid": "86420",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-008",
+    "guid": "86420",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-008",
+    "guid": "86420",
+    "table": "chunks",
+    "best_chunk_score": 0.561,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.561,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-008",
+    "guid": "86420",
+    "table": "chunks",
+    "best_chunk_score": 0.815,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.815,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-008",
+    "guid": "86420",
+    "table": "chunks",
+    "best_chunk_score": 0.995,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.995,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-008",
+    "guid": "86420",
+    "table": "chunks",
+    "best_chunk_score": 0.502,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.502,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-008",
+    "guid": "86420",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-008",
+    "guid": "86420",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-008",
+    "guid": "86420",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-008",
+    "guid": "86420",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-008",
+    "guid": "86420",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-008",
+    "guid": "80958",
+    "table": "chunks",
+    "best_chunk_score": 0.774,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.774,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-008",
+    "guid": "86420",
+    "table": "chunks",
+    "best_chunk_score": 0.406,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.406,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-008",
+    "guid": "86420",
+    "table": "chunks",
+    "best_chunk_score": 0.617,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.617,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-009",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 0.535,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.535,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-009",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-009",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 0.993,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.993,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-009",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 0.995,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.995,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-009",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-009",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-009",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 0.995,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.995,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-009",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 0.993,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.993,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-009",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 0.673,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.673,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-009",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 0.995,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.995,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-009",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-009",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-009",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 0.994,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.994,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-009",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 0.61,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.61,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-009",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 0.994,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.994,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-009",
+    "guid": "72674",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-009",
+    "guid": "72674",
+    "table": "chunks",
+    "best_chunk_score": 0.994,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.994,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-009",
+    "guid": "72674",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-010",
+    "guid": "77832",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-010",
+    "guid": "77832",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-010",
+    "guid": "77832",
+    "table": "chunks",
+    "best_chunk_score": 0.993,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.993,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-010",
+    "guid": "77832",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-010",
+    "guid": "77832",
+    "table": "chunks",
+    "best_chunk_score": 0.994,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.994,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-010",
+    "guid": "77832",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-010",
+    "guid": "77832",
+    "table": "chunks",
+    "best_chunk_score": 0.994,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.994,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-010",
+    "guid": "77832",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-010",
+    "guid": "141565",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-010",
+    "guid": "77832",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-010",
+    "guid": "77832",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-010",
+    "guid": "141565",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-010",
+    "guid": "141565",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-010",
+    "guid": "141565",
+    "table": "chunks",
+    "best_chunk_score": 0.995,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.995,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-010",
+    "guid": "141565",
+    "table": "chunks",
+    "best_chunk_score": 0.847,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.847,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "easy-010",
+    "guid": "141565",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-010",
+    "guid": "141565",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-001",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-001",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-001",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-001",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-001",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 0.835,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.835,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "medium-001",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-001",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-001",
+    "guid": "180978",
+    "table": "chunks",
+    "best_chunk_score": 0.758,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.758,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "medium-001",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 0.649,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.649,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "medium-001",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-002",
+    "guid": "99785",
+    "table": "chunks",
+    "best_chunk_score": 0.617,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.617,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "medium-002",
+    "guid": "99785",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-002",
+    "guid": "99785",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-002",
+    "guid": "99785",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-003",
+    "guid": "80958",
+    "table": "chunks",
+    "best_chunk_score": 0.996,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.996,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-003",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-003",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 0.996,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.996,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-003",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-003",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-003",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-003",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-003",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-003",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-003",
+    "guid": "109618",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-004",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-004",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-004",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-004",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-004",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-004",
+    "guid": "73141",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-004",
+    "guid": "73141",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-004",
+    "guid": "73141",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-004",
+    "guid": "73141",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-004",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-004",
+    "guid": "71794",
+    "table": "chunks",
+    "best_chunk_score": 0.996,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.996,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-004",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-004",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 0.881,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.881,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-004",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-004",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 0.759,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.759,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "medium-004",
+    "guid": "71794",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-004",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-005",
+    "guid": "89019",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-005",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-005",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 0.377,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.377,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "medium-005",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-005",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 0.992,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.992,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-005",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-005",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-005",
+    "guid": "89019",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-005",
+    "guid": "89019",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-005",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-005",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-005",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 0.459,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.459,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "medium-005",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-005",
+    "guid": "89019",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 0.996,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.996,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 0.911,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.911,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 0.425,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.425,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "medium-006",
+    "guid": "95862",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-006",
+    "guid": "95862",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-006",
+    "guid": "95862",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-006",
+    "guid": "95862",
+    "table": "chunks",
+    "best_chunk_score": 0.993,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.993,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-006",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-007",
+    "guid": "163694",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-007",
+    "guid": "163694",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-007",
+    "guid": "80481",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-007",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-007",
+    "guid": "80481",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-007",
+    "guid": "80481",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-007",
+    "guid": "80481",
+    "table": "chunks",
+    "best_chunk_score": 0.419,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.419,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "medium-007",
+    "guid": "80481",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-007",
+    "guid": "80481",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-007",
+    "guid": "163694",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-007",
+    "guid": "80481",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-007",
+    "guid": "80481",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-007",
+    "guid": "163694",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-007",
+    "guid": "163694",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-008",
+    "guid": "84830",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-008",
+    "guid": "84830",
+    "table": "chunks",
+    "best_chunk_score": 0.995,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.995,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-008",
+    "guid": "84830",
+    "table": "chunks",
+    "best_chunk_score": 0.994,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.994,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-008",
+    "guid": "84830",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-008",
+    "guid": "84830",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-008",
+    "guid": "84830",
+    "table": "chunks",
+    "best_chunk_score": 0.652,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.652,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "medium-008",
+    "guid": "84830",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-008",
+    "guid": "84830",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-008",
+    "guid": "84830",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-008",
+    "guid": "84830",
+    "table": "chunks",
+    "best_chunk_score": 0.995,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.995,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-008",
+    "guid": "80481",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-008",
+    "guid": "80481",
+    "table": "chunks",
+    "best_chunk_score": 0.995,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.995,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-008",
+    "guid": "163694",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-008",
+    "guid": "80481",
+    "table": "chunks",
+    "best_chunk_score": 0.996,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.996,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-008",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 0.995,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.995,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-008",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-008",
+    "guid": "84830",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-009",
+    "guid": "99785",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-009",
+    "guid": "99785",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-009",
+    "guid": "99785",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-009",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-009",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-009",
+    "guid": "82395",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-009",
+    "guid": "95862",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-009",
+    "guid": "95862",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-009",
+    "guid": "99785",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-009",
+    "guid": "99785",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-009",
+    "guid": "99785",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-009",
+    "guid": "99785",
+    "table": "chunks",
+    "best_chunk_score": 0.637,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.637,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "medium-009",
+    "guid": "99812",
+    "table": "chunks",
+    "best_chunk_score": 0.377,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.377,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "medium-009",
+    "guid": "99812",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-010",
+    "guid": "81015",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-010",
+    "guid": "81015",
+    "table": "chunks",
+    "best_chunk_score": 0.984,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.984,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-010",
+    "guid": "81015",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-010",
+    "guid": "81015",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-010",
+    "guid": "81015",
+    "table": "chunks",
+    "best_chunk_score": 0.617,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.617,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "medium-010",
+    "guid": "81015",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-010",
+    "guid": "81015",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-010",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-010",
+    "guid": "81015",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-010",
+    "guid": "81015",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-010",
+    "guid": "81015",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-010",
+    "guid": "81015",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-010",
+    "guid": "81015",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-011",
+    "guid": "72674",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-011",
+    "guid": "72674",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-011",
+    "guid": "82395",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-011",
+    "guid": "72674",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-011",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 0.537,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.537,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "medium-011",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-011",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-011",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-011",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-011",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-011",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-011",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-011",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-011",
+    "guid": "72674",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-012",
+    "guid": "141565",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-012",
+    "guid": "141565",
+    "table": "chunks",
+    "best_chunk_score": 0.993,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.993,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-012",
+    "guid": "141565",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-012",
+    "guid": "77832",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-012",
+    "guid": "141565",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-012",
+    "guid": "77832",
+    "table": "chunks",
+    "best_chunk_score": 0.993,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.993,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-012",
+    "guid": "77832",
+    "table": "chunks",
+    "best_chunk_score": 0.994,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.994,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-012",
+    "guid": "77832",
+    "table": "chunks",
+    "best_chunk_score": 0.989,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.989,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-012",
+    "guid": "77832",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-012",
+    "guid": "141565",
+    "table": "chunks",
+    "best_chunk_score": 0.627,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.627,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "medium-012",
+    "guid": "141565",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-012",
+    "guid": "99769",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-012",
+    "guid": "74307",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-013",
+    "guid": "87363",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-013",
+    "guid": "87363",
+    "table": "chunks",
+    "best_chunk_score": 0.52,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.52,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "medium-013",
+    "guid": "87363",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-013",
+    "guid": "87363",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-013",
+    "guid": "87363",
+    "table": "chunks",
+    "best_chunk_score": 0.994,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.994,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-013",
+    "guid": "92671",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-013",
+    "guid": "92671",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-013",
+    "guid": "92671",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-013",
+    "guid": "87363",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-013",
+    "guid": "87363",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-013",
+    "guid": "92671",
+    "table": "chunks",
+    "best_chunk_score": 0.991,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.991,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-013",
+    "guid": "92671",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-013",
+    "guid": "92671",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-013",
+    "guid": "92671",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-013",
+    "guid": "92671",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-013",
+    "guid": "87363",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-013",
+    "guid": "92671",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-013",
+    "guid": "92671",
+    "table": "chunks",
+    "best_chunk_score": 0.991,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.991,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-013",
+    "guid": "87363",
+    "table": "chunks",
+    "best_chunk_score": 0.981,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.981,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-013",
+    "guid": "87363",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-014",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-014",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-014",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-014",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 0.539,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.539,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "medium-014",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 0.889,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.889,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-014",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-014",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-014",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 0.336,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.336,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "medium-014",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-014",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 0.919,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.919,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-014",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-014",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-014",
+    "guid": "81015",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-014",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-014",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-014",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-014",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 0.872,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.872,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-015",
+    "guid": "112671",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-015",
+    "guid": "112671",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-015",
+    "guid": "112671",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-015",
+    "guid": "80958",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-015",
+    "guid": "112671",
+    "table": "chunks",
+    "best_chunk_score": 0.549,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.549,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "medium-015",
+    "guid": "112671",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-015",
+    "guid": "112671",
+    "table": "chunks",
+    "best_chunk_score": 0.986,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.986,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-015",
+    "guid": "112671",
+    "table": "chunks",
+    "best_chunk_score": 0.995,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.995,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-015",
+    "guid": "112671",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-015",
+    "guid": "112671",
+    "table": "chunks",
+    "best_chunk_score": 0.992,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.992,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-015",
+    "guid": "112671",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-015",
+    "guid": "153781",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "medium-015",
+    "guid": "112671",
+    "table": "chunks",
+    "best_chunk_score": 0.888,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.888,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 0.647,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.647,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "hard-001",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 0.995,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.995,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-001",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 0.976,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.976,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 0.836,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.836,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "hard-002",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 0.804,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.804,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "hard-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 0.689,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.689,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "hard-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 0.995,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.995,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-002",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-002",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-002",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-002",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-002",
+    "guid": "166704",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-002",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 0.701,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.701,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "hard-002",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 0.994,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.994,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-002",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-002",
+    "guid": "184856",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-003",
+    "guid": "95636",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-003",
+    "guid": "95636",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-003",
+    "guid": "95636",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-003",
+    "guid": "95636",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-003",
+    "guid": "95636",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-003",
+    "guid": "95636",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-003",
+    "guid": "95636",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-003",
+    "guid": "95636",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-003",
+    "guid": "95636",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-003",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-003",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-003",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-003",
+    "guid": "119933",
+    "table": "chunks",
+    "best_chunk_score": 0.588,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.588,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "hard-004",
+    "guid": "72674",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-004",
+    "guid": "99769",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-004",
+    "guid": "99769",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-004",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-004",
+    "guid": "99769",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-004",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-004",
+    "guid": "115672",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-004",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-004",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-004",
+    "guid": "72674",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-005",
+    "guid": "72674",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-005",
+    "guid": "99769",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-005",
+    "guid": "72674",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-005",
+    "guid": "99769",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-005",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-005",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-005",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-005",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 0.52,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.52,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "hard-005",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-005",
+    "guid": "152657",
+    "table": "chunks",
+    "best_chunk_score": 0.743,
+    "best_chunk_verified": false,
+    "doc_level_score": 0.743,
+    "doc_level_verified": false
+  },
+  {
+    "case_id": "hard-005",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-005",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-005",
+    "guid": "190201",
+    "table": "chunks",
+    "best_chunk_score": 0.975,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.975,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "hard-005",
+    "guid": "72674",
+    "table": "chunks",
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
+  }
+]

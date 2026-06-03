@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
 
+import re
+
 import httpx
 import psycopg
 import pypdf
@@ -203,7 +205,166 @@ def parse_pdf(path: Path) -> str:
     return "\n".join(page.extract_text() or "" for page in reader.pages)
 
 
+# ─── Clean ─────────────────────────────────────────────────────────────────────
+
+# FDA running header spliced mid-sentence at page breaks by pypdf's page join.
+_NONBINDING_RE = re.compile(
+    r"Contains?\s+Nonbinding\s+Recommendations?\.?",
+    re.IGNORECASE,
+)
+# Companion header present in draft docs.
+_DRAFT_HEADER_RE = re.compile(
+    r"Draft\s*[–—-]\s*Not\s+for\s+Implementation\.?",
+    re.IGNORECASE,
+)
+# Page-number footers / running headers on their own line.
+_PAGE_RE = re.compile(
+    r"\n[ \t]*(?:Page\s+\d+\s+of\s+\d+|\d+\s+of\s+\d+)[ \t]*(?=\n|$)",
+    re.IGNORECASE,
+)
+# Hyphenated word split across a line break (e.g. "manufac-\nturer").
+_HYPHEN_NL_RE = re.compile(r"-\n(?=[a-z])")
+# Mid-sentence single newline: lower/punct before \n, word-char after.
+# Preserves \n\n (paragraph breaks) and newlines after sentence-terminal . ! ?
+_MID_SENT_NL_RE = re.compile(r"(?<=[a-z,;:(])\n(?=[a-zA-Z0-9(])")
+
+
+def clean_text(raw: str) -> str:
+    """Strip FDA boilerplate and repair PDF-embedded newlines pre-chunk.
+
+    Applied once before chunk_text_structural (ADR 0014, plan §0.3):
+    char_start/char_end offsets in the output are self-consistent with the
+    text this function returns because chunking happens downstream.
+    """
+    text = _NONBINDING_RE.sub(" ", raw)
+    text = _DRAFT_HEADER_RE.sub(" ", text)
+    text = _PAGE_RE.sub("", text)
+    text = _HYPHEN_NL_RE.sub("", text)
+    text = _MID_SENT_NL_RE.sub(" ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
 # ─── Chunk ─────────────────────────────────────────────────────────────────────
+
+# Paragraph separator (two or more newlines).
+_PARA_SPLIT = re.compile(r"\n\n+")
+# Sentence boundary: terminal punctuation + whitespace + sentence-starting char.
+_SENT_SPLIT = re.compile(r'(?<=[.!?])\s+(?=[A-Z0-9("])')
+
+
+def _structural_segments(text: str, enc: tiktoken.Encoding) -> list[tuple[int, int]]:
+    """Return non-overlapping (char_start, char_end) segments from cleaned text.
+
+    Splits on paragraph boundaries first; oversized paragraphs fall back to
+    sentence boundaries. Covers the full character range of `text`.
+    """
+    size = settings.chunk_size_tokens
+
+    para_spans: list[tuple[int, int]] = []
+    prev = 0
+    for m in _PARA_SPLIT.finditer(text):
+        if m.start() > prev:
+            para_spans.append((prev, m.start()))
+        prev = m.end()
+    if prev < len(text):
+        para_spans.append((prev, len(text)))
+
+    segments: list[tuple[int, int]] = []
+    for cs, ce in para_spans:
+        para = text[cs:ce]
+        if not para.strip():
+            continue
+        if len(enc.encode(para)) <= size:
+            segments.append((cs, ce))
+        else:
+            sent_prev = 0
+            for sm in _SENT_SPLIT.finditer(para):
+                if sm.start() > sent_prev:
+                    segments.append((cs + sent_prev, cs + sm.start()))
+                sent_prev = sm.end()
+            if sent_prev < len(para):
+                segments.append((cs + sent_prev, ce))
+
+    return segments
+
+
+def chunk_text_structural(
+    text: str,
+    guidance_id: str,
+    guidance_title: str,
+    cluster: str | None = None,
+) -> list[Chunk]:
+    """Structural chunker: paragraph → sentence packing under a token budget.
+
+    Replaces the fixed tiktoken window (ADR 0014). Splits on paragraph (\\n\\n)
+    then sentence boundaries; packs segments greedily to
+    settings.chunk_size_tokens with settings.chunk_overlap_tokens of soft
+    overlap at segment boundaries.
+
+    char_start / char_end are character offsets into the `text` argument (the
+    cleaned doc text); they remain self-consistent with the stored chunk text
+    by construction — chunking happens after cleaning (plan §0.3).
+    """
+    enc = tiktoken.get_encoding("cl100k_base")
+    size = settings.chunk_size_tokens
+    overlap = settings.chunk_overlap_tokens
+
+    if not text.strip():
+        return []
+
+    segs = _structural_segments(text, enc)
+    if not segs:
+        return []
+
+    seg_toks: list[int] = [len(enc.encode(text[cs:ce])) for cs, ce in segs]
+
+    result: list[Chunk] = []
+    i = 0
+    n = len(segs)
+
+    while i < n:
+        # Greedily pack segments starting at segs[i].
+        total = 0
+        j = i
+        while j < n:
+            if total + seg_toks[j] > size and j > i:
+                break
+            total += seg_toks[j]
+            j += 1
+
+        # Chunk spans segs[i..j); char range covers the full text slice
+        # including inter-segment whitespace between packed segments.
+        cs = segs[i][0]
+        ce = segs[j - 1][1]
+        chunk_str = text[cs:ce]
+
+        result.append(
+            Chunk(
+                guidance_id=guidance_id,
+                guidance_title=guidance_title,
+                chunk_index=len(result),
+                text=chunk_str,
+                char_start=cs,
+                char_end=ce,
+                token_count=len(enc.encode(chunk_str)),
+                cluster=cluster,
+            )
+        )
+
+        if j >= n:
+            break
+
+        # Soft overlap: re-include tail segments totalling ≈ overlap tokens.
+        overlap_acc = 0
+        k = j
+        while k > i + 1 and overlap_acc + seg_toks[k - 1] <= overlap:
+            overlap_acc += seg_toks[k - 1]
+            k -= 1
+        i = k
+
+    return result
+
 
 def chunk_text(
     text: str,
@@ -211,21 +372,9 @@ def chunk_text(
     guidance_title: str,
     cluster: str | None = None,
 ) -> list[Chunk]:
-    """Split *text* into overlapping token-bounded chunks.
+    """Fixed-size tiktoken sliding window (retained for reference / tests).
 
-    Uses a tiktoken sliding window (cl100k_base encoding) with
-    settings.chunk_size_tokens and settings.chunk_overlap_tokens.
-    Chunk boundaries are determined by the token encoding rather than
-    character boundaries; char_start/char_end are computed by decoding
-    the prefix up to the chunk start so that check_citation can resolve
-    spans back to the source text.
-
-    Note: the spec (§4.4) cites RecursiveCharacterTextSplitter for its
-    structural-boundary preference.  That lives in langchain-text-splitters,
-    which is not a declared project dependency.  A pure tiktoken window is used
-    here and produces equivalent chunk sizes; boundary preference can be added
-    via langchain-text-splitters if recall@10 stalls below 0.75 (spec §4.4
-    reopen trigger).
+    Superseded in the live pipeline by chunk_text_structural (ADR 0014).
     """
     enc = tiktoken.get_encoding("cl100k_base")
     size = settings.chunk_size_tokens
@@ -243,8 +392,6 @@ def chunk_text(
         end = min(start + size, n)
         chunk_str = enc.decode(all_tokens[start:end])
 
-        # Decode prefix to get exact char offset (O(n) per chunk; acceptable
-        # for FDA guidance docs which are typically <20k tokens each).
         prefix_str = enc.decode(all_tokens[:start]) if start > 0 else ""
         char_start = len(prefix_str)
         char_end = char_start + len(chunk_str)
@@ -324,6 +471,77 @@ def _embed_batch(texts: list[str]) -> list[list[float]]:
 
 
 # ─── Write ─────────────────────────────────────────────────────────────────────
+
+_SCRATCH_TABLE: Final[str] = "corpus.chunks_rechunk"
+
+_SCRATCH_DDL: Final[str] = f"""
+CREATE SCHEMA IF NOT EXISTS corpus;
+CREATE TABLE IF NOT EXISTS {_SCRATCH_TABLE} (
+    id              bigserial    PRIMARY KEY,
+    guidance_id     text         NOT NULL,
+    guidance_title  text         NOT NULL,
+    chunk_index     int          NOT NULL,
+    text            text         NOT NULL,
+    char_start      int          NOT NULL,
+    char_end        int          NOT NULL,
+    token_count     int          NOT NULL,
+    metadata        jsonb        DEFAULT '{{}}'::jsonb,
+    UNIQUE (guidance_id, chunk_index)
+);
+"""
+
+_SCRATCH_UPSERT: Final[str] = f"""
+INSERT INTO {_SCRATCH_TABLE}
+    (guidance_id, guidance_title, chunk_index, text, char_start, char_end, token_count, metadata)
+VALUES
+    (%(guidance_id)s, %(guidance_title)s, %(chunk_index)s, %(text)s,
+     %(char_start)s, %(char_end)s, %(token_count)s, %(metadata)s)
+ON CONFLICT (guidance_id, chunk_index) DO UPDATE SET
+    guidance_title = EXCLUDED.guidance_title,
+    text           = EXCLUDED.text,
+    char_start     = EXCLUDED.char_start,
+    char_end       = EXCLUDED.char_end,
+    token_count    = EXCLUDED.token_count,
+    metadata       = EXCLUDED.metadata
+"""
+
+
+def write_to_scratch(chunks: list[Chunk]) -> None:
+    """Write clean+rechunked text to corpus.chunks_rechunk — no embeddings.
+
+    Idempotent: safe to re-run as cleaning/chunking parameters are tuned.
+    Live corpus.chunks is untouched throughout (ADR 0014 text-only validation
+    path). Schema is created on first call.
+    """
+    if not chunks:
+        return
+
+    with psycopg.connect(settings.pg_dsn) as conn:
+        with conn.cursor() as cur:
+            cur.execute(_SCRATCH_DDL)
+
+        rows: list[dict[str, Any]] = [
+            {
+                "guidance_id": c.guidance_id,
+                "guidance_title": c.guidance_title,
+                "chunk_index": c.chunk_index,
+                "text": c.text,
+                "char_start": c.char_start,
+                "char_end": c.char_end,
+                "token_count": c.token_count,
+                "metadata": Jsonb({"cluster": c.cluster}),
+            }
+            for c in chunks
+        ]
+        with conn.cursor() as cur:
+            cur.executemany(_SCRATCH_UPSERT, rows)
+
+    log.info(
+        "corpus.scratch.done",
+        guidance_id=chunks[0].guidance_id,
+        n_chunks=len(chunks),
+    )
+
 
 _UPSERT_SQL: Final[str] = """
 INSERT INTO corpus.chunks
@@ -417,6 +635,55 @@ def _ensure_schema(conn: psycopg.Connection[Any]) -> None:
 
 # ─── Entry point ───────────────────────────────────────────────────────────────
 
+def rechunk_to_scratch(limit: int | None = None) -> int:
+    """Clean + structurally rechunk all PDFs into corpus.chunks_rechunk.
+
+    Text + offsets only — no embeddings. Safe to re-run; idempotent via ON
+    CONFLICT DO UPDATE. Live corpus.chunks is untouched (ADR 0014).
+    """
+    limiter = RateLimiter(
+        rate_per_second=settings.download_rate_per_second,
+        burst=settings.download_burst,
+    )
+    docs = download_guidances(limit, limiter)
+    if not docs:
+        log.error("corpus.rechunk_scratch.no_files")
+        return 1
+
+    ingested = 0
+    failures = 0
+    for doc in docs:
+        try:
+            raw = parse_pdf(doc.path)
+            if len(raw) < PDF_MIN_TEXT_LEN:
+                log.warning(
+                    "corpus.rechunk_scratch.scanned_pdf_skipped",
+                    filename=doc.path.name,
+                )
+                continue
+            text = clean_text(raw)
+            chunks = chunk_text_structural(
+                text, doc.guidance_id, doc.guidance_title, doc.cluster
+            )
+            write_to_scratch(chunks)
+            ingested += 1
+        except Exception:
+            log.error(
+                "corpus.rechunk_scratch.doc_failed",
+                path=str(doc.path),
+                guidance_id=doc.guidance_id,
+            )
+            failures += 1
+
+    log.info(
+        "corpus.rechunk_scratch.complete",
+        ingested=ingested,
+        failed=failures,
+        total=len(docs),
+    )
+    return 0 if ingested > 0 else 1
+
+
 def main() -> int:
     """CLI entry point for the `rra-ingest` console script."""
     parser = argparse.ArgumentParser(
@@ -436,7 +703,19 @@ def main() -> int:
             "Use after schema changes to start with a clean slate."
         ),
     )
+    parser.add_argument(
+        "--rechunk-scratch",
+        action="store_true",
+        help=(
+            "Build corpus.chunks_rechunk (text + offsets, no embeddings) via "
+            "clean_text + chunk_text_structural. Does NOT touch corpus.chunks. "
+            "Run before smoke_rechunk.py to validate the rechunk strategy."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.rechunk_scratch:
+        return rechunk_to_scratch(args.limit)
 
     # Bootstrap schema — and optionally truncate — before any download or
     # embedding work. This surfaces schema problems immediately rather than
@@ -471,7 +750,9 @@ def main() -> int:
                 )
                 continue
 
-            chunks = chunk_text(text, doc.guidance_id, doc.guidance_title, doc.cluster)
+            chunks = chunk_text_structural(
+                clean_text(text), doc.guidance_id, doc.guidance_title, doc.cluster
+            )
             embedded = embed_chunks(chunks)
             write_to_postgres(embedded)
             ingested += 1

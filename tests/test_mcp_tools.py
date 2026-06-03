@@ -38,6 +38,7 @@ from rra.mcp_server.tools import (  # noqa: E402
     check_citation,
     fetch_guidance,
     list_recent_guidances,
+    match_quote,
     search_corpus,
 )
 
@@ -485,6 +486,115 @@ class TestRatioBugRegression:
             f"Short quote in long chunk must verify. "
             f"ratio()={ratio:.4f} would fail, coverage ratio should pass."
         )
+
+
+# ─── match_quote ─────────────────────────────────────────────────────────────
+
+
+class TestMatchQuoteMalformedInput:
+    """Robustness: malformed inputs return (False, 0.0, None) — never an exception.
+
+    An unverifiable chunk (None text, empty text, wrong-type char_start) is a
+    non-match, not a crash.  Same fail-closed principle as the empty-quote guard
+    in check_citation (ADR 0013 / ADR 0014).
+    """
+
+    def test_none_chunk_text(self) -> None:
+        v, sim, span = match_quote("some quote", None, 0)  # type: ignore[arg-type]
+        assert v is False
+        assert sim == 0.0
+        assert span is None
+
+    def test_empty_chunk_text(self) -> None:
+        v, sim, span = match_quote("some quote", "", 0)
+        assert v is False
+        assert sim == 0.0
+        assert span is None
+
+    def test_none_char_start(self) -> None:
+        v, sim, span = match_quote("some quote", "chunk text here", None)  # type: ignore[arg-type]
+        assert v is False
+        assert sim == 0.0
+        assert span is None
+
+    def test_non_int_char_start(self) -> None:
+        v, sim, span = match_quote("some quote", "chunk text here", "abc")  # type: ignore[arg-type]
+        assert v is False
+        assert sim == 0.0
+        assert span is None
+
+    def test_none_quoted_text(self) -> None:
+        v, sim, span = match_quote(None, "chunk text here", 0)  # type: ignore[arg-type]
+        assert v is False
+        assert sim == 0.0
+        assert span is None
+
+    def test_valid_inputs_still_work(self) -> None:
+        """Guard must not break the normal path."""
+        v, sim, span = match_quote("chunk text", "chunk text here for testing", 0)
+        assert v is True
+
+
+class TestMatchQuoteSpanRecovery:
+    """Step 2 span recovery works correctly for stored text with PDF whitespace."""
+
+    def test_pdf_newline_in_stored_text(self) -> None:
+        """Quote normalized from PDF-newline text should recover span in stored text."""
+        stored = "the sponsor\nshould demonstrate adequate safety"
+        quote = "sponsor should demonstrate adequate"  # normalized (spaces)
+        v, sim, span = match_quote(quote, stored, 10)
+        assert v is True
+        # Span should be document-relative (offset by char_start=10)
+        if span is not None:
+            assert span[0] >= 10
+            assert span[1] > span[0]
+
+    def test_span_none_on_no_match(self) -> None:
+        """No span when quote is not in chunk."""
+        v, sim, span = match_quote("completely unrelated phrase", "some chunk text here", 0)
+        assert v is False
+        assert span is None
+
+
+class TestCurlyQuoteNormalization:
+    """Curly apostrophes and quotation marks in corpus text match analyst straight-quote output.
+
+    pypdf extracts FDA guidance text with typographic quotes (U+2018/19/1C/1D).
+    Analyst models emit straight ASCII quotes. _normalize folds both sides so
+    the mismatch never causes a false verified=False.
+    """
+
+    def test_curly_apostrophe_in_chunk_matches_straight_in_quote(self) -> None:
+        """Chunk with U+2019 RIGHT SINGLE QUOTATION MARK matches straight-apostrophe quote."""
+        chunk = "the device’s intended use must be supported"  # curly apostrophe
+        quote = "the device's intended use must be supported"       # straight apostrophe
+        v, sim, span = match_quote(quote, chunk, 0)
+        assert v is True, "curly apostrophe in chunk should match straight apostrophe in quote"
+        assert sim is None  # substring hit (Step 2) — no LCS needed
+
+    def test_straight_apostrophe_in_chunk_matches_curly_in_quote(self) -> None:
+        """Reverse direction: straight chunk, curly quote — both fold to the same form."""
+        chunk = "the device's intended use must be supported"       # straight apostrophe
+        quote = "the device’s intended use must be supported"  # curly apostrophe
+        v, sim, span = match_quote(quote, chunk, 0)
+        assert v is True, "curly apostrophe in quote should match straight apostrophe in chunk"
+
+    def test_curly_double_quotes_in_chunk_match_straight_in_quote(self) -> None:
+        """Left/right double-quote chars in chunk match straight double-quote in quote."""
+        chunk = '“Software as a Medical Device” (SaMD) guidance'
+        quote = '"Software as a Medical Device" (SaMD) guidance'
+        v, sim, span = match_quote(quote, chunk, 0)
+        assert v is True
+
+    def test_non_quote_unicode_preserved(self) -> None:
+        """Normalization must NOT fold § or en/em dash — those are regulatory content."""
+        chunk = "under § 820.30 of 21 CFR"   # § char
+        quote = "under § 820.30 of 21 CFR"   # identical
+        v, sim, span = match_quote(quote, chunk, 0)
+        assert v is True
+        # Verify that § is unchanged in the normalized form
+        from rra.mcp_server.tools import _normalize
+        assert "§" in _normalize(chunk), "§ must survive _normalize (regulatory content)"
 
 
 # ─── list_recent_guidances ────────────────────────────────────────────────────

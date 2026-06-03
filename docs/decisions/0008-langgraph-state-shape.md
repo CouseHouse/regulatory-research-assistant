@@ -4,6 +4,14 @@
 **Date:** 2026-06-01
 **Owner:** Kyle Couse
 
+> **ℹ️ Amended by [ADR 0015](0015-session-tracking.md) (2026-06-02).**
+> The `session_id` field is documented below as tracing-only ("Reader(s): all
+> nodes (tracing)"). ADR 0015 **adds a persistence role**: api.py writes
+> `session_id` to `app.sessions` / `app.query_audit`, and a history-retrieval path
+> reads it. The state-shape decision and every field contract here remain
+> **Active and unchanged** — only `session_id`'s scope is *extended*, not
+> redefined.
+
 ## Context
 
 Day 4 introduces a four-node LangGraph state machine. The `GraphState` TypedDict is the inter-agent contract: every field added is inherited by tests, the Postgres checkpointer schema, and Langfuse traces. Several field-level choices are non-obvious and will be relitigated without recorded rationale: whether `critic_notes` accumulates or replaces, who increments `revision_count`, whether the researcher is a Python function or an LLM node, and how cap-out surfaces to the API caller.

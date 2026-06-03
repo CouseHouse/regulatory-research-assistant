@@ -1,5 +1,72 @@
 # Dev log
 
+## 2026-06-03 — Day 7: $0 matcher preprocessing fixes (quote faithfulness)
+
+### Count reconciliation: 137 vs 106
+
+- **137** = total quote failures at τ<0.85 (the configured threshold) — the "persistent failures" population.
+- **106** = the subset with best-chunk score <0.70 — the "hard fails" within that 137. The other 31 are near-misses (0.70–0.85).
+
+### Step 1 — Smart-quote normalization (tools.py `_normalize`)
+
+Added `_CURLY_MAP` (6 entries: U+2018/19/1C/1D/2032/2033 → ASCII '/"') and applied via `str.translate` before whitespace collapse. Applied to **both** quote and chunk sides. Narrow by design — only quotes/apostrophes, preserving §, en-dash, em-dash, ×, and all other regulatory-document Unicode.
+
+**Unit test added:** `TestCurlyQuoteNormalization` (4 tests) — curly-in-chunk matches straight-in-quote, vice versa, double quotes, and `§` preservation. 48→51 tests pass.
+
+**Smoke results after Step 1:**
+
+| Arm | Before | After Step 1 | Δ |
+|---|---|---|---|
+| `chunks` (dirty) | 309/446 | 350/446 | +41 |
+| `chunks_rechunk` (clean) | 309/446 | 350/446 | +41 |
+
++41 rescued exactly (matches the c-1 projection). Gap remains 0.
+
+### Step 2 — PDF line-number stripping (tools.py `_normalize`)
+
+Added `_LINENUM_INLINE_RE` and `_LINENUM_LINE_RE` patterns, applied to **both** sides in `_normalize` before whitespace collapse. pypdf embeds sequential 2–4 digit line numbers between sentence fragments in FDA draft guidance PDFs (e.g. `"medical 105 \ndevices"` → `"medical devices"`).
+
+**Regex:** `(?<!CFR)(?<!USC)(?<!art)(?<=[\w,;:\.\)])\s+\d{2,4}\s*\n`
+
+**Edge cases handled (verified against corpus):**
+- `"21 CFR 820\n"` → unchanged (`(?<!CFR)` fires) ✓
+- `"10 USC 7902\n"` → unchanged (`(?<!USC)` fires) ✓
+- `"under Part 820\n"` → unchanged (`(?<!art)` fires — "Part" ends in "art") ✓
+- `"§ 820.30"` → unchanged (§ not in `[\w,;:\.\)]` lookbehind) ✓
+- `"510(k)"` → unchanged (no \n after; paren not matched) ✓
+- `"TLS 1.3"` → unchanged (single digit "3", not 2–4) ✓
+- `"medical 105 \ndevices"` → `"medical devices"` ✓
+
+Verified: **0 regression on the 309 (→350) passing quotes** before adding Step 2.
+
+**Smoke results after Step 2:**
+
+| Arm | After Step 1 | After Step 2 | Δ (Step 2) | Total Δ |
+|---|---|---|---|---|
+| `chunks` (dirty) | 350/446 | 386/446 | +36 | +77 |
+| `chunks_rechunk` (clean) | 350/446 | 386/446 | +36 | +77 |
+
+c-3 near-miss resolution: the original near-miss band (0.70–0.85) had 31 cases. After both steps it has 13 residual — 18 near-miss cases crossed τ (combined across both steps).
+
+### Final residual breakdown (60 cases)
+
+| Category | Count | Notes |
+|---|---|---|
+| Ellipsis (… or ...) | 13 | Analyst synthesized/omitted text between sections |
+| Very low (<0.50, no ellipsis) | 8 | Likely synthesized — no verbatim span exists |
+| Mid-range (0.50–0.70) | 27 | Mixed: boundary straddle, paraphrased, wrong-chunk |
+| Near-miss (0.70–0.85) | 13 | Near-threshold; may resolve with corpus cleaning |
+
+**Real analyst issues (~21):** 8 synthesized + 13 ellipsis = real faithfulness problems the prompt could theoretically fix. Too few clear synthesized cases to justify a prompt change now. **Matcher/corpus near-misses (~39):** 27 mid-range + 13 near-miss — boundary straddle, wrong-chunk citations, or corpus cleaning residual.
+
+**Why delta=0 across corpus arms matters:** The fact that both `chunks` and `chunks_rechunk` went from 309→386 identically — same +77, same residual 60 — proves the faithfulness lever was the matcher, not corpus cleaning or re-chunking. The `chunks_rechunk` clean corpus offered zero additional faithfulness benefit. Re-embed and table-swap therefore remain **DEFERRED**: unneeded for faithfulness. Their remaining value (if any) is retrieval quality — measured separately via the Priority 4 recall comparison, not here.
+
+**No analyst prompt change. No re-embed. No merge, no tag.**
+
+154 tests pass (excluding pre-existing Voyage live-api test).
+
+---
+
 ## 2026-06-02 — Day 7: Priority 1 (key_fact_coverage backstop) + pre-rechunk baseline
 
 ### Results — run `day7-prerechunk-baseline` (tag), 2026-06-02T21:24:14Z

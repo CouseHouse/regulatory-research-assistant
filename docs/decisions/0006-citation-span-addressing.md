@@ -12,6 +12,12 @@
 > The `guidance_id:chunk_index` addressing decision in this ADR remains Active and
 > unchanged — only the `quoted_text` substring clause is affected.
 
+> **ℹ️ Noted by [ADR 0014](0014-corpus-cleaning-structural-chunking.md) (2026-06-02).**
+> The Day-2 open question ("stale high-index rows on re-chunk," §Consequences) is resolved:
+> re-chunking uses an atomic table-swap (`RENAME chunks_rechunk → chunks`), not in-place
+> upsert, so phantom-valid high-index rows cannot arise. The `guidance_id:chunk_index`
+> addressing scheme remains Active and unchanged.
+
 ## Context
 
 Answers cite sources inline as `[guidance_id:span]` (spec §5), but "span" is

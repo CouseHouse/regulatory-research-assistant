@@ -11,12 +11,14 @@ A flat list of all ADRs with status and one-line summary. Keep current — updat
 | 0005  | [Query-time embeddings: singleton client + input_type=query](0005-query-time-embeddings.md) | Active | 2026-05-31 | Day 3 |
 | 0006  | [Citation span addressing: guidance_id:chunk_index](0006-citation-span-addressing.md) | Active | 2026-05-31 | Day 3; quoted_text clause amended by 0013 |
 | 0007  | [Corpus scope and methodology](0007-corpus-scope-and-methodology.md) | Active | 2026-05-31 | Day 3 |
-| 0008  | [LangGraph state shape and agent contracts](0008-langgraph-state-shape.md) | Active | 2026-06-01 | Day 4 |
+| 0008  | [LangGraph state shape and agent contracts](0008-langgraph-state-shape.md) | Active | 2026-06-01 | Day 4; session_id contract amended by 0015 |
 | 0009  | [Critic-loop policy](0009-critic-loop-policy.md) | Active | 2026-06-01 | Day 4 |
 | 0010  | [`check_citation` matching contract](0010-check-citation-matching-contract.md) | Active | 2026-06-01 | Day 5 |
 | 0011  | [MCP tools as in-process functions; server as exposure layer](0011-mcp-tools-in-process.md) | Active | 2026-06-01 | Day 5 |
 | 0012  | [Day 6 eval-harness scoring and CI policy](0012-eval-harness-scoring-and-ci-policy.md) | Active | 2026-06-02 | Day 6 |
 | 0013  | [Quote-faithfulness: analyst-emitted supporting quotes](0013-quote-faithfulness-activation.md) | Active | 2026-06-02 | Day 7; amends 0006 |
+| 0014  | [Corpus cleaning + structural chunking](0014-corpus-cleaning-structural-chunking.md) | Active | 2026-06-02 | Day 7; resolves ADR 0006 orphan-row Q |
+| 0015  | [Session tracking: persist and surface session_id](0015-session-tracking.md) | Active | 2026-06-02 | Day 10 (new); amends 0008; opens ADR 0016 |
 
 
 ## Conventions for this file

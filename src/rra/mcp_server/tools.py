@@ -188,9 +188,113 @@ class CitationCheckResult(BaseModel):
     similarity_score: float | None = None
 
 
+# Maps typographic quote/apostrophe characters to ASCII equivalents.
+# Narrow: only the six quote/apostrophe variants. Preserves §, en-dash (–),
+# em-dash (—), ×, and all other meaningful regulatory-document characters.
+_CURLY_MAP = str.maketrans({
+    0x2018: "'",  # LEFT SINGLE QUOTATION MARK  → '
+    0x2019: "'",  # RIGHT SINGLE QUOTATION MARK → '
+    0x201C: '"',  # LEFT DOUBLE QUOTATION MARK  → "
+    0x201D: '"',  # RIGHT DOUBLE QUOTATION MARK → "
+    0x2032: "'",  # PRIME                       → '
+    0x2033: '"',  # DOUBLE PRIME                → "
+})
+
+# Strips pypdf-embedded draft-guidance line numbers applied before \s+ collapse.
+# In FDA draft guidances, pypdf injects sequential 2–4 digit line numbers between
+# sentence fragments (e.g. "medical 105 \ndevices" → "medical\ndevices").
+#
+# Lookbehind logic:
+#   (?<!CFR) / (?<!USC) / (?<!art): guard "21 CFR 820\n", "10 USC 7902\n",
+#     "Part 820\n" ("art" = last 3 chars of "Part").
+#   (?<=[\w,;:\.\)]): require a word/punct char immediately before the spaces
+#     so a bare number at start of line (handled by _LINENUM_LINE_RE) is
+#     caught by the second pattern instead.
+#
+# Preserved examples:  "21 CFR 820.30" (dot + digits), "510(k)" (paren),
+#   "§ 820.30" (§ not in lookbehind set), "TLS 1.3" (single digit),
+#   "90 days" (not before \n).
+# Stripped examples:   "medical 105 \ndevices", "controls. 831\nthat".
+_LINENUM_INLINE_RE = re.compile(
+    r"(?<!CFR)(?<!USC)(?<!art)(?<=[\w,;:\.\)])\s+\d{2,4}\s*\n"
+)
+# Isolated lines that contain only a 2–4 digit number (e.g. blank-line runs
+# between sections in numbered guidance PDFs). No lookbehind needed here
+# because the line is standalone.
+_LINENUM_LINE_RE = re.compile(r"(?m)^\s*\d{2,4}\s*\n")
+
+
 def _normalize(s: str) -> str:
-    """Collapse all whitespace runs to a single space and strip."""
+    """Whitespace-normalize; fold typographic quotes; strip PDF line numbers.
+
+    Applied to BOTH quote and chunk before any substring or LCS comparison.
+    Three transformations, applied in order before the final \s+ collapse:
+      1. Curly quote/apostrophe → ASCII (U+2018/19/1C/1D/32/33 → '/"): corpus
+         chunks carry typographic quotes from the PDF; analyst output uses ASCII.
+      2. Inline PDF line numbers stripped: bare 2–4 digit integers that pypdf
+         embeds between sentence fragments, always before \n (see _LINENUM_INLINE_RE
+         guards). Does NOT touch "21 CFR 820", "§ 820.30", "510(k)", etc.
+      3. Isolated number-only lines stripped (_LINENUM_LINE_RE).
+    Only quotes and apostrophes are folded in step 1; all other Unicode (§, –, —)
+    is preserved — those are regulatory content, not noise.
+    """
+    s = s.translate(_CURLY_MAP)
+    s = _LINENUM_INLINE_RE.sub("\n", s)
+    s = _LINENUM_LINE_RE.sub("", s)
     return re.sub(r"\s+", " ", s).strip()
+
+
+def match_quote(
+    quoted_text: str,
+    chunk_text: str,
+    char_start: int,
+) -> tuple[bool, float | None, list[int] | None]:
+    """ADR-0010 three-step matching algorithm — pure function, no DB, no config I/O.
+
+    Returns (verified, similarity_score, matched_doc_span).
+    Called by check_citation (production path) and by the $0 text-only smoke
+    (evals/smoke_rechunk.py — ADR 0014). Sharing one implementation prevents
+    drift between the diagnostic and production matching paths.
+
+    Malformed inputs (None, empty chunk_text, non-int char_start) return
+    (False, 0.0, None) rather than raising — an unverifiable chunk is a
+    non-match, not an exception (same fail-closed principle as the empty-quote
+    guard in check_citation).
+    """
+    # Guard malformed inputs before any _normalize call.
+    if (
+        not isinstance(quoted_text, str)
+        or not isinstance(chunk_text, str)
+        or not chunk_text
+        or not isinstance(char_start, int)
+    ):
+        return False, 0.0, None
+
+    norm_quoted = _normalize(quoted_text)
+    norm_chunk = _normalize(chunk_text)
+
+    if not norm_quoted:
+        return False, None, None
+
+    # Step 2: normalized substring + whitespace-flexible regex for span recovery.
+    if norm_quoted in norm_chunk:
+        # Split into words BEFORE escaping so re.escape does not consume spaces.
+        # re.escape no longer escapes spaces in Python 3.7+, so the old
+        # re.escape(s).split(r"\ ") pattern never splits and \s+ is never joined.
+        words = norm_quoted.split()
+        pattern = re.compile(r"\s+".join(re.escape(w) for w in words))
+        m = pattern.search(chunk_text)
+        if m:
+            return True, None, [char_start + m.start(), char_start + m.end()]
+        return True, None, None
+
+    # Step 3: SequenceMatcher coverage-ratio fallback.
+    matcher = SequenceMatcher(None, norm_quoted, norm_chunk, autojunk=False)
+    longest = matcher.find_longest_match(0, len(norm_quoted), 0, len(norm_chunk))
+    coverage = longest.size / len(norm_quoted)
+
+    tau = settings.citation_match_threshold
+    return coverage >= tau, coverage, None
 
 
 def check_citation(
@@ -255,13 +359,7 @@ def check_citation(
             similarity_score=None,
         )
 
-    # ── Three-step matching (ADR 0010) ────────────────────────────────────────
-
-    # Step 1: Normalize both sides.
-    norm_quoted = _normalize(quoted_text)
-    norm_chunk = _normalize(chunk_text)
-
-    if not norm_quoted:
+    if not quoted_text.strip():
         # Empty/whitespace quoted_text (non-None) — faithfulness CANNOT be
         # assessed, so fail closed: verified=False. This is NOT key-existence
         # (that is the quoted_text IS None path above, untouched). Returning True
@@ -276,56 +374,16 @@ def check_citation(
             similarity_score=None,
         )
 
-    # Step 2: Normalized substring check with whitespace-flexible regex for span recovery.
-    if norm_quoted in norm_chunk:
-        # Recover offsets in the STORED (non-normalized) text.
-        # Normalized positions do not map to stored positions because normalization
-        # collapses whitespace sequences and shifts subsequent offsets.
-        escaped_words = re.escape(norm_quoted).split(r"\ ")
-        pattern = re.compile(r"\s+".join(escaped_words))
-        m = pattern.search(chunk_text)
-        if m:
-            doc_start = char_start + m.start()
-            doc_end = char_start + m.end()
-            return CitationCheckResult(
-                verified=True,
-                source_text=chunk_text,
-                matched_doc_span=[doc_start, doc_end],
-                similarity_score=None,
-            )
-        # Substring found in normalized space but regex could not relocate it in
-        # stored text (edge case: normalization changed word boundaries).
-        return CitationCheckResult(
-            verified=True,
-            source_text=chunk_text,
-            matched_doc_span=None,
-            similarity_score=None,
-        )
-
-    # Step 3: SequenceMatcher coverage-ratio fallback.
-    # Metric: longest_match.size / len(norm_quoted) — NOT ratio().
-    # ratio() denominator is dominated by chunk length; returns ~0.05 even on a
-    # perfect short-quote match. Coverage ratio asks the right question: what
-    # fraction of the quote appears contiguously in the chunk?
-    matcher = SequenceMatcher(None, norm_quoted, norm_chunk, autojunk=False)
-    longest = matcher.find_longest_match(0, len(norm_quoted), 0, len(norm_chunk))
-    coverage = longest.size / len(norm_quoted)
-
-    tau = settings.citation_match_threshold
-    if coverage >= tau:
-        return CitationCheckResult(
-            verified=True,
-            source_text=chunk_text,
-            matched_doc_span=None,  # cannot pinpoint from longest-match alone
-            similarity_score=coverage,
-        )
-
-    # No match — return source_text and score for critic reference and τ-calibration.
+    # Three-step matching delegated to pure function (ADR 0014 — shared with
+    # the $0 text-only smoke so production and diagnostic paths are identical).
+    verified, similarity_score, matched_doc_span = match_quote(
+        quoted_text, chunk_text, char_start
+    )
     return CitationCheckResult(
-        verified=False,
+        verified=verified,
         source_text=chunk_text,
-        matched_doc_span=None,
-        similarity_score=coverage,
+        matched_doc_span=matched_doc_span,
+        similarity_score=similarity_score,
     )
 
 

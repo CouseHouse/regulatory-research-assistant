@@ -1,6 +1,6 @@
 # Project plan
 
-> **For Claude Code:** This is the 14-day build plan. Each day's detail is in `docs/plan/dayNN.md`. At session start, read `docs/dev-log.md` first to find current day, then read the matching `dayNN.md` for today's specifics. Do not start a later day's work before the current day's stop conditions are met.
+> **For Claude Code:** This is the 15-day build plan. Each day's detail is in `docs/plan/dayNN.md`. At session start, read `docs/dev-log.md` first to find current day, then read the matching `dayNN.md` for today's specifics. Do not start a later day's work before the current day's stop conditions are met.
 
 ## Status
 
@@ -21,18 +21,27 @@ The day numbers below are calendar position, not completion status. The dev log 
 | 7 | Fix #1 | Address worst weakness from evals → postmortem 1 | [day07.md](plan/day07.md) |
 | 8 | IaC | Terraform: VPC, ALB, RDS, ECS task definition | [day08.md](plan/day08.md) |
 | 9 | Deploy | Cloud deploy + smoke test + tear down | [day09.md](plan/day09.md) |
-| 10 | Design docs | OAuth + cost model + architecture diagram | [day10.md](plan/day10.md) |
-| 11 | Postmortems | Three "what broke" writeups | [day11.md](plan/day11.md) |
-| 12 | Polish | README rewrite, eval table, repo hygiene | [day12.md](plan/day12.md) |
-| 13 | Loom demo | Record 6–8 minute video | [day13.md](plan/day13.md) |
-| 14 | Buffer | Whatever broke, last polish, final push | [day14.md](plan/day14.md) |
+| 10 | **Session tracking** | Persist + surface `session_id`; activate `app.query_audit` (ADR 0015) | [day10-session-tracking.md](plan/day10-session-tracking.md) |
+| 11 | Design docs | OAuth + cost model + architecture diagram | [day10.md](plan/day10.md) |
+| 12 | Postmortems | Three "what broke" writeups | [day11.md](plan/day11.md) |
+| 13 | Polish | README rewrite, eval table, repo hygiene | [day12.md](plan/day12.md) |
+| 14 | Loom demo | Record 6–8 minute video | [day13.md](plan/day13.md) |
+| 15 | Buffer | Whatever broke, last polish, final push | [day14.md](plan/day14.md) |
+
+> **Renumber note (ADR 0015, 2026-06-02):** Day 10 "Session tracking" was inserted
+> after the cloud demo; the original Day 10–14 shifted to Day 11–15. The shifted
+> skeleton detail files keep their **original numeric names** (e.g. Day 11 "Design
+> docs" → `day10.md`) to avoid a churny rename across the cross-referenced day
+> plans — the **Day column above is authoritative** ("day numbers are calendar
+> position"). Some "(day N)" mentions inside the older skeleton files may still use
+> pre-insertion numbers.
 
 ## Cut-list if running behind
 
 Drop in this order (least to most critical):
 
-1. **Day 13 stretches** — talk about cloud deploy in the video instead of recording it live
-2. **Day 10 cost-model.md** — a paragraph in the README will do
+1. **Day 14 stretches** — talk about cloud deploy in the video instead of recording it live
+2. **Day 11 cost-model.md** — a paragraph in the README will do
 3. **Day 9 eval-against-cloud** — smoke test alone is fine
 4. **Day 8–9 entirely** — Terraform on a local-only branch with screenshots, no actual deploy
 
@@ -40,8 +49,8 @@ Drop in this order (least to most critical):
 
 - Day 6 evals — the JD's headline ask
 - Day 5 MCP `check_citation` — the project's distinctive piece
-- Day 11 postmortems — interview gold
-- Day 13 Loom — the demo IS the deliverable
+- Day 12 postmortems — interview gold
+- Day 14 Loom — the demo IS the deliverable
 
 ## Day-start ritual
 

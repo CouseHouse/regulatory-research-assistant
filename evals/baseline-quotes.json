@@ -1,0 +1,2678 @@
+[
+  {
+    "case_id": "easy-001",
+    "guidance_id": "184856",
+    "chunk_index": 3,
+    "quoted_text": "This guidance intends to continue these efforts, by providing lifecycle management and marketing submission recommendations consistent with a TPLC approach for AI-enabled devices."
+  },
+  {
+    "case_id": "easy-001",
+    "guidance_id": "184856",
+    "chunk_index": 5,
+    "quoted_text": "an AI-enabled device can be found substantially equivalent to a non-AI-enabled device with the same intended use provided, among other things, the AI-enabled device does not introduce different questions of safety and effectiveness"
+  },
+  {
+    "case_id": "easy-001",
+    "guidance_id": "166704",
+    "chunk_index": 15,
+    "quoted_text": "These data typically should be representative of the proposed intended use populations (e.g., with respect to race, ethnicity, disease severity, sex, age, or others, as appropriate) and intended environments."
+  },
+  {
+    "case_id": "easy-001",
+    "guidance_id": "184856",
+    "chunk_index": 33,
+    "quoted_text": "A description of the quality assurance processes related to the data, including the controls that were put in place to protect from human error during data acquisition, when applicable."
+  },
+  {
+    "case_id": "easy-001",
+    "guidance_id": "184856",
+    "chunk_index": 33,
+    "quoted_text": "A description of the mechanisms used to improve diversity in enrollment within the scope of the study, and how they ensure the generalizability of study results across patient populations and clinical sites."
+  },
+  {
+    "case_id": "easy-001",
+    "guidance_id": "184856",
+    "chunk_index": 33,
+    "quoted_text": "Synthetic data used in support of a regulatory submission should be accompanied by a comprehensive explanation of how the data were generated and why they are fit-for-purpose."
+  },
+  {
+    "case_id": "easy-001",
+    "guidance_id": "184856",
+    "chunk_index": 41,
+    "quoted_text": "A description of how the model was trained, including but not limited to: Optimization methods; Training paradigms (e.g., supervised, unsupervised or semi-supervised learning, federated learning, active learning)"
+  },
+  {
+    "case_id": "easy-001",
+    "guidance_id": "184856",
+    "chunk_index": 38,
+    "quoted_text": "The data management information for data used in the development of the model should be included in the \"Software Description\" in the Software Documentation section of the marketing submission."
+  },
+  {
+    "case_id": "easy-001",
+    "guidance_id": "184856",
+    "chunk_index": 31,
+    "quoted_text": "Data leakage between the validation and development datasets can create uncertainty regarding the true performance of the AI-enabled device."
+  },
+  {
+    "case_id": "easy-001",
+    "guidance_id": "166704",
+    "chunk_index": 15,
+    "quoted_text": "Test Data: These data are never shown to the algorithm during training and are used to estimate the AI model's performance after training."
+  },
+  {
+    "case_id": "easy-001",
+    "guidance_id": "184856",
+    "chunk_index": 48,
+    "quoted_text": "Prognostic clinical decision support devices may need longitudinal data with survival analysis, calibration analysis, and/or discrimination analysis (e.g., risk stratification analysis)."
+  },
+  {
+    "case_id": "easy-001",
+    "guidance_id": "184856",
+    "chunk_index": 38,
+    "quoted_text": "When the characteristics of data used for model training and validation differ, sponsors should highlight and justify the differences along with the performance validation data management section."
+  },
+  {
+    "case_id": "easy-001",
+    "guidance_id": "184856",
+    "chunk_index": 38,
+    "quoted_text": "AI-enabled devices may also be more sensitive than traditional medical devices to the idiosyncratic patterns in the training or test data. For these reasons, they may require higher proportion of U.S. data in the clinical validation."
+  },
+  {
+    "case_id": "easy-001",
+    "guidance_id": "184856",
+    "chunk_index": 52,
+    "quoted_text": "sponsors should proactively monitor, identify, and address device performance changes, as well as changes to device inputs and the context in which the device is used that could lead to changes in device performance."
+  },
+  {
+    "case_id": "easy-001",
+    "guidance_id": "184856",
+    "chunk_index": 52,
+    "quoted_text": "The inclusion of a performance monitoring plan in the marketing submission may help to reduce uncertainty and support FDA's evaluation of risk controls."
+  },
+  {
+    "case_id": "easy-001",
+    "guidance_id": "166704",
+    "chunk_index": 2,
+    "quoted_text": "A. Goals of the Modification Protocol Section\u2026 (1) Data management practices (2) Re-training practices (3) Performance evaluation (4) Update procedures"
+  },
+  {
+    "case_id": "easy-002",
+    "guidance_id": "166704",
+    "chunk_index": 8,
+    "quoted_text": "section 515C of the FD&C Act (21 U.S.C. 360e-4) has provisions regarding PCCPs for devices requiring premarket approval (PMA) or premarket notification (510(k))"
+  },
+  {
+    "case_id": "easy-002",
+    "guidance_id": "166704",
+    "chunk_index": 17,
+    "quoted_text": "modifications can be implemented to the AI-DSF without triggering the need for a new marketing submission"
+  },
+  {
+    "case_id": "easy-002",
+    "guidance_id": "166704",
+    "chunk_index": 16,
+    "quoted_text": "The PCCP includes a Description of Modifications, Modification Protocol, and Impact Assessment"
+  },
+  {
+    "case_id": "easy-002",
+    "guidance_id": "166704",
+    "chunk_index": 32,
+    "quoted_text": "The Description of Modifications should include the specifications for the characteristics and performance of the device that, following the agreed upon verification and validation described in the Modification Protocol, can be implemented without a new marketing submission"
+  },
+  {
+    "case_id": "easy-002",
+    "guidance_id": "166704",
+    "chunk_index": 32,
+    "quoted_text": "FDA recommends that a PCCP include only a limited number of modifications that are specific, and that can be verified and validated"
+  },
+  {
+    "case_id": "easy-002",
+    "guidance_id": "166704",
+    "chunk_index": 33,
+    "quoted_text": "The Description of Modifications should clearly state if the planned modifications are proposed to be implemented automatically\u2026whether modifications are implemented manually\u2026or a combination of both"
+  },
+  {
+    "case_id": "easy-002",
+    "guidance_id": "166704",
+    "chunk_index": 33,
+    "quoted_text": "it may be helpful for manufacturers to clearly establish boundaries or guardrails that define the range of automatic updates"
+  },
+  {
+    "case_id": "easy-002",
+    "guidance_id": "166704",
+    "chunk_index": 16,
+    "quoted_text": "The Modification Protocol includes the verification and validation activities (including pre-defined acceptance criteria) for those modifications"
+  },
+  {
+    "case_id": "easy-002",
+    "guidance_id": "166704",
+    "chunk_index": 17,
+    "quoted_text": "Modification Protocol\u2026The associated verification and validation testing activities that will support the planned modifications and acceptance criteria to assure the device remains safe and effective"
+  },
+  {
+    "case_id": "easy-002",
+    "guidance_id": "166704",
+    "chunk_index": 33,
+    "quoted_text": "Each modification should be linked to a specific performance evaluation activity within the Modification Protocol"
+  },
+  {
+    "case_id": "easy-002",
+    "guidance_id": "166704",
+    "chunk_index": 16,
+    "quoted_text": "Impact Assessment: The documentation of the assessment of the benefits and risks of implementing a PCCP, as well as the plan for risk mitigation"
+  },
+  {
+    "case_id": "easy-002",
+    "guidance_id": "166704",
+    "chunk_index": 41,
+    "quoted_text": "AI model testing protocols comparing the newly modified device to both the original device (the version of the device without any modifications implemented) and the last modified version of the device"
+  },
+  {
+    "case_id": "easy-002",
+    "guidance_id": "166704",
+    "chunk_index": 41,
+    "quoted_text": "identify any triggers for re-training (e.g., when the quantity of new data reaches a certain size or when a drift in data is observed over time)"
+  },
+  {
+    "case_id": "easy-002",
+    "guidance_id": "166704",
+    "chunk_index": 58,
+    "quoted_text": "Labeling was updated in accordance with the modified AI-DSF performance, and communication was provided to the device users"
+  },
+  {
+    "case_id": "easy-002",
+    "guidance_id": "166704",
+    "chunk_index": 58,
+    "quoted_text": "The manufacturer should document the modification that was specified in the PCCP in accordance with their quality system"
+  },
+  {
+    "case_id": "easy-002",
+    "guidance_id": "180978",
+    "chunk_index": 7,
+    "quoted_text": "a premarket notification shall not be required for a change to a device cleared under section 510(k), if such change is consistent with an established predetermined change control plan"
+  },
+  {
+    "case_id": "easy-002",
+    "guidance_id": "166704",
+    "chunk_index": 17,
+    "quoted_text": "Deviations from the authorized PCCP could significantly affect the safety or effectiveness of the device. This could include, for example, issues related to the Modification Protocol, such as data management or re-training failure, or failure to meet pre-specified performance criteria"
+  },
+  {
+    "case_id": "easy-002",
+    "guidance_id": "166704",
+    "chunk_index": 58,
+    "quoted_text": "the manufacturer also noticed that the modified AI model\u2026can now also predict physiologic instability in advance of its onset, which the previous version of the AI model could not do"
+  },
+  {
+    "case_id": "easy-002",
+    "guidance_id": "166704",
+    "chunk_index": 33,
+    "quoted_text": "FDA recommends manufacturers discuss considerations for automatic updates for AI-DSFs through the Q-Submission Program"
+  },
+  {
+    "case_id": "easy-003",
+    "guidance_id": "166704",
+    "chunk_index": 16,
+    "quoted_text": "The documentation describing what modifications will be made to a device and how the modifications will be assessed."
+  },
+  {
+    "case_id": "easy-003",
+    "guidance_id": "180978",
+    "chunk_index": 7,
+    "quoted_text": "The Secretary may clear a predetermined change control plan submitted in a notification submitted under section 510(k) that describes planned changes that may be made to the device (and that would otherwise require a new notification), if\u2014(A) the device remains safe and effective without any such change; and (B) the device would remain substantially equivalent to the predicate."
+  },
+  {
+    "case_id": "easy-003",
+    "guidance_id": "180978",
+    "chunk_index": 34,
+    "quoted_text": "Modifications included in a PCCP must maintain the device within the device's intended use."
+  },
+  {
+    "case_id": "easy-003",
+    "guidance_id": "166704",
+    "chunk_index": 17,
+    "quoted_text": "An authorized PCCP should include the following sections\u2026 Description of Modifications\u2026 Modification Protocol\u2026 Impact Assessment."
+  },
+  {
+    "case_id": "easy-003",
+    "guidance_id": "180978",
+    "chunk_index": 34,
+    "quoted_text": "Modifications that are appropriate for inclusion in a PCCP include those that are intended to maintain or improve the safety or effectiveness of the device."
+  },
+  {
+    "case_id": "easy-003",
+    "guidance_id": "180978",
+    "chunk_index": 42,
+    "quoted_text": "Minor change in device design, including dimensions, performance specifications, wireless communication, components or accessories, or the patient/user interface."
+  },
+  {
+    "case_id": "easy-003",
+    "guidance_id": "180978",
+    "chunk_index": 42,
+    "quoted_text": "Minor change in sterilization, packaging, transport, or expiration dating."
+  },
+  {
+    "case_id": "easy-003",
+    "guidance_id": "180978",
+    "chunk_index": 42,
+    "quoted_text": "Minor change in a material/component that has similar technical specifications to those for the authorized device."
+  },
+  {
+    "case_id": "easy-003",
+    "guidance_id": "180978",
+    "chunk_index": 36,
+    "quoted_text": "Modifications that could introduce a new risk are those that could introduce a new hazard or hazardous situations that did not exist for the original device."
+  },
+  {
+    "case_id": "easy-003",
+    "guidance_id": "180978",
+    "chunk_index": 42,
+    "quoted_text": "Minor change in software related to device compatibility and/or interoperability (e.g., changes to support device use on upgraded operating system(s) or new data vendors and/or sources)."
+  },
+  {
+    "case_id": "easy-003",
+    "guidance_id": "180978",
+    "chunk_index": 42,
+    "quoted_text": "Minor change in software consistent with the intended use to improve device performance."
+  },
+  {
+    "case_id": "easy-003",
+    "guidance_id": "180978",
+    "chunk_index": 36,
+    "quoted_text": "FDA recommends when assessing such types of modifications that a manufacturer should first conduct a risk-based assessment to determine whether the modification would require a new marketing submission."
+  },
+  {
+    "case_id": "easy-003",
+    "guidance_id": "180978",
+    "chunk_index": 42,
+    "quoted_text": "Minor change to the labeling, including instructions for use, warnings, precautions, or other labeling that does not affect the indications for use or contraindications."
+  },
+  {
+    "case_id": "easy-003",
+    "guidance_id": "180978",
+    "chunk_index": 42,
+    "quoted_text": "Minor change to the labeling to describe a specific subset of a patient population within the originally indicated patient population."
+  },
+  {
+    "case_id": "easy-003",
+    "guidance_id": "99812",
+    "chunk_index": 19,
+    "quoted_text": "most labeling changes that affect the substance, meaning, or scope of the indications for use could significantly affect safety or effectiveness and will require submission of a new 510(k)."
+  },
+  {
+    "case_id": "easy-003",
+    "guidance_id": "180978",
+    "chunk_index": 42,
+    "quoted_text": "if such a change addresses a safety issue, it would not be appropriate to include in a PCCP."
+  },
+  {
+    "case_id": "easy-003",
+    "guidance_id": "114034",
+    "chunk_index": 6,
+    "quoted_text": "FDA encourages the use of a Pre-Sub as it provides an opportunity to work proactively with the FDA in the development of the PCCP, which helps to streamline the premarket review."
+  },
+  {
+    "case_id": "easy-004",
+    "guidance_id": "109618",
+    "chunk_index": 4,
+    "quoted_text": "Section 3060(a) of the Cures Act amended the FD&C Act to add section 520(o) of the FD&C Act, which excludes certain software functions from the definition of device in section 201(h) of the FD&C Act."
+  },
+  {
+    "case_id": "easy-004",
+    "guidance_id": "109618",
+    "chunk_index": 6,
+    "quoted_text": "This guidance presents the Agency's current thinking on which CDS software functions are excluded from the definition of device by section 520(o)(1)(E) of the FD&C Act."
+  },
+  {
+    "case_id": "easy-004",
+    "guidance_id": "109618",
+    "chunk_index": 4,
+    "quoted_text": "Certain CDS software functions are excluded from the definition of device by section 520(o)(1)(E) of the FD&C Act if the software functions meet all of the following four criteria."
+  },
+  {
+    "case_id": "easy-004",
+    "guidance_id": "109618",
+    "chunk_index": 5,
+    "quoted_text": "not intended to acquire, process, or analyze a medical image or a signal from an in vitro diagnostic device or a pattern or signal from a signal acquisition system"
+  },
+  {
+    "case_id": "easy-004",
+    "guidance_id": "109618",
+    "chunk_index": 5,
+    "quoted_text": "intended for the purpose of displaying, analyzing, or printing medical information about a patient or other medical information (such as peer-reviewed clinical studies and clinical practice guidelines)"
+  },
+  {
+    "case_id": "easy-004",
+    "guidance_id": "109618",
+    "chunk_index": 10,
+    "quoted_text": "FDA interprets Criterion 2 to include software functions that display, analyze, or print patient-specific information, such as demographic information, symptoms, certain test results, patient discharge summaries, and/or other medical information"
+  },
+  {
+    "case_id": "easy-004",
+    "guidance_id": "109618",
+    "chunk_index": 15,
+    "quoted_text": "Is not intended to replace or direct the HCP's judgment."
+  },
+  {
+    "case_id": "easy-004",
+    "guidance_id": "109618",
+    "chunk_index": 5,
+    "quoted_text": "intended for the purpose of enabling such health care professional to independently review the basis for such recommendations that such software presents"
+  },
+  {
+    "case_id": "easy-004",
+    "guidance_id": "109618",
+    "chunk_index": 17,
+    "quoted_text": "FDA does not consider software functions intended for a critical, time-sensitive task or decision to meet Criterion 4, because an HCP is unlikely to have sufficient time to independently review the basis of the recommendations."
+  },
+  {
+    "case_id": "easy-004",
+    "guidance_id": "109618",
+    "chunk_index": 17,
+    "quoted_text": "The software or labeling identify the required input medical information, with plain language instructions on how the inputs should be obtained, their relevance, and data quality requirements."
+  },
+  {
+    "case_id": "easy-004",
+    "guidance_id": "109618",
+    "chunk_index": 17,
+    "quoted_text": "The software or labeling provide a plain language description of the underlying algorithm development and validation that forms the basis for the CDS implementation."
+  },
+  {
+    "case_id": "easy-004",
+    "guidance_id": "109618",
+    "chunk_index": 36,
+    "quoted_text": "The full report of the clinical studies being relied upon is not made available to the user."
+  },
+  {
+    "case_id": "easy-004",
+    "guidance_id": "109618",
+    "chunk_index": 19,
+    "quoted_text": "Automation bias is the propensity of humans to over-rely on a suggestion from an automated system."
+  },
+  {
+    "case_id": "easy-004",
+    "guidance_id": "109618",
+    "chunk_index": 19,
+    "quoted_text": "In some cases, developers may need to perform usability testing to evaluate if their implementation meets Criterion 4."
+  },
+  {
+    "case_id": "easy-004",
+    "guidance_id": "109618",
+    "chunk_index": 21,
+    "quoted_text": "Software function that matches patient-specific medical information to peer-reviewed literature publications on related topics."
+  },
+  {
+    "case_id": "easy-004",
+    "guidance_id": "109618",
+    "chunk_index": 21,
+    "quoted_text": "Software function that provides HCPs with available treatment options, including drug, device, surgical and/or lifestyle changes for heart failure patients based on their disease stage and clinical guidelines."
+  },
+  {
+    "case_id": "easy-004",
+    "guidance_id": "109618",
+    "chunk_index": 19,
+    "quoted_text": "being able to clearly understand how the logic was applied for the patient will aid an HCP in understanding the basis of the recommendations."
+  },
+  {
+    "case_id": "easy-005",
+    "guidance_id": "153781",
+    "chunk_index": 2,
+    "quoted_text": "This guidance document is intended to provide information regarding the recommended documentation for premarket submissions for FDA's evaluation of the safety and effectiveness of device software functions"
+  },
+  {
+    "case_id": "easy-005",
+    "guidance_id": "153781",
+    "chunk_index": 8,
+    "quoted_text": "firmware and other means for software-based control of medical devices, software accessories to medical devices, and software only function(s) that meet the definition of a device"
+  },
+  {
+    "case_id": "easy-005",
+    "guidance_id": "80958",
+    "chunk_index": 47,
+    "quoted_text": "If the device software function uses off-the-shelf software, manufacturers should also refer to FDA's \"Guidance for Industry, FDA Reviewers, and Compliance on Off-the-Shelf Software Use in Medical Devices.\""
+  },
+  {
+    "case_id": "easy-005",
+    "guidance_id": "153781",
+    "chunk_index": 12,
+    "quoted_text": "FDA intends to take a risk-based approach to help determine the device's Documentation Level, which is either Basic or Enhanced."
+  },
+  {
+    "case_id": "easy-005",
+    "guidance_id": "153781",
+    "chunk_index": 12,
+    "quoted_text": "The Documentation Level of a device is based on the risks of its device software function(s) in the context of the device's intended use"
+  },
+  {
+    "case_id": "easy-005",
+    "guidance_id": "153781",
+    "chunk_index": 12,
+    "quoted_text": "Enhanced Documentation should be provided for any premarket submission that includes device software function(s) where a failure or flaw of any device software function(s) could present a hazardous situation with a probable risk of death or serious injury"
+  },
+  {
+    "case_id": "easy-005",
+    "guidance_id": "153781",
+    "chunk_index": 12,
+    "quoted_text": "Basic Documentation should be provided for any premarket submission that includes device software function(s) where Enhanced Documentation does not apply."
+  },
+  {
+    "case_id": "easy-005",
+    "guidance_id": "153781",
+    "chunk_index": 15,
+    "quoted_text": "A statement indicating the Documentation Level and a description of the rationale for that level."
+  },
+  {
+    "case_id": "easy-005",
+    "guidance_id": "153781",
+    "chunk_index": 15,
+    "quoted_text": "Software description, including overview of significant software features, functions, analyses, inputs, outputs, and hardware platforms."
+  },
+  {
+    "case_id": "easy-005",
+    "guidance_id": "153781",
+    "chunk_index": 15,
+    "quoted_text": "Risk management plan, risk assessment demonstrating that risks have been appropriately mitigated, and risk management report."
+  },
+  {
+    "case_id": "easy-005",
+    "guidance_id": "153781",
+    "chunk_index": 15,
+    "quoted_text": "SRS documentation, describing the needs or expectations for a system or software, presented in an organized format, at the software system level or subsystem level"
+  },
+  {
+    "case_id": "easy-005",
+    "guidance_id": "153781",
+    "chunk_index": 24,
+    "quoted_text": "Each requirement identified in the software requirements specification should be traceable and we recommend that the SRS be evaluated for accuracy, completeness, consistency, testability, correctness, and clarity."
+  },
+  {
+    "case_id": "easy-005",
+    "guidance_id": "153781",
+    "chunk_index": 15,
+    "quoted_text": "Detailed diagrams of the modules, layers, and interfaces that comprise the device, their relationships, the data inputs/outputs and flow of data"
+  },
+  {
+    "case_id": "easy-005",
+    "guidance_id": "153781",
+    "chunk_index": 15,
+    "quoted_text": "FDA is not recommending the SDS as part of the premarket submission. Sponsor should document this information on the design via the DHF for the device."
+  },
+  {
+    "case_id": "easy-005",
+    "guidance_id": "153781",
+    "chunk_index": 29,
+    "quoted_text": "A singular SDS document or set of SDS documents that provide the technical design details of how the software functions, how the software design completely and correctly implements all the requirements of the SRS"
+  },
+  {
+    "case_id": "easy-005",
+    "guidance_id": "153781",
+    "chunk_index": 16,
+    "quoted_text": "A summary of the life cycle development plan and a summary of configuration management and maintenance activities"
+  },
+  {
+    "case_id": "easy-005",
+    "guidance_id": "153781",
+    "chunk_index": 16,
+    "quoted_text": "Basic Documentation Level, PLUS complete configuration management and maintenance plan document(s)"
+  },
+  {
+    "case_id": "easy-005",
+    "guidance_id": "153781",
+    "chunk_index": 16,
+    "quoted_text": "A summary description of the testing activities at the unit, integration and system levels; AND System level test protocol including expected results, observed results, pass/fail determination, and system level test report."
+  },
+  {
+    "case_id": "easy-006",
+    "guidance_id": "119933",
+    "chunk_index": 8,
+    "quoted_text": "Section 524B(c) of the FD&C Act defines \"cyber device\" as a device that \"(1) includes software validated, installed, or authorized by the sponsor as a device or in a device; (2) has the ability to connect to the internet\""
+  },
+  {
+    "case_id": "easy-006",
+    "guidance_id": "119933",
+    "chunk_index": 13,
+    "quoted_text": "if a thermometer is used in a safety-critical control loop, or is connected to networks or other devices, then the cybersecurity risks for the device are considered to be greater"
+  },
+  {
+    "case_id": "easy-006",
+    "guidance_id": "119933",
+    "chunk_index": 15,
+    "quoted_text": "Possible frameworks to consider include, but are not limited to, the medical device-specific framework that can be found in the Medical Device and Health IT Joint Security Plan (JSP2) and IEC 81001-5-1."
+  },
+  {
+    "case_id": "easy-006",
+    "guidance_id": "119933",
+    "chunk_index": 67,
+    "quoted_text": "Cybersecurity Risk Management Report \u2026 Sections V, VI.B"
+  },
+  {
+    "case_id": "easy-006",
+    "guidance_id": "119933",
+    "chunk_index": 49,
+    "quoted_text": "Section 524B(b)(3) of the FD&C Act requires manufacturers of cyber devices to provide an SBOM, including commercial, open-source, and off-the-shelf software components."
+  },
+  {
+    "case_id": "easy-006",
+    "guidance_id": "119933",
+    "chunk_index": 25,
+    "quoted_text": "the software level of support provided through monitoring and maintenance from the software component manufacturer \u2026 and the software component's end-of-support date."
+  },
+  {
+    "case_id": "easy-006",
+    "guidance_id": "119933",
+    "chunk_index": 26,
+    "quoted_text": "manufacturers should also identify all known vulnerabilities associated with the device and the software components, including those identified in CISA's Known Exploited Vulnerabilities Catalog."
+  },
+  {
+    "case_id": "easy-006",
+    "guidance_id": "119933",
+    "chunk_index": 31,
+    "quoted_text": "an adequate set of security controls should include, but not necessarily be limited to, controls from the following categories: Authentication; Authorization; Cryptography; Code, Data, and Execution Integrity"
+  },
+  {
+    "case_id": "easy-006",
+    "guidance_id": "119933",
+    "chunk_index": 26,
+    "quoted_text": "Some anomalies discovered during development or testing may have security implications and may also be considered vulnerabilities."
+  },
+  {
+    "case_id": "easy-006",
+    "guidance_id": "119933",
+    "chunk_index": 20,
+    "quoted_text": "State any assumptions about the medical device system or environment of use (e.g., hospital networks are inherently hostile, therefore manufacturers are recommended to assume that an adversary controls the network)"
+  },
+  {
+    "case_id": "easy-006",
+    "guidance_id": "119933",
+    "chunk_index": 22,
+    "quoted_text": "a device may have cybersecurity considerations from interoperable functionality, including but not limited to interfaces with \u2026 Healthcare infrastructure (e.g., network, Electronic Medical Records, medical imaging systems)"
+  },
+  {
+    "case_id": "easy-006",
+    "guidance_id": "119933",
+    "chunk_index": 22,
+    "quoted_text": "device manufacturers should assess whether added security controls beneath such communication are needed to ensure the safety and effectiveness of the device."
+  },
+  {
+    "case_id": "easy-006",
+    "guidance_id": "112671",
+    "chunk_index": 30,
+    "quoted_text": "Demonstrate that appropriate cybersecurity controls were included in the design and implementation of the product."
+  },
+  {
+    "case_id": "easy-006",
+    "guidance_id": "119933",
+    "chunk_index": 68,
+    "quoted_text": "For a device with greater complexities such as, but not limited to, networking, wireless connections, cloud, and/or commercial operating systems, multiple architecture views may be needed."
+  },
+  {
+    "case_id": "easy-006",
+    "guidance_id": "119933",
+    "chunk_index": 36,
+    "quoted_text": "Manufacturers should provide evidence that each design input requirement was implemented successfully."
+  },
+  {
+    "case_id": "easy-006",
+    "guidance_id": "119933",
+    "chunk_index": 36,
+    "quoted_text": "Manufacturers should provide details and evidence of testing that demonstrates effective risk control measures according to the threat models provided."
+  },
+  {
+    "case_id": "easy-007",
+    "guidance_id": "163694",
+    "chunk_index": 6,
+    "quoted_text": "Systematic use of available information to identify use-related hazards and to estimate the use-related risk."
+  },
+  {
+    "case_id": "easy-007",
+    "guidance_id": "163694",
+    "chunk_index": 6,
+    "quoted_text": "demonstrating that the user interface of the device is appropriate for the intended users, uses, and use environments."
+  },
+  {
+    "case_id": "easy-007",
+    "guidance_id": "80481",
+    "chunk_index": 3,
+    "quoted_text": "use errors that occur during use of the device that could cause harm or degrade medical treatment are either eliminated or reduced to the extent possible."
+  },
+  {
+    "case_id": "easy-007",
+    "guidance_id": "80481",
+    "chunk_index": 3,
+    "quoted_text": "the severity of the potential harm is more meaningful for determining the need to eliminate (design out) or reduce resulting harm."
+  },
+  {
+    "case_id": "easy-007",
+    "guidance_id": "80481",
+    "chunk_index": 40,
+    "quoted_text": "at least one hazardous scenario associated with each use error, the potential harm that could result, the potential severity of the harm"
+  },
+  {
+    "case_id": "easy-007",
+    "guidance_id": "80481",
+    "chunk_index": 40,
+    "quoted_text": "all risk control measures implemented to eliminate or reduce the risk, and the source of evidence that each risk control measure was effective."
+  },
+  {
+    "case_id": "easy-007",
+    "guidance_id": "163694",
+    "chunk_index": 49,
+    "quoted_text": "Evidence of effectiveness of each risk management measure"
+  },
+  {
+    "case_id": "easy-007",
+    "guidance_id": "163694",
+    "chunk_index": 8,
+    "quoted_text": "The URRA incorporating risk analysis approaches such as Failure Mode and Effects Analysis (FMEA), analysis of known use problems, and formative evaluation should be referenced."
+  },
+  {
+    "case_id": "easy-007",
+    "guidance_id": "80481",
+    "chunk_index": 15,
+    "quoted_text": "Task analysis techniques systematically break down the device use process into discrete sequences of tasks...to identify the user interface components involved, the use errors that users could make."
+  },
+  {
+    "case_id": "easy-007",
+    "guidance_id": "163694",
+    "chunk_index": 19,
+    "quoted_text": "The URRA document is intended to be a living document; updates should be made to identified risks and hazards throughout the device design process."
+  },
+  {
+    "case_id": "easy-007",
+    "guidance_id": "163694",
+    "chunk_index": 8,
+    "quoted_text": "The URRA should include all user tasks and identify those considered to be critical tasks."
+  },
+  {
+    "case_id": "easy-007",
+    "guidance_id": "80481",
+    "chunk_index": 37,
+    "quoted_text": "Categorization of critical tasks by severity of potential harm; Descriptions of use scenarios that include critical tasks."
+  },
+  {
+    "case_id": "easy-007",
+    "guidance_id": "80481",
+    "chunk_index": 40,
+    "quoted_text": "discuss the key findings that informed development of the protocol for the human factors validation test."
+  },
+  {
+    "case_id": "easy-007",
+    "guidance_id": "171855",
+    "chunk_index": 10,
+    "quoted_text": "Impact dosing (e.g., overdose, underdose, or missed dose)...or have the potential to result in harm (e.g., physical injury, adverse events, events that may need patient monitoring)."
+  },
+  {
+    "case_id": "easy-007",
+    "guidance_id": "171855",
+    "chunk_index": 10,
+    "quoted_text": "most or all tasks are likely combination product critical tasks because of their potential impact on delivering life-saving medication."
+  },
+  {
+    "case_id": "easy-007",
+    "guidance_id": "80481",
+    "chunk_index": 37,
+    "quoted_text": "Use environments and conditions that could affect user interactions with the device."
+  },
+  {
+    "case_id": "easy-007",
+    "guidance_id": "163694",
+    "chunk_index": 18,
+    "quoted_text": "all known use problems for previous models of the same device (as applicable) or with similar types of devices (e.g., predicate devices)."
+  },
+  {
+    "case_id": "easy-008",
+    "guidance_id": "86420",
+    "chunk_index": 21,
+    "quoted_text": "\"Malfunction\" means the failure of a device to meet its performance specifications or otherwise perform as intended [21 CFR 803.3]."
+  },
+  {
+    "case_id": "easy-008",
+    "guidance_id": "86420",
+    "chunk_index": 21,
+    "quoted_text": "Performance specifications include all claims made in the labeling for the device."
+  },
+  {
+    "case_id": "easy-008",
+    "guidance_id": "86420",
+    "chunk_index": 22,
+    "quoted_text": "The manufacturer takes, or would be required to take, an action under section 518 or 519(g) of the FD&C Act as a result of the malfunction."
+  },
+  {
+    "case_id": "easy-008",
+    "guidance_id": "86420",
+    "chunk_index": 11,
+    "quoted_text": "reasonably suggest that one of their marketed devices may have caused or contributed to a death or serious injury, or has malfunctioned and the malfunction of the device or a similar device that they market would be likely to cause or contribute to a death or serious injury if the malfunction were to recur."
+  },
+  {
+    "case_id": "easy-008",
+    "guidance_id": "86420",
+    "chunk_index": 27,
+    "quoted_text": "A \"30-day report\" is the initial MDR report that must be submitted within 30 calendar days after the day you become aware of a reportable device-related death or serious injury, or a reportable malfunction."
+  },
+  {
+    "case_id": "easy-008",
+    "guidance_id": "86420",
+    "chunk_index": 27,
+    "quoted_text": "A \"5-day report\" is a report that must be submitted to us within five work days after the day you become aware of an MDR reportable event that necessitates remedial action to prevent an unreasonable risk of substantial harm to public health."
+  },
+  {
+    "case_id": "easy-008",
+    "guidance_id": "86420",
+    "chunk_index": 12,
+    "quoted_text": "A \"work day\" is Monday through Friday, except Federal holidays [21 CFR 803.3]."
+  },
+  {
+    "case_id": "easy-008",
+    "guidance_id": "86420",
+    "chunk_index": 21,
+    "quoted_text": "You do not need to assess the likelihood that a malfunction will recur. We presume that once the malfunction has occurred it will recur."
+  },
+  {
+    "case_id": "easy-008",
+    "guidance_id": "86420",
+    "chunk_index": 22,
+    "quoted_text": "Malfunctions that are not likely to cause or contribute to a death or serious injury if they recur do not have to be reported."
+  },
+  {
+    "case_id": "easy-008",
+    "guidance_id": "86420",
+    "chunk_index": 23,
+    "quoted_text": "once a malfunction causes or contributes to a death or serious injury, you have an obligation to file MDRs for additional reports of that malfunction."
+  },
+  {
+    "case_id": "easy-008",
+    "guidance_id": "86420",
+    "chunk_index": 23,
+    "quoted_text": "This presumption will continue until either the malfunction has caused or contributed to no further deaths or serious injuries for two years, or the manufacturer can show through valid data that the likelihood of another death or serious injury as a result of the malfunction is remote."
+  },
+  {
+    "case_id": "easy-008",
+    "guidance_id": "80958",
+    "chunk_index": 40,
+    "quoted_text": "The MDR report (FDA Form 3500A) must contain all the information described in 21 CFR 803.52 that is reasonably known to the manufacturer."
+  },
+  {
+    "case_id": "easy-008",
+    "guidance_id": "86420",
+    "chunk_index": 27,
+    "quoted_text": "Information that must be provided in your initial report includes: Patient information [21 CFR 803.52(a)]; Information about the adverse event or device problem [21 CFR 803.52(b)]."
+  },
+  {
+    "case_id": "easy-008",
+    "guidance_id": "86420",
+    "chunk_index": 10,
+    "quoted_text": "Develop, maintain, and implement written procedures for the identification and evaluation of all medical device events to determine whether the event is an MDR reportable event [21 CFR 803.17]."
+  },
+  {
+    "case_id": "easy-009",
+    "guidance_id": "152657",
+    "chunk_index": 4,
+    "quoted_text": "FDA staff conduct acceptance reviews of De Novo requests based on objective criteria using the Acceptance Checklist to ensure that the De Novo request contains the information necessary to permit a substantive review."
+  },
+  {
+    "case_id": "easy-009",
+    "guidance_id": "152657",
+    "chunk_index": 4,
+    "quoted_text": "The acceptance review occurs prior to the substantive review and should be conducted and completed within 15 calendar days of FDA receiving the De Novo request."
+  },
+  {
+    "case_id": "easy-009",
+    "guidance_id": "152657",
+    "chunk_index": 10,
+    "quoted_text": "The Acceptance Checklist is a tool to ensure that the De Novo request contains the necessary information to conduct a substantive review."
+  },
+  {
+    "case_id": "easy-009",
+    "guidance_id": "152657",
+    "chunk_index": 7,
+    "quoted_text": "If FDA does not complete the acceptance review within the acceptance review period (i.e., within 15 calendar days of receipt), FDA will accept the De Novo request for review and will notify the requester."
+  },
+  {
+    "case_id": "easy-009",
+    "guidance_id": "152657",
+    "chunk_index": 5,
+    "quoted_text": "acceptance review will only begin for De Novo requests for which the applicable user fee has been paid and a valid eCopy has been received."
+  },
+  {
+    "case_id": "easy-009",
+    "guidance_id": "152657",
+    "chunk_index": 14,
+    "quoted_text": "For those items that have an option of \"yes,\" \"no,\" or \"not applicable\" (N/A) as an answer, the item should receive an answer of \"yes\" or \"N/A\" for the De Novo request to be accepted for substantive review."
+  },
+  {
+    "case_id": "easy-009",
+    "guidance_id": "152657",
+    "chunk_index": 23,
+    "quoted_text": "De Novo request contains a Table of Contents. Each section should be labeled (e.g., headings or tabs designating Device Description section, Classification Information and Supporting Data."
+  },
+  {
+    "case_id": "easy-009",
+    "guidance_id": "152657",
+    "chunk_index": 18,
+    "quoted_text": "These prior submissions must be identified in the De Novo request or the request must include a statement that there have been no prior submissions."
+  },
+  {
+    "case_id": "easy-009",
+    "guidance_id": "152657",
+    "chunk_index": 18,
+    "quoted_text": "if a De Novo requester is instead proposing that multiple device types be classified under a single De Novo request, the De Novo request should receive an RTA designation."
+  },
+  {
+    "case_id": "easy-009",
+    "guidance_id": "152657",
+    "chunk_index": 10,
+    "quoted_text": "It is FDA's expectation that each item in the Acceptance Checklist will be addressed either by including the requested information or providing a rationale for why it is not applicable."
+  },
+  {
+    "case_id": "easy-009",
+    "guidance_id": "152657",
+    "chunk_index": 5,
+    "quoted_text": "the De Novo request generally should not be accepted and should receive an RTA designation if one or more of the items noted as RTA items in the Acceptance Checklist are not present and no explanation is provided for the omission(s)."
+  },
+  {
+    "case_id": "easy-009",
+    "guidance_id": "152657",
+    "chunk_index": 13,
+    "quoted_text": "If the device does not appear to be eligible for De Novo classification (e.g., a predicate device exists, an existing classification regulation exists for the same device type, or an approved PMA(s) exists for the same device type), FDA staff should make this determination during the acceptance review."
+  },
+  {
+    "case_id": "easy-009",
+    "guidance_id": "152657",
+    "chunk_index": 18,
+    "quoted_text": "If the requester has not responded to, or has failed to provide a rationale for not responding to, such deficiencies, FDA may refuse to accept the De Novo request."
+  },
+  {
+    "case_id": "easy-009",
+    "guidance_id": "152657",
+    "chunk_index": 13,
+    "quoted_text": "The lead reviewer should refer to the AIP list. If the requester is on the list, the reviewer should consult the CDRH OPEQ."
+  },
+  {
+    "case_id": "easy-009",
+    "guidance_id": "152657",
+    "chunk_index": 6,
+    "quoted_text": "If a complete response to the RTA notification is not received within 180 days of the date of RTA notification, FDA will consider the De Novo request to be withdrawn."
+  },
+  {
+    "case_id": "easy-009",
+    "guidance_id": "72674",
+    "chunk_index": 12,
+    "quoted_text": "After FDA has accepted the De Novo request for review, FDA will begin the substantive review of the De Novo request."
+  },
+  {
+    "case_id": "easy-009",
+    "guidance_id": "72674",
+    "chunk_index": 13,
+    "quoted_text": "If a likely predicate device exists or your device falls under a class III classification regulation, your product is not eligible for De Novo classification."
+  },
+  {
+    "case_id": "easy-009",
+    "guidance_id": "72674",
+    "chunk_index": 13,
+    "quoted_text": "Issuance of an AI letter stops the review clock, and once you provide a complete response, the clock will resume and review will continue."
+  },
+  {
+    "case_id": "easy-010",
+    "guidance_id": "77832",
+    "chunk_index": 14,
+    "quoted_text": "Content validity is the extent to which the instrument measures the concept of interest."
+  },
+  {
+    "case_id": "easy-010",
+    "guidance_id": "77832",
+    "chunk_index": 14,
+    "quoted_text": "Content validity is specific to the population, condition, and treatment to be studied."
+  },
+  {
+    "case_id": "easy-010",
+    "guidance_id": "77832",
+    "chunk_index": 14,
+    "quoted_text": "Evidence of other types of validity (e.g., construct validity) or reliability (e.g., consistent scores) will not overcome problems with content validity."
+  },
+  {
+    "case_id": "easy-010",
+    "guidance_id": "77832",
+    "chunk_index": 14,
+    "quoted_text": "It is important to establish content validity before other measurement properties are evaluated."
+  },
+  {
+    "case_id": "easy-010",
+    "guidance_id": "77832",
+    "chunk_index": 15,
+    "quoted_text": "Item generation generally incorporates the input of a wide range of patients with the condition of interest to represent variations in severity and in population characteristics."
+  },
+  {
+    "case_id": "easy-010",
+    "guidance_id": "77832",
+    "chunk_index": 15,
+    "quoted_text": "Without adequate documentation of patient input, a PRO instrument's content validity is likely to be questioned."
+  },
+  {
+    "case_id": "easy-010",
+    "guidance_id": "77832",
+    "chunk_index": 15,
+    "quoted_text": "Saturation is reached at the point when no new relevant or important information emerges and collecting additional data will not likely add to the understanding."
+  },
+  {
+    "case_id": "easy-010",
+    "guidance_id": "77832",
+    "chunk_index": 44,
+    "quoted_text": "Item tracking matrix for versions tested with patients showing items retained and items deleted providing evidence of saturation."
+  },
+  {
+    "case_id": "easy-010",
+    "guidance_id": "141565",
+    "chunk_index": 15,
+    "quoted_text": "A cognitive interview is a type of qualitative research method used to determine whether the concepts and items of a PRO instrument are understood by patients as intended by the instrument developers."
+  },
+  {
+    "case_id": "easy-010",
+    "guidance_id": "77832",
+    "chunk_index": 7,
+    "quoted_text": "The FDA will review documentation of PRO instrument development and testing in conjunction with clinical trial results to determine whether a labeling claim is substantiated."
+  },
+  {
+    "case_id": "easy-010",
+    "guidance_id": "77832",
+    "chunk_index": 8,
+    "quoted_text": "We suggest that an instrument's measurement properties be well established before enrollment begins for confirmatory clinical trials."
+  },
+  {
+    "case_id": "easy-010",
+    "guidance_id": "141565",
+    "chunk_index": 11,
+    "quoted_text": "sponsors are encouraged to engage FDA regarding the relevance and suitability of a proposed PRO instrument to the benefit-risk assessment."
+  },
+  {
+    "case_id": "easy-010",
+    "guidance_id": "141565",
+    "chunk_index": 11,
+    "quoted_text": "the sponsor should confirm that the concept measured by the PRO instrument matches the COI stated in the COU, and that the specified change in the PRO instrument is clinically meaningful."
+  },
+  {
+    "case_id": "easy-010",
+    "guidance_id": "141565",
+    "chunk_index": 14,
+    "quoted_text": "generating validity evidence as part of the pivotal clinical study does not mean the PRO instruments can be used to support specific statements regarding safety and/or effectiveness in that pivotal study."
+  },
+  {
+    "case_id": "easy-010",
+    "guidance_id": "141565",
+    "chunk_index": 15,
+    "quoted_text": "Adaptation does not change the items comprising the PRO instrument but involves the transfer of a PRO instrument's content to another mode, language or population."
+  },
+  {
+    "case_id": "easy-010",
+    "guidance_id": "141565",
+    "chunk_index": 15,
+    "quoted_text": "Adaption studies are undertaken to confirm the properties of the PRO instrument in the new situation or language."
+  },
+  {
+    "case_id": "easy-010",
+    "guidance_id": "141565",
+    "chunk_index": 5,
+    "quoted_text": "FDA uses the term \"fit-for-purpose\" to describe this flexible approach."
+  },
+  {
+    "case_id": "medium-001",
+    "guidance_id": "166704",
+    "chunk_index": 5,
+    "quoted_text": "a total product lifecycle approach"
+  },
+  {
+    "case_id": "medium-001",
+    "guidance_id": "166704",
+    "chunk_index": 16,
+    "quoted_text": "The PCCP includes a Description of Modifications, Modification Protocol, and Impact Assessment."
+  },
+  {
+    "case_id": "medium-001",
+    "guidance_id": "166704",
+    "chunk_index": 5,
+    "quoted_text": "the ability to improve model performance through iterative modifications, including by learning from real-world data"
+  },
+  {
+    "case_id": "medium-001",
+    "guidance_id": "184856",
+    "chunk_index": 9,
+    "quoted_text": "AI-enabled devices can be sensitive to differences in input data (also referred to as data drift)"
+  },
+  {
+    "case_id": "medium-001",
+    "guidance_id": "166704",
+    "chunk_index": 17,
+    "quoted_text": "modifications can be implemented to the AI-DSF without triggering the need for a new marketing submission"
+  },
+  {
+    "case_id": "medium-001",
+    "guidance_id": "166704",
+    "chunk_index": 18,
+    "quoted_text": "significant modifications made to an AI-DSF that are not specified in, or implemented in accordance with, the authorized PCCP likely require a new marketing submission prior to implementation of the modification."
+  },
+  {
+    "case_id": "medium-001",
+    "guidance_id": "166704",
+    "chunk_index": 63,
+    "quoted_text": "Because this modification that was not included in the PCCP could significantly affect the safety or effectiveness of the device, a new marketing submission would be required."
+  },
+  {
+    "case_id": "medium-001",
+    "guidance_id": "166704",
+    "chunk_index": 18,
+    "quoted_text": "Deviations from the authorized PCCP reviewed in the marketing submission would generally cause the device to be adulterated and misbranded under sections 501(f)(1) and 502(o) of the FD&C Act, respectively."
+  },
+  {
+    "case_id": "medium-001",
+    "guidance_id": "180978",
+    "chunk_index": 17,
+    "quoted_text": "FDA may take legal or regulatory action against violations of prohibited acts, including, without limitation, seizure or injunction."
+  },
+  {
+    "case_id": "medium-001",
+    "guidance_id": "166704",
+    "chunk_index": 31,
+    "quoted_text": "the marketing submission must include the appropriate marketing submission requirements and the proposed, modified PCCP for the device"
+  },
+  {
+    "case_id": "medium-001",
+    "guidance_id": "166704",
+    "chunk_index": 31,
+    "quoted_text": "the new marketing submission for the device should include a summary of those modifications that have been implemented."
+  },
+  {
+    "case_id": "medium-002",
+    "guidance_id": "99785",
+    "chunk_index": 2,
+    "quoted_text": "The device is one that the person currently has in commercial distribution\u2026 but that is about to be significantly changed or modified in design, components, method of manufacture, or intended use."
+  },
+  {
+    "case_id": "medium-002",
+    "guidance_id": "99785",
+    "chunk_index": 13,
+    "quoted_text": "the changes that do not require submission of a new 510(k) may be immediately implemented, so long as those changes can be implemented independently"
+  },
+  {
+    "case_id": "medium-002",
+    "guidance_id": "166704",
+    "chunk_index": 17,
+    "quoted_text": "An authorized PCCP specifies planned modifications that, if not included in a PCCP, could otherwise require a new marketing submission pursuant to 21 CFR 807.81(a)(3) and 21 CFR 814.39(a)"
+  },
+  {
+    "case_id": "medium-002",
+    "guidance_id": "166704",
+    "chunk_index": 17,
+    "quoted_text": "modifications can be implemented to the AI-DSF without triggering the need for a new marketing submission."
+  },
+  {
+    "case_id": "medium-002",
+    "guidance_id": "166704",
+    "chunk_index": 17,
+    "quoted_text": "significant modifications made to an AI-DSF that are not specified in, or implemented in accordance with, the authorized PCCP likely require a new marketing submission"
+  },
+  {
+    "case_id": "medium-002",
+    "guidance_id": "99785",
+    "chunk_index": 21,
+    "quoted_text": "\"Core algorithm\" changes are modifications made to an algorithm that directly impact or contribute to the device's intended use."
+  },
+  {
+    "case_id": "medium-002",
+    "guidance_id": "99785",
+    "chunk_index": 21,
+    "quoted_text": "a complete rewrite of the algorithm, even with the same performance claims and risk profile, may be significant enough to require submission of a new 510(k) because the rewrite may impact performance indirectly."
+  },
+  {
+    "case_id": "medium-002",
+    "guidance_id": "166704",
+    "chunk_index": 60,
+    "quoted_text": "the new camera technology was not specified in the PCCP. Because this modification that was not included in the PCCP could significantly affect the safety or effectiveness of the device, a new marketing submission would be required."
+  },
+  {
+    "case_id": "medium-002",
+    "guidance_id": "166704",
+    "chunk_index": 16,
+    "quoted_text": "The Modification Protocol includes the verification and validation activities (including pre-defined acceptance criteria) for those modifications and is intended to provide a step-by-step delineation"
+  },
+  {
+    "case_id": "medium-002",
+    "guidance_id": "166704",
+    "chunk_index": 17,
+    "quoted_text": "Deviations from the authorized PCCP could significantly affect the safety or effectiveness of the device. This could include, for example, issues related to the Modification Protocol, such as data management or re-training failure"
+  },
+  {
+    "case_id": "medium-003",
+    "guidance_id": "80958",
+    "chunk_index": 19,
+    "quoted_text": "software functions that become a regulated medical device by performing patient-specific analysis and providing specific output(s) or directive(s) to health care professionals for use in the diagnosis, treatment, mitigation, cure, or prevention of a disease or condition"
+  },
+  {
+    "case_id": "medium-003",
+    "guidance_id": "109618",
+    "chunk_index": 12,
+    "quoted_text": "software function fails Criterion 3 because it is not intended for the purpose of supporting or providing recommendations under section 520(o)(1)(E)(ii)"
+  },
+  {
+    "case_id": "medium-003",
+    "guidance_id": "109618",
+    "chunk_index": 21,
+    "quoted_text": "software function that matches patient-specific medical information (e.g., diagnosis, treatments, allergies, signs or symptoms) to reference information routinely uses in clinical practice (e.g., practice guidelines) to facilitate assessments of specific patients"
+  },
+  {
+    "case_id": "medium-003",
+    "guidance_id": "109618",
+    "chunk_index": 21,
+    "quoted_text": "Software function that provides HCPs with available treatment options, including drug, device, surgical and/or lifestyle changes for heart failure patients based on their disease stage and clinical guidelines"
+  },
+  {
+    "case_id": "medium-003",
+    "guidance_id": "109618",
+    "chunk_index": 32,
+    "quoted_text": "Software function that analyzes an ECG waveform output from an FDA-cleared device to detect or diagnose arrhythmias (e.g., atrial fibrillation). This software is a device function. It does not meet Criterion 1 because it analyzes a pattern."
+  },
+  {
+    "case_id": "medium-003",
+    "guidance_id": "109618",
+    "chunk_index": 12,
+    "quoted_text": "FDA intends to exercise enforcement discretion (meaning that FDA does not intend to enforce requirements under the FD&C Act) for such functions"
+  },
+  {
+    "case_id": "medium-003",
+    "guidance_id": "109618",
+    "chunk_index": 13,
+    "quoted_text": "A software function that predicts risk of future cardiovascular events for an HCP to consider based on a patient's weight, current and historical smoking status, blood pressure, and brain natriuretic peptide (BNP) IVD test results."
+  },
+  {
+    "case_id": "medium-003",
+    "guidance_id": "109618",
+    "chunk_index": 13,
+    "quoted_text": "a software function with the same functionality, but predicts risk of a cardiovascular event in the next 24 hours, would not fall under this example. Such a software function is a device software function that would remain the focus of FDA's oversight"
+  },
+  {
+    "case_id": "medium-003",
+    "guidance_id": "109618",
+    "chunk_index": 19,
+    "quoted_text": "the recommendation should be based on information whose meaning could be expected to be independently understood by the intended HCP user"
+  },
+  {
+    "case_id": "medium-003",
+    "guidance_id": "109618",
+    "chunk_index": 33,
+    "quoted_text": "It does not meet Criterion 3 or 4 because it provides a specific diagnostic output or directive and supports time-critical decision-making"
+  },
+  {
+    "case_id": "medium-004",
+    "guidance_id": "153781",
+    "chunk_index": 3,
+    "quoted_text": "The least burdensome approach was applied to identify the minimum amount of information that, based on our experience, would generally be needed to support a premarket submission for a device that uses software."
+  },
+  {
+    "case_id": "medium-004",
+    "guidance_id": "153781",
+    "chunk_index": 8,
+    "quoted_text": "the term premarket submission includes, but is not limited to, premarket notification (510(k)) submission, De Novo classification request, Premarket Approval (PMA) application"
+  },
+  {
+    "case_id": "medium-004",
+    "guidance_id": "153781",
+    "chunk_index": 15,
+    "quoted_text": "Table 1 below provides an outline of the recommended documentation for each software documentation element and corresponding Documentation Level."
+  },
+  {
+    "case_id": "medium-004",
+    "guidance_id": "153781",
+    "chunk_index": 9,
+    "quoted_text": "this guidance is not meant to provide recommendations regarding how device software should be developed, verified, and validated."
+  },
+  {
+    "case_id": "medium-004",
+    "guidance_id": "153781",
+    "chunk_index": 12,
+    "quoted_text": "The above descriptions of software verification and software validation are consistent with FDA's thinking as described in the guidance \"General Principles of Software Validation.\""
+  },
+  {
+    "case_id": "medium-004",
+    "guidance_id": "73141",
+    "chunk_index": 9,
+    "quoted_text": "FDA considers software validation to be \"confirmation by examination and provision of objective evidence that software specifications conform to user needs and intended uses, and that the particular requirements implemented through software can be consistently fulfilled.\""
+  },
+  {
+    "case_id": "medium-004",
+    "guidance_id": "73141",
+    "chunk_index": 9,
+    "quoted_text": "Software verification provides objective evidence that the design outputs of a particular phase of the software development life cycle meet all of the specified requirements for that phase."
+  },
+  {
+    "case_id": "medium-004",
+    "guidance_id": "73141",
+    "chunk_index": 15,
+    "quoted_text": "Preparation for software validation should begin early, i.e., during design and development planning and design input."
+  },
+  {
+    "case_id": "medium-004",
+    "guidance_id": "73141",
+    "chunk_index": 15,
+    "quoted_text": "in most cases software testing by itself is not sufficient to establish confidence that the software is fit for its intended use."
+  },
+  {
+    "case_id": "medium-004",
+    "guidance_id": "153781",
+    "chunk_index": 12,
+    "quoted_text": "FDA intends to take a risk-based approach to help determine the device's Documentation Level, which is either Basic or Enhanced."
+  },
+  {
+    "case_id": "medium-004",
+    "guidance_id": "71794",
+    "chunk_index": 5,
+    "quoted_text": "The documentation level provided for any premarket submission that includes device software function(s), where a failure or flaw of any device software function(s) could present a hazardous situation with a probable risk of death or serious injury."
+  },
+  {
+    "case_id": "medium-004",
+    "guidance_id": "153781",
+    "chunk_index": 13,
+    "quoted_text": "sponsors should consider all known or foreseeable software hazards and hazardous situations associated with the device, including those resulting from reasonably foreseeable misuse, whether intentional or unintentional, prior to the implementation of risk control measures."
+  },
+  {
+    "case_id": "medium-004",
+    "guidance_id": "153781",
+    "chunk_index": 16,
+    "quoted_text": "A Declaration of Conformity to the FDA-recognized version of IEC 62304, including subclause 5.1 (Software development planning), clause 6 (software maintenance process), and clause 8 (software configuration management process)"
+  },
+  {
+    "case_id": "medium-004",
+    "guidance_id": "153781",
+    "chunk_index": 29,
+    "quoted_text": "FDA is not recommending the SDS as part of the premarket submission. Sponsors should document this information on the design internally via the DHF for the device."
+  },
+  {
+    "case_id": "medium-004",
+    "guidance_id": "153781",
+    "chunk_index": 15,
+    "quoted_text": "SRS documentation, describing the needs or expectations for a system or software...with sufficient information to understand the traceability of the information with respect to the other software documentation elements (e.g., risk management file, software design specification, system and software architecture design chart, software testing)."
+  },
+  {
+    "case_id": "medium-004",
+    "guidance_id": "71794",
+    "chunk_index": 5,
+    "quoted_text": "Information to provide an assurance that the product development methodologies used by the OTS software developer are appropriate and sufficient, and mechanisms exist for assuring the continued performance, maintenance, and support of the OTS software."
+  },
+  {
+    "case_id": "medium-004",
+    "guidance_id": "153781",
+    "chunk_index": 3,
+    "quoted_text": "documentation related to the requirements of the Quality System Regulation (QSR) (21 CFR Part 820) is often a necessary part of the premarket submission."
+  },
+  {
+    "case_id": "medium-005",
+    "guidance_id": "89019",
+    "chunk_index": 12,
+    "quoted_text": "FDA evaluates the aggregate benefits, which includes, but is not limited to, consideration of the type, magnitude, probability, and duration of benefits."
+  },
+  {
+    "case_id": "medium-005",
+    "guidance_id": "184856",
+    "chunk_index": 45,
+    "quoted_text": "the reliance of models on relationships learned from large amounts of data, and the relative opacity of models to users make AI-enabled devices particularly susceptible to unexpected differences in performance."
+  },
+  {
+    "case_id": "medium-005",
+    "guidance_id": "184856",
+    "chunk_index": 88,
+    "quoted_text": "Among 1000 patients from the target population, about 168 \u2026 patients will be correctly classified \u2026 while about 136 \u2026 patients will be wrongly classified."
+  },
+  {
+    "case_id": "medium-005",
+    "guidance_id": "184856",
+    "chunk_index": 90,
+    "quoted_text": "The subgroup analysis for each ECG acquisition device can be found below"
+  },
+  {
+    "case_id": "medium-005",
+    "guidance_id": "184856",
+    "chunk_index": 88,
+    "quoted_text": "Both the point estimates and their 95% two-sided confidence intervals, along with the confusion matrix, can be reported in a table."
+  },
+  {
+    "case_id": "medium-005",
+    "guidance_id": "184856",
+    "chunk_index": 45,
+    "quoted_text": "Subgroup analysis provides the tools to evaluate the performance of the device in specific populations and can be helpful in identifying scenarios in which the device performs worse than overall performance."
+  },
+  {
+    "case_id": "medium-005",
+    "guidance_id": "153781",
+    "chunk_index": 18,
+    "quoted_text": "What steps were taken to identify and address potential biases and limitations of the model(s)?"
+  },
+  {
+    "case_id": "medium-005",
+    "guidance_id": "89019",
+    "chunk_index": 16,
+    "quoted_text": "different patient subgroups are likely to experience different benefits or different levels of the same benefit. If the subgroups can be identified, the device may be indicated for those subgroups."
+  },
+  {
+    "case_id": "medium-005",
+    "guidance_id": "89019",
+    "chunk_index": 12,
+    "quoted_text": "FDA could also consider whether mitigation strategies, such as labeling revisions, could be implemented to address differences in the benefit-risk profile between a new device and a predicate device."
+  },
+  {
+    "case_id": "medium-005",
+    "guidance_id": "184856",
+    "chunk_index": 54,
+    "quoted_text": "it is important for device manufacturers to consider the impact of these factors (e.g., data drift) on the safety and effectiveness of the device."
+  },
+  {
+    "case_id": "medium-005",
+    "guidance_id": "184856",
+    "chunk_index": 54,
+    "quoted_text": "sponsors may opt to include information regarding the performance monitoring plan in any submission for an AI-enabled device."
+  },
+  {
+    "case_id": "medium-005",
+    "guidance_id": "184856",
+    "chunk_index": 24,
+    "quoted_text": "Some limitations of a model may not reach the degree of severity that would warrant a contraindication, warning, or precaution, but they may still be important to include in labeling."
+  },
+  {
+    "case_id": "medium-005",
+    "guidance_id": "184856",
+    "chunk_index": 24,
+    "quoted_text": "Description of the corresponding performance for different operating points, including subgroup analysis for each operating point, as applicable."
+  },
+  {
+    "case_id": "medium-005",
+    "guidance_id": "89019",
+    "chunk_index": 12,
+    "quoted_text": "Generally, if there is an increase in risk or decrease in benefit, FDA will likely find the new device NSE to the predicate device."
+  },
+  {
+    "case_id": "medium-006",
+    "guidance_id": "119933",
+    "chunk_index": 14,
+    "quoted_text": "device cybersecurity design and documentation are expected to scale with the cybersecurity risk of that device"
+  },
+  {
+    "case_id": "medium-006",
+    "guidance_id": "119933",
+    "chunk_index": 13,
+    "quoted_text": "if a thermometer is used in a safety-critical control loop, or is connected to networks or other devices, then the cybersecurity risks for the device are considered to be greater"
+  },
+  {
+    "case_id": "medium-006",
+    "guidance_id": "119933",
+    "chunk_index": 19,
+    "quoted_text": "Such report should include the documentation elements for the system threat modeling, cybersecurity risk assessment, Software Bill of Materials (SBOM), component support information, vulnerability assessments, and unresolved anomaly assessment(s)"
+  },
+  {
+    "case_id": "medium-006",
+    "guidance_id": "119933",
+    "chunk_index": 45,
+    "quoted_text": "Section 524B(b)(1) of the FD&C Act requires manufacturers of cyber devices to submit to FDA \"a plan to monitor, identify, and address, as appropriate, in a reasonable time, postmarket cybersecurity vulnerabilities and exploits\""
+  },
+  {
+    "case_id": "medium-006",
+    "guidance_id": "119933",
+    "chunk_index": 51,
+    "quoted_text": "Section 524B(b)(3) of the FD&C Act requires manufacturers of cyber devices to provide an SBOM, including commercial, open-source, and off-the-shelf software components"
+  },
+  {
+    "case_id": "medium-006",
+    "guidance_id": "119933",
+    "chunk_index": 14,
+    "quoted_text": "inadequate cybersecurity information in the device labeling may cause a device to be misbranded under section 502(f) of the FD&C Act"
+  },
+  {
+    "case_id": "medium-006",
+    "guidance_id": "119933",
+    "chunk_index": 15,
+    "quoted_text": "The primary goal of using an SPDF is to manufacture and maintain safe and effective devices. From a security standpoint, these are also trustworthy and resilient devices."
+  },
+  {
+    "case_id": "medium-006",
+    "guidance_id": "119933",
+    "chunk_index": 15,
+    "quoted_text": "Possible frameworks to consider include, but are not limited to, the medical device-specific framework that can be found in the Medical Device and Health IT Joint Security Plan (JSP2) and IEC 81001-5-1."
+  },
+  {
+    "case_id": "medium-006",
+    "guidance_id": "119933",
+    "chunk_index": 30,
+    "quoted_text": "Effective cybersecurity relies upon security being \"built in\" to a device, and not \"bolted on\" after the device is designed."
+  },
+  {
+    "case_id": "medium-006",
+    "guidance_id": "119933",
+    "chunk_index": 30,
+    "quoted_text": "The security architecture should include a consideration of system-level risks, including but not limited to risks related to the supply chain"
+  },
+  {
+    "case_id": "medium-006",
+    "guidance_id": "119933",
+    "chunk_index": 45,
+    "quoted_text": "Radio-frequency communications (e.g., Wi-Fi, cellular, Bluetooth, Bluetooth Low Energy); Magnetic inductive communications; and Hardware connectors capable of connecting to the internet (e.g., USB, ethernet, serial port)."
+  },
+  {
+    "case_id": "medium-006",
+    "guidance_id": "95862",
+    "chunk_index": 16,
+    "quoted_text": "Monitoring cybersecurity information sources for identification and detection of cybersecurity vulnerabilities and risk"
+  },
+  {
+    "case_id": "medium-006",
+    "guidance_id": "95862",
+    "chunk_index": 16,
+    "quoted_text": "monitoring third party software components for new vulnerabilities throughout the device's total product lifecycle"
+  },
+  {
+    "case_id": "medium-006",
+    "guidance_id": "95862",
+    "chunk_index": 16,
+    "quoted_text": "Adopting a coordinated vulnerability disclosure policy and practice. The FDA has recognized ISO/IEC 29147:2014: Information Technology \u2013 Security Techniques \u2013 Vulnerability Disclosure"
+  },
+  {
+    "case_id": "medium-006",
+    "guidance_id": "95862",
+    "chunk_index": 16,
+    "quoted_text": "it is strongly recommended that manufacturers participate in an ISAO that shares vulnerabilities and threats that impact medical devices"
+  },
+  {
+    "case_id": "medium-006",
+    "guidance_id": "119933",
+    "chunk_index": 42,
+    "quoted_text": "Sources, methods, and frequency for monitoring and identifying vulnerabilities (e.g., researchers, NIST national vulnerability database (NIST NVD), third-party software manufacturers)"
+  },
+  {
+    "case_id": "medium-007",
+    "guidance_id": "163694",
+    "chunk_index": 2,
+    "quoted_text": "the device design adequately meets the needs of the intended users and that the device is safe and effective for the intended users, uses, and use environments"
+  },
+  {
+    "case_id": "medium-007",
+    "guidance_id": "163694",
+    "chunk_index": 2,
+    "quoted_text": "information that explains the presence or absence of critical tasks, human factors validation testing to assess the effectiveness of risk control strategies, and a discussion of residual risks"
+  },
+  {
+    "case_id": "medium-007",
+    "guidance_id": "80481",
+    "chunk_index": 4,
+    "quoted_text": "for those devices where an analysis of risk indicates that users performing tasks incorrectly or failing to perform tasks could result in serious harm, manufacturers should submit human factors data in premarket submissions"
+  },
+  {
+    "case_id": "medium-007",
+    "guidance_id": "184856",
+    "chunk_index": 75,
+    "quoted_text": "Human factors engineering processes typically begin with preliminary analysis and evaluation of all tasks that identifies critical tasks which, if performed incorrectly or not performed at all, could cause serious harm"
+  },
+  {
+    "case_id": "medium-007",
+    "guidance_id": "80481",
+    "chunk_index": 49,
+    "quoted_text": "Hypothetical Task Failure Initial risk analysis Possible root cause Possible risk control Evaluation of risk control effectiveness Revised risk anal: redesign needed?"
+  },
+  {
+    "case_id": "medium-007",
+    "guidance_id": "80481",
+    "chunk_index": 36,
+    "quoted_text": "All documentation related to HFE/UE processes, whether required to be submitted to FDA or not, should be kept in manufacturers' files"
+  },
+  {
+    "case_id": "medium-007",
+    "guidance_id": "80481",
+    "chunk_index": 23,
+    "quoted_text": "The test participants represent the intended (actual) users of the device. All critical tasks are performed during the test. The device user interface represents the final design."
+  },
+  {
+    "case_id": "medium-007",
+    "guidance_id": "80481",
+    "chunk_index": 23,
+    "quoted_text": "the human factors validation test results should show no use errors or problems that could result in serious harm and that could be eliminated or reduced through modification of the design of the user interface"
+  },
+  {
+    "case_id": "medium-007",
+    "guidance_id": "80481",
+    "chunk_index": 23,
+    "quoted_text": "You should perform human factors validation testing under conditions of actual use when simulated-use test methods are inadequate to evaluate users' interactions with the device"
+  },
+  {
+    "case_id": "medium-007",
+    "guidance_id": "163694",
+    "chunk_index": 21,
+    "quoted_text": "Submitters should reevaluate risk control measures to identify other means to reduce risk when it is determined that the residual use-related risks are unacceptable"
+  },
+  {
+    "case_id": "medium-007",
+    "guidance_id": "80481",
+    "chunk_index": 36,
+    "quoted_text": "The level of detail of documentation submitted should be sufficient to describe your identification, evaluation, and final assessment of all serious use-related hazards for the device"
+  },
+  {
+    "case_id": "medium-007",
+    "guidance_id": "80481",
+    "chunk_index": 36,
+    "quoted_text": "the submission would not need to include, for example, all the raw data from a human factors validation test"
+  },
+  {
+    "case_id": "medium-007",
+    "guidance_id": "163694",
+    "chunk_index": 21,
+    "quoted_text": "observations of task performance and occurrences of use errors, close calls, and use problems"
+  },
+  {
+    "case_id": "medium-007",
+    "guidance_id": "163694",
+    "chunk_index": 21,
+    "quoted_text": "A full test protocol and a sample of all scripts and forms used in the testing should be appended"
+  },
+  {
+    "case_id": "medium-008",
+    "guidance_id": "84830",
+    "chunk_index": 4,
+    "quoted_text": "This guidance applies to both prescription and over-the-counter (OTC) medical devices, including any class I, II, or III devices intended for home use."
+  },
+  {
+    "case_id": "medium-008",
+    "guidance_id": "84830",
+    "chunk_index": 3,
+    "quoted_text": "These risks are best addressed at the design stage. Failure to adequately consider potentially hazardous situations during the design of home use devices may result in inappropriate use, use error, or incompatibilities."
+  },
+  {
+    "case_id": "medium-008",
+    "guidance_id": "84830",
+    "chunk_index": 4,
+    "quoted_text": "you should ensure that the device is suitable for home use and provide in the submission data that demonstrate how you considered and addressed the relevant hazards and risks."
+  },
+  {
+    "case_id": "medium-008",
+    "guidance_id": "84830",
+    "chunk_index": 6,
+    "quoted_text": "older buildings can have outlets that do not meet current electrical code or a limited number of outlets."
+  },
+  {
+    "case_id": "medium-008",
+    "guidance_id": "84830",
+    "chunk_index": 6,
+    "quoted_text": "Crowded use environments can interfere with device use and movement, present tripping hazards, or increase the likelihood that device parts will bump into or get tangled with objects in the environment."
+  },
+  {
+    "case_id": "medium-008",
+    "guidance_id": "84830",
+    "chunk_index": 6,
+    "quoted_text": "The risk that the device could be affected by contaminants such as vermin, pets, tobacco smoke, and household chemicals should be mitigated as much as possible by designing the device to minimize the ingress of fluids, solids, and airborne particles."
+  },
+  {
+    "case_id": "medium-008",
+    "guidance_id": "84830",
+    "chunk_index": 17,
+    "quoted_text": "noise and other distractions inside and outside the home can interfere with the users' ability to be made aware of an alarm signal."
+  },
+  {
+    "case_id": "medium-008",
+    "guidance_id": "84830",
+    "chunk_index": 17,
+    "quoted_text": "FDA recommends that you provide alarm signals in at least two of the three following modes: visual, auditory, tactile."
+  },
+  {
+    "case_id": "medium-008",
+    "guidance_id": "84830",
+    "chunk_index": 18,
+    "quoted_text": "users may not understand multiple steps, may receive minimal training or teaching on how to operate these devices, and may not be able to understand multiple warnings and precautions."
+  },
+  {
+    "case_id": "medium-008",
+    "guidance_id": "84830",
+    "chunk_index": 18,
+    "quoted_text": "Testing early in the design process and then several more times as the design evolves is an effective way to prevent user interaction problems from persisting into the later stages of the design process."
+  },
+  {
+    "case_id": "medium-008",
+    "guidance_id": "80481",
+    "chunk_index": 34,
+    "quoted_text": "the results of testing a home dialysis machine in a conference room might not be generalizable to use of the device in a residential environment."
+  },
+  {
+    "case_id": "medium-008",
+    "guidance_id": "80481",
+    "chunk_index": 34,
+    "quoted_text": "Human factors testing performed under actual use conditions should be preceded by appropriate simulated-use testing to ensure that the device is sufficiently well designed to be safe in actual use."
+  },
+  {
+    "case_id": "medium-008",
+    "guidance_id": "163694",
+    "chunk_index": 31,
+    "quoted_text": "the existing critical tasks are impacted because, with this change, they are intended to be executed by an additional user group."
+  },
+  {
+    "case_id": "medium-008",
+    "guidance_id": "80481",
+    "chunk_index": 33,
+    "quoted_text": "Human factors validation testing results indicating that serious use errors persist are not acceptable in premarket submissions unless the results are analyzed well and the submission shows that further reduction of the errors' likelihood is not possible or practical."
+  },
+  {
+    "case_id": "medium-008",
+    "guidance_id": "119933",
+    "chunk_index": 40,
+    "quoted_text": "A list of network ports and other interfaces that are expected to receive and/or send data. This list should include a description of port functionality and indicate whether the ports are incoming, outgoing, or both."
+  },
+  {
+    "case_id": "medium-008",
+    "guidance_id": "119933",
+    "chunk_index": 40,
+    "quoted_text": "instructions for users on how to respond upon detection of a cybersecurity vulnerability or incident."
+  },
+  {
+    "case_id": "medium-008",
+    "guidance_id": "84830",
+    "chunk_index": 17,
+    "quoted_text": "you should carefully address RF wireless coexistence through testing the device with other common applications of RF wireless technology that can be expected to be present in the environment of use."
+  },
+  {
+    "case_id": "medium-009",
+    "guidance_id": "99785",
+    "chunk_index": 2,
+    "quoted_text": "The device is one that the person currently has in commercial distribution or is reintroducing into commercial distribution, but that is about to be significantly changed or modified in design, components, method of manufacture, or intended use."
+  },
+  {
+    "case_id": "medium-009",
+    "guidance_id": "99785",
+    "chunk_index": 5,
+    "quoted_text": "deciding whether the change exceeds the regulatory threshold of 21 CFR 807.81(a)(3) for submission and clearance of a new 510(k)"
+  },
+  {
+    "case_id": "medium-009",
+    "guidance_id": "99785",
+    "chunk_index": 14,
+    "quoted_text": "the manufacturer's basis for comparison of any changed device should be the original device"
+  },
+  {
+    "case_id": "medium-009",
+    "guidance_id": "119933",
+    "chunk_index": 50,
+    "quoted_text": "changes that may impact cybersecurity and may require premarket submission could include changes to authentication or encryption algorithms, new connectivity features, or changing software update process/mechanisms."
+  },
+  {
+    "case_id": "medium-009",
+    "guidance_id": "119933",
+    "chunk_index": 50,
+    "quoted_text": "changes unlikely to impact cybersecurity could include changes in materials, sterilization method changes, or a change to an algorithm without change to architecture/software structure/connectivity."
+  },
+  {
+    "case_id": "medium-009",
+    "guidance_id": "82395",
+    "chunk_index": 12,
+    "quoted_text": "the term \"different technological characteristics\" means, with respect to a device being compared to a predicate device, that there is a significant change in the materials, design, energy source, or other features of the device from those of the predicate device."
+  },
+  {
+    "case_id": "medium-009",
+    "guidance_id": "95862",
+    "chunk_index": 22,
+    "quoted_text": "For cybersecurity routine updates and patches, the FDA will, typically, not need to conduct premarket review to clear or approve the medical device software changes."
+  },
+  {
+    "case_id": "medium-009",
+    "guidance_id": "95862",
+    "chunk_index": 11,
+    "quoted_text": "Cybersecurity \"routine updates and patches\" are changes to a device to increase device security and/or remediate only those vulnerabilities associated with controlled risk of patient harm."
+  },
+  {
+    "case_id": "medium-009",
+    "guidance_id": "99785",
+    "chunk_index": 15,
+    "quoted_text": "FDA expects manufacturers to ensure that such changes do not impact the safety or effectiveness of the device by performing necessary analysis, verification,"
+  },
+  {
+    "case_id": "medium-009",
+    "guidance_id": "99785",
+    "chunk_index": 15,
+    "quoted_text": "a change made solely to strengthen cybersecurity is not likely to require submission of a new 510(k)"
+  },
+  {
+    "case_id": "medium-009",
+    "guidance_id": "99785",
+    "chunk_index": 15,
+    "quoted_text": "If a manufacturer becomes aware of any incidental or unintended impacts of the change on other aspects of the software or device, the manufacturer should continue through the remaining questions in this guidance."
+  },
+  {
+    "case_id": "medium-009",
+    "guidance_id": "99785",
+    "chunk_index": 13,
+    "quoted_text": "Manufacturers should answer the questions posed for each individual type of change until a decision is made either to submit a new 510(k) or to document the basis for concluding that submission of a new 510(k) is not required."
+  },
+  {
+    "case_id": "medium-009",
+    "guidance_id": "99812",
+    "chunk_index": 83,
+    "quoted_text": "Documentation should include the following: Product name, Date of change assessment, Description of the device, Description of the change(s), Reason why the change(s) is being made, Applicable regulatory history, including the 510(k) number of the most recently cleared version of the device."
+  },
+  {
+    "case_id": "medium-009",
+    "guidance_id": "99812",
+    "chunk_index": 83,
+    "quoted_text": "only highlighting the flowcharts in this guidance document, or simply answering \"yes\" or \"no\" to each question without further details or justification, is not sufficient documentation."
+  },
+  {
+    "case_id": "medium-010",
+    "guidance_id": "81015",
+    "chunk_index": 3,
+    "quoted_text": "a class II or class III device for which failure of the device would be reasonably likely to have a serious adverse health consequence"
+  },
+  {
+    "case_id": "medium-010",
+    "guidance_id": "81015",
+    "chunk_index": 2,
+    "quoted_text": "FDA with the authority to require manufacturers to conduct postmarket surveillance at the time of approval or clearance or at any time thereafter of certain class II or class III devices"
+  },
+  {
+    "case_id": "medium-010",
+    "guidance_id": "81015",
+    "chunk_index": 8,
+    "quoted_text": "A manufacturer must submit a postmarket surveillance plan within 30 calendar days of receipt of the 522 order."
+  },
+  {
+    "case_id": "medium-010",
+    "guidance_id": "81015",
+    "chunk_index": 8,
+    "quoted_text": "FDA will review postmarket surveillance plans and respond within 60 calendar days of receipt."
+  },
+  {
+    "case_id": "medium-010",
+    "guidance_id": "81015",
+    "chunk_index": 8,
+    "quoted_text": "the variables and endpoints for assessing the surveillance question(s), such as the primary and secondary endpoints"
+  },
+  {
+    "case_id": "medium-010",
+    "guidance_id": "81015",
+    "chunk_index": 11,
+    "quoted_text": "section 522(b)(1) of the FD&C Act authorizes FDA to order prospective postmarket surveillance for duration of up to 36 months unless the manufacturer and FDA agree to extend that timeframe"
+  },
+  {
+    "case_id": "medium-010",
+    "guidance_id": "81015",
+    "chunk_index": 7,
+    "quoted_text": "20% of subjects enrolled within 18 months"
+  },
+  {
+    "case_id": "medium-010",
+    "guidance_id": "190201",
+    "chunk_index": 48,
+    "quoted_text": "The device-generated data were considered sufficiently relevant and reliable to fulfill the postmarket requirement."
+  },
+  {
+    "case_id": "medium-010",
+    "guidance_id": "81015",
+    "chunk_index": 2,
+    "quoted_text": "Postmarket surveillance is the active, systematic, scientifically valid collection, analysis, and interpretation of data or other information about a marketed device."
+  },
+  {
+    "case_id": "medium-010",
+    "guidance_id": "81015",
+    "chunk_index": 18,
+    "quoted_text": "the Final Postmarket Surveillance Report should be submitted no later than three months after study/surveillance completion"
+  },
+  {
+    "case_id": "medium-010",
+    "guidance_id": "81015",
+    "chunk_index": 3,
+    "quoted_text": "Such issues may be identified through a variety of sources including analysis of adverse event reports, a recall or corrective action, post-approval data, review of premarket data"
+  },
+  {
+    "case_id": "medium-010",
+    "guidance_id": "81015",
+    "chunk_index": 4,
+    "quoted_text": "better define the association between problems and devices when unexpected or unexplained serious adverse events occur after a device is marketed"
+  },
+  {
+    "case_id": "medium-010",
+    "guidance_id": "81015",
+    "chunk_index": 4,
+    "quoted_text": "What is the public health question? The delineation of the public health question is the most important element discussed by the team."
+  },
+  {
+    "case_id": "medium-011",
+    "guidance_id": "72674",
+    "chunk_index": 4,
+    "quoted_text": "there is no legally marketed predicate device, they may submit a De Novo request without a preceding 510(k) and NSE (hereafter \"Direct De Novo\")"
+  },
+  {
+    "case_id": "medium-011",
+    "guidance_id": "72674",
+    "chunk_index": 3,
+    "quoted_text": "Congress included this section to limit unnecessary expenditure of FDA and industry resources that could occur if devices for which general controls or general and special controls provide a reasonable assurance of safety and effectiveness were subject to premarket approval"
+  },
+  {
+    "case_id": "medium-011",
+    "guidance_id": "82395",
+    "chunk_index": 27,
+    "quoted_text": "A manufacturer who intends to submit a direct De Novo request is encouraged to engage in dialogue with FDA through the pre-submission process to obtain additional feedback related to whether a valid predicate exists for the new device and appropriate performance data"
+  },
+  {
+    "case_id": "medium-011",
+    "guidance_id": "72674",
+    "chunk_index": 6,
+    "quoted_text": "you should sufficiently understand and be able to explain all of the probable risks to health associated with use of the device that are known or should reasonably be known to you and the proposed mitigations"
+  },
+  {
+    "case_id": "medium-011",
+    "guidance_id": "152657",
+    "chunk_index": 4,
+    "quoted_text": "FDA staff conduct acceptance reviews of De Novo requests based on objective criteria using the Acceptance Checklist to ensure that the De Novo request contains the information necessary to permit a substantive review"
+  },
+  {
+    "case_id": "medium-011",
+    "guidance_id": "152657",
+    "chunk_index": 4,
+    "quoted_text": "The acceptance review occurs prior to the substantive review and should be conducted and completed within 15 calendar days of FDA receiving the De Novo request. An acceptance review will only begin for De Novo requests for which the applicable user fee has been paid and a valid eCopy has been received."
+  },
+  {
+    "case_id": "medium-011",
+    "guidance_id": "152657",
+    "chunk_index": 4,
+    "quoted_text": "For the De Novo request to be accepted, all items identified as elements of a complete De Novo request (\"RTA items\") in the Acceptance Checklist should be present or a rationale should be provided for those elements determined by the requester to be not applicable"
+  },
+  {
+    "case_id": "medium-011",
+    "guidance_id": "152657",
+    "chunk_index": 29,
+    "quoted_text": "The searches used to establish that no legally marketed device of the same type exists"
+  },
+  {
+    "case_id": "medium-011",
+    "guidance_id": "152657",
+    "chunk_index": 29,
+    "quoted_text": "The benefit-risk discussion addresses why the probable benefit to health from use of the device outweighs any probable injury or illness from such use, when subject to general controls or general and special controls"
+  },
+  {
+    "case_id": "medium-011",
+    "guidance_id": "152657",
+    "chunk_index": 34,
+    "quoted_text": "For all devices that incorporate software, all relevant software information and testing is provided, including: a. Software level of concern and rationale for the software level of concern"
+  },
+  {
+    "case_id": "medium-011",
+    "guidance_id": "152657",
+    "chunk_index": 6,
+    "quoted_text": "A new De Novo request and new user fee are not necessary, and it is not necessary to resend the entire De Novo request, unless FDA notes otherwise"
+  },
+  {
+    "case_id": "medium-011",
+    "guidance_id": "152657",
+    "chunk_index": 6,
+    "quoted_text": "If a complete response to the RTA notification is not received within 180 days of the date of RTA notification, FDA will consider the De Novo request to be withdrawn"
+  },
+  {
+    "case_id": "medium-011",
+    "guidance_id": "152657",
+    "chunk_index": 7,
+    "quoted_text": "If FDA does not complete the acceptance review within the acceptance review period (i.e., within 15 calendar days of receipt), FDA will accept the De Novo request for review and will notify the requester"
+  },
+  {
+    "case_id": "medium-011",
+    "guidance_id": "72674",
+    "chunk_index": 12,
+    "quoted_text": "After FDA has accepted the De Novo request for review, FDA will begin the substantive review of the De Novo request. As part of FDA's substantive review, FDA intends to conduct a classification review of legally marketed device types."
+  },
+  {
+    "case_id": "medium-012",
+    "guidance_id": "141565",
+    "chunk_index": 5,
+    "quoted_text": "FDA determines the validity evidence needed to support the PRO instrument's specified use for a regulatory purpose."
+  },
+  {
+    "case_id": "medium-012",
+    "guidance_id": "141565",
+    "chunk_index": 7,
+    "quoted_text": "the population in which the validation work was performed should be consistent with the intended use population in the clinical study protocol."
+  },
+  {
+    "case_id": "medium-012",
+    "guidance_id": "141565",
+    "chunk_index": 11,
+    "quoted_text": "FDA recommends that the COI be clearly defined by a statement of what is being measured, how it is being measured and interpreted, and how the results will be communicated in the labeling."
+  },
+  {
+    "case_id": "medium-012",
+    "guidance_id": "77832",
+    "chunk_index": 5,
+    "quoted_text": "instrument development and performance can be reviewed in the context of the intended role, and appropriate statistical methods can be planned and applied."
+  },
+  {
+    "case_id": "medium-012",
+    "guidance_id": "141565",
+    "chunk_index": 11,
+    "quoted_text": "the specified change in the PRO instrument is clinically meaningful."
+  },
+  {
+    "case_id": "medium-012",
+    "guidance_id": "77832",
+    "chunk_index": 14,
+    "quoted_text": "Evidence of other types of validity (e.g., construct validity) or reliability (e.g., consistent scores) will not overcome problems with content validity."
+  },
+  {
+    "case_id": "medium-012",
+    "guidance_id": "77832",
+    "chunk_index": 14,
+    "quoted_text": "evidence that a PRO instrument can identify differences in scores over time in individuals or groups who have changed with respect to the measurement concept."
+  },
+  {
+    "case_id": "medium-012",
+    "guidance_id": "77832",
+    "chunk_index": 5,
+    "quoted_text": "sponsors should provide documented evidence of patient input during instrument development and of the instrument's performance in the specific application in which it is used."
+  },
+  {
+    "case_id": "medium-012",
+    "guidance_id": "77832",
+    "chunk_index": 14,
+    "quoted_text": "to establish the items that reflect the concept of interest and contribute to its evaluation."
+  },
+  {
+    "case_id": "medium-012",
+    "guidance_id": "141565",
+    "chunk_index": 16,
+    "quoted_text": "evidence needed to support measurement equivalence between electronic and paper-based patient-reported outcome (PRO) measures."
+  },
+  {
+    "case_id": "medium-012",
+    "guidance_id": "141565",
+    "chunk_index": 8,
+    "quoted_text": "FDA recommends that these elements be composed using plain language to help ensure that patients with varying levels of overall literacy and health literacy understand and are able to provide informed responses."
+  },
+  {
+    "case_id": "medium-012",
+    "guidance_id": "99769",
+    "chunk_index": 12,
+    "quoted_text": "validated health-related quality of life measures and other Patient-Reported Outcomes (PROs) (e.g., scales or scores indicating patient's experience of pain or function) can be helpful for patients and health care practitioners when discussing treatment options and decisions, and may be used to demonstrate benefit for purposes of product approval."
+  },
+  {
+    "case_id": "medium-012",
+    "guidance_id": "74307",
+    "chunk_index": 69,
+    "quoted_text": "meaningful to patients considering the severity, chronicity, etc., of the condition"
+  },
+  {
+    "case_id": "medium-013",
+    "guidance_id": "87363",
+    "chunk_index": 73,
+    "quoted_text": "A definitive study during which evidence is gathered to support the safety and effectiveness evaluation of the medical device for its intended use."
+  },
+  {
+    "case_id": "medium-013",
+    "guidance_id": "87363",
+    "chunk_index": 31,
+    "quoted_text": "It is important that all primary and secondary endpoints are pre-specified at the design stage of the pivotal clinical study."
+  },
+  {
+    "case_id": "medium-013",
+    "guidance_id": "87363",
+    "chunk_index": 31,
+    "quoted_text": "The protocol should specify what endpoints or outcomes are being measured, how and when they are being measured, and how they will be analyzed statistically."
+  },
+  {
+    "case_id": "medium-013",
+    "guidance_id": "87363",
+    "chunk_index": 31,
+    "quoted_text": "The endpoints, outcomes, or measurements should be clinically meaningful and relevant to the stated study objectives and desired intended use."
+  },
+  {
+    "case_id": "medium-013",
+    "guidance_id": "87363",
+    "chunk_index": 31,
+    "quoted_text": "an independent adjudication committee may be warranted to adjudicate an endpoint, for example, when objective assessments do not exist and a subjective assessment is used."
+  },
+  {
+    "case_id": "medium-013",
+    "guidance_id": "92671",
+    "chunk_index": 3,
+    "quoted_text": "a clinical study design that allows for prospectively planned modifications based on accumulating study data without undermining the study's integrity and validity."
+  },
+  {
+    "case_id": "medium-013",
+    "guidance_id": "92671",
+    "chunk_index": 3,
+    "quoted_text": "Adaptive designs, when properly implemented, can reduce resource requirements, decrease time to study completion, and/or increase the chance of study success."
+  },
+  {
+    "case_id": "medium-013",
+    "guidance_id": "92671",
+    "chunk_index": 3,
+    "quoted_text": "modifications should be prospectively planned and described in the clinical study protocol prior to initiation of the study."
+  },
+  {
+    "case_id": "medium-013",
+    "guidance_id": "87363",
+    "chunk_index": 67,
+    "quoted_text": "Adaptations that are not pre-planned can severely weaken the scientific validity of the pivotal study."
+  },
+  {
+    "case_id": "medium-013",
+    "guidance_id": "87363",
+    "chunk_index": 67,
+    "quoted_text": "If sponsors are considering a Bayesian or adaptive trial design, they should seek FDA input as early as possible."
+  },
+  {
+    "case_id": "medium-013",
+    "guidance_id": "92671",
+    "chunk_index": 12,
+    "quoted_text": "control of the chance of erroneous conclusions (positive and negative) and (2) minimization of operational bias."
+  },
+  {
+    "case_id": "medium-013",
+    "guidance_id": "92671",
+    "chunk_index": 6,
+    "quoted_text": "Adaptive designs can improve the chance of trial success by employing sample size reassessment (SSR), whether for a superiority or a non-inferiority study."
+  },
+  {
+    "case_id": "medium-013",
+    "guidance_id": "92671",
+    "chunk_index": 6,
+    "quoted_text": "This approach allows for mid-course correction in trials where there is a treatment effect that is meaningful but smaller than originally anticipated."
+  },
+  {
+    "case_id": "medium-013",
+    "guidance_id": "92671",
+    "chunk_index": 12,
+    "quoted_text": "The ability to anticipate what one might regret and then plan to adapt can significantly increase the likelihood of study success."
+  },
+  {
+    "case_id": "medium-013",
+    "guidance_id": "92671",
+    "chunk_index": 3,
+    "quoted_text": "modifications should be prospectively planned and described in the clinical study protocol prior to initiation of the study."
+  },
+  {
+    "case_id": "medium-013",
+    "guidance_id": "87363",
+    "chunk_index": 67,
+    "quoted_text": "Such designs should address who will decide whether the modifications will be implemented once the interim results are available (e.g., the DMC an independent statistician)."
+  },
+  {
+    "case_id": "medium-013",
+    "guidance_id": "92671",
+    "chunk_index": 24,
+    "quoted_text": "it is important that the chance of erroneous findings (the overall probability of a Type I error) be well-controlled in a prospective manner."
+  },
+  {
+    "case_id": "medium-013",
+    "guidance_id": "92671",
+    "chunk_index": 12,
+    "quoted_text": "control of the chance of erroneous conclusions (positive and negative) and (2) minimization of operational bias."
+  },
+  {
+    "case_id": "medium-013",
+    "guidance_id": "87363",
+    "chunk_index": 37,
+    "quoted_text": "Generally, four types of comparisons are recognized."
+  },
+  {
+    "case_id": "medium-013",
+    "guidance_id": "87363",
+    "chunk_index": 41,
+    "quoted_text": "If superiority to the placebo can be demonstrated, then it can be inferred that the investigational device is effective."
+  },
+  {
+    "case_id": "medium-014",
+    "guidance_id": "190201",
+    "chunk_index": 8,
+    "quoted_text": "premarket notification under section 510(k) of the Federal Food, Drug, and Cosmetic (FD&C) Act (510(k)), PMA, Humanitarian Device Exemption (HDE), De Novo classification request"
+  },
+  {
+    "case_id": "medium-014",
+    "guidance_id": "190201",
+    "chunk_index": 13,
+    "quoted_text": "To generate (primary) clinical evidence to support marketing authorization (e.g., 510(k), PMA, HDE, or De Novo request)"
+  },
+  {
+    "case_id": "medium-014",
+    "guidance_id": "190201",
+    "chunk_index": 49,
+    "quoted_text": "A sponsor submitted data from two clinical studies to support a De Novo request for a device. One was a prospective, repeated measures, single-arm study, which served as the primary clinical evidence"
+  },
+  {
+    "case_id": "medium-014",
+    "guidance_id": "190201",
+    "chunk_index": 11,
+    "quoted_text": "As a historical control, an informative prior in a Bayesian analysis of a clinical trial, or as one source of data in a hierarchical model or a hybrid data synthesis"
+  },
+  {
+    "case_id": "medium-014",
+    "guidance_id": "190201",
+    "chunk_index": 11,
+    "quoted_text": "Patient-generated data (e.g., patient-reported outcomes or performance outcomes) that are created, reported, or gathered by patients, including in-home use, potentially using wearables and other DHTs"
+  },
+  {
+    "case_id": "medium-014",
+    "guidance_id": "184856",
+    "chunk_index": 32,
+    "quoted_text": "FDA recommends that sponsors provide an assessment of fit-for-purpose data for the selected data source(s) that evaluates both the relevance and reliability of the RWD. FDA encourages sponsors to leverage the Q-Submission Program for obtaining FDA feedback on proposed uses of RWD."
+  },
+  {
+    "case_id": "medium-014",
+    "guidance_id": "190201",
+    "chunk_index": 25,
+    "quoted_text": "Adequacy of information and descriptors about data sources provided in the regulatory submission for FDA review"
+  },
+  {
+    "case_id": "medium-014",
+    "guidance_id": "190201",
+    "chunk_index": 25,
+    "quoted_text": "Data collection procedures; Use of common data capture forms; Common definitional frameworks; Data cleaning and cross-referencing procedures"
+  },
+  {
+    "case_id": "medium-014",
+    "guidance_id": "190201",
+    "chunk_index": 25,
+    "quoted_text": "Sponsors should document routine migration of data between various sources over time (e.g., indicate the date and time of data transfers, linkages)"
+  },
+  {
+    "case_id": "medium-014",
+    "guidance_id": "190201",
+    "chunk_index": 27,
+    "quoted_text": "Study sample size should be justified to address the study question and regulatory purpose. It should be determined based on adequate statistical power or precision to detect a clinically meaningful difference."
+  },
+  {
+    "case_id": "medium-014",
+    "guidance_id": "190201",
+    "chunk_index": 27,
+    "quoted_text": "data provenance and traceability are important. Sponsors should plan and document all aspects of data extraction, aggregation, curation, storage, and availability for research"
+  },
+  {
+    "case_id": "medium-014",
+    "guidance_id": "190201",
+    "chunk_index": 27,
+    "quoted_text": "Adherence to source verification procedures and data collection and recording procedures should be documented for completeness and consistency."
+  },
+  {
+    "case_id": "medium-014",
+    "guidance_id": "81015",
+    "chunk_index": 9,
+    "quoted_text": "description of the data source relevance (e.g., does it capture information to address the surveillance question(s) in the order?) and of its reliability (e.g., data quality)"
+  },
+  {
+    "case_id": "medium-014",
+    "guidance_id": "190201",
+    "chunk_index": 49,
+    "quoted_text": "Both the single-arm study and the registry used a common data capture form with the same definitions for key variables (covariates and outcomes of interest)."
+  },
+  {
+    "case_id": "medium-014",
+    "guidance_id": "190201",
+    "chunk_index": 49,
+    "quoted_text": "the sponsor performed a propensity-score adjusted analysis using pre-specified variables. The propensity score results were reviewed and considered acceptable by FDA before the sponsor performed the outcome analysis."
+  },
+  {
+    "case_id": "medium-014",
+    "guidance_id": "190201",
+    "chunk_index": 49,
+    "quoted_text": "sensitivity analyses demonstrated that the extent of missing data did not change the conclusions of the study."
+  },
+  {
+    "case_id": "medium-014",
+    "guidance_id": "190201",
+    "chunk_index": 7,
+    "quoted_text": "Improving generalizability. Capturing data generated over a longer period of time than would be practical in a traditional clinical study and potentially allowing for data to be gathered on longer-term outcomes."
+  },
+  {
+    "case_id": "medium-015",
+    "guidance_id": "112671",
+    "chunk_index": 7,
+    "quoted_text": "A multiple function device product contains at least one device function and at least one \"other function.\""
+  },
+  {
+    "case_id": "medium-015",
+    "guidance_id": "112671",
+    "chunk_index": 3,
+    "quoted_text": "FDA may assess the impact that the software non-device function has on the device function when assessing the safety and effectiveness of the device function"
+  },
+  {
+    "case_id": "medium-015",
+    "guidance_id": "112671",
+    "chunk_index": 8,
+    "quoted_text": "FDA believes the same principles should apply to the assessment of all multiple function device products, whether those functions are software-based, hardware-based, or both."
+  },
+  {
+    "case_id": "medium-015",
+    "guidance_id": "80958",
+    "chunk_index": 26,
+    "quoted_text": "Software functions that are intended for individuals to log, record, track, evaluate, or make decisions or behavioral suggestions related to developing or maintaining general fitness, health or wellness"
+  },
+  {
+    "case_id": "medium-015",
+    "guidance_id": "112671",
+    "chunk_index": 7,
+    "quoted_text": "\"Other function:\" function that: does not meet the definition of device"
+  },
+  {
+    "case_id": "medium-015",
+    "guidance_id": "112671",
+    "chunk_index": 9,
+    "quoted_text": "Such \"other functions\" are not the subject of FDA's review simply because they are part of a multiple function device product."
+  },
+  {
+    "case_id": "medium-015",
+    "guidance_id": "112671",
+    "chunk_index": 21,
+    "quoted_text": "Where the device function-under-review could not be adversely impacted by an \"other function,\" FDA does not intend to assess that \"other function.\""
+  },
+  {
+    "case_id": "medium-015",
+    "guidance_id": "112671",
+    "chunk_index": 21,
+    "quoted_text": "FDA intends to make the extent of the product's assessment clear, such as with a statement in the 510(k) Summary, PMA Summary of Safety and Effectiveness Data (SSED), De Novo Decision Summary."
+  },
+  {
+    "case_id": "medium-015",
+    "guidance_id": "112671",
+    "chunk_index": 24,
+    "quoted_text": "the manufacturer would still be required to report it if the information reasonably suggests that the device may have caused the death or serious injury."
+  },
+  {
+    "case_id": "medium-015",
+    "guidance_id": "112671",
+    "chunk_index": 9,
+    "quoted_text": "FDA may assess the impact of \"other functions\" when assessing the safety and effectiveness of the device functions-under-review."
+  },
+  {
+    "case_id": "medium-015",
+    "guidance_id": "112671",
+    "chunk_index": 21,
+    "quoted_text": "Documentation of requirements and specifications included in the premarket submission for the device function-under-review should include adequate detail to describe any expected relationship, utility, reliance, or interoperability with any \"other function.\""
+  },
+  {
+    "case_id": "medium-015",
+    "guidance_id": "153781",
+    "chunk_index": 15,
+    "quoted_text": "the recommendations described in the aforementioned guidance should be considered when preparing the software documentation for a premarket submission."
+  },
+  {
+    "case_id": "medium-015",
+    "guidance_id": "112671",
+    "chunk_index": 21,
+    "quoted_text": "Performance testing for the device function-under-review should be conducted considering those aspects of the \"other function(s)\" that have an impact on the performance."
+  },
+  {
+    "case_id": "hard-001",
+    "guidance_id": "184856",
+    "chunk_index": 9,
+    "quoted_text": "AI bias is a potential tendency to produce incorrect results in a systematic, but sometimes unforeseeable way, which can impact safety and effectiveness of the device within all or a subset of the intended use population"
+  },
+  {
+    "case_id": "hard-001",
+    "guidance_id": "184856",
+    "chunk_index": 3,
+    "quoted_text": "collecting evidence to evaluate whether a device benefits all relevant demographic groups (e.g., race, ethnicity, sex, and age) similarly, to help ensure that these devices remain safe and effective for their intended use"
+  },
+  {
+    "case_id": "hard-001",
+    "guidance_id": "184856",
+    "chunk_index": 45,
+    "quoted_text": "the reliance of models on relationships learned from large amounts of data, and the relative opacity of models to users make AI-enabled devices particularly susceptible to unexpected differences in performance"
+  },
+  {
+    "case_id": "hard-001",
+    "guidance_id": "184856",
+    "chunk_index": 44,
+    "quoted_text": "Poor performance in specific subgroups could make the device unsafe for use in those groups, which may impact the potential scope of the intended use population"
+  },
+  {
+    "case_id": "hard-001",
+    "guidance_id": "184856",
+    "chunk_index": 37,
+    "quoted_text": "A subgroup analysis or analyses stratified by the identified covariates"
+  },
+  {
+    "case_id": "hard-001",
+    "guidance_id": "184856",
+    "chunk_index": 37,
+    "quoted_text": "A characterization of the distribution of data along important covariates, including those corresponding to the population characteristics described above"
+  },
+  {
+    "case_id": "hard-001",
+    "guidance_id": "184856",
+    "chunk_index": 37,
+    "quoted_text": "an explanation regarding how the data compares to the U.S. population and U.S. medical practice in terms of general medical practice, disease prevalence, and progression as well as the demographic characteristics of patients"
+  },
+  {
+    "case_id": "hard-001",
+    "guidance_id": "166704",
+    "chunk_index": 16,
+    "quoted_text": "representative of the proposed intended use populations (e.g., with respect to race, ethnicity, disease severity, sex, age, or others, as appropriate)"
+  },
+  {
+    "case_id": "hard-001",
+    "guidance_id": "184856",
+    "chunk_index": 30,
+    "quoted_text": "although bias may be difficult to eliminate completely, FDA recommends that manufacturers, as a starting point, ensure that the validation data sufficiently represents the intended use (target) population"
+  },
+  {
+    "case_id": "hard-001",
+    "guidance_id": "184856",
+    "chunk_index": 45,
+    "quoted_text": "Subgroup analysis provides the tools to evaluate the performance of the device in specific populations and can be helpful in identifying scenarios in which the device performs worse than overall performance"
+  },
+  {
+    "case_id": "hard-001",
+    "guidance_id": "184856",
+    "chunk_index": 24,
+    "quoted_text": "Description of all known limitations of the AI-enabled device, AI-DSF(s), or model(s)"
+  },
+  {
+    "case_id": "hard-002",
+    "guidance_id": "166704",
+    "chunk_index": 5,
+    "quoted_text": "AI is a machine-based system that can, for a given set of human-defined objectives, make predictions, recommendations, or decisions influencing real or virtual environments."
+  },
+  {
+    "case_id": "hard-002",
+    "guidance_id": "166704",
+    "chunk_index": 3,
+    "quoted_text": "FDA recognizes that the development of AI-enabled devices (also referred to as AI-enabled device software functions or AI-DSFs) is an iterative process."
+  },
+  {
+    "case_id": "hard-002",
+    "guidance_id": "184856",
+    "chunk_index": 8,
+    "quoted_text": "FDA encourages sponsors to consider discussing these plans with FDA via the Q-Submission Program."
+  },
+  {
+    "case_id": "hard-002",
+    "guidance_id": "166704",
+    "chunk_index": 16,
+    "quoted_text": "evidence to demonstrate a reasonable assurance of safety and effectiveness of an AI-DSF before it is deployed or marketed."
+  },
+  {
+    "case_id": "hard-002",
+    "guidance_id": "166704",
+    "chunk_index": 16,
+    "quoted_text": "Test data should be independent of data used for training and tuning and should generally be from multiple sites different from those that were used to generate training and tuning data."
+  },
+  {
+    "case_id": "hard-002",
+    "guidance_id": "166704",
+    "chunk_index": 16,
+    "quoted_text": "These data typically should be representative of the proposed intended use populations (e.g., with respect to race, ethnicity, disease severity, sex, age, or others, as appropriate)."
+  },
+  {
+    "case_id": "hard-002",
+    "guidance_id": "184856",
+    "chunk_index": 69,
+    "quoted_text": "study protocols and statistical analysis plans should be pre-specified."
+  },
+  {
+    "case_id": "hard-002",
+    "guidance_id": "184856",
+    "chunk_index": 46,
+    "quoted_text": "it is important to understand the performance of the \"Human-AI team, rather than just the performance of the model in isolation\" when a model has a \"human in the loop.\""
+  },
+  {
+    "case_id": "hard-002",
+    "guidance_id": "184856",
+    "chunk_index": 47,
+    "quoted_text": "the nature of the clinical study or other studies (e.g., human factors validation testing) that would be appropriate to support performance evaluation of an AI-based medical device will vary according to the intended use of the model."
+  },
+  {
+    "case_id": "hard-002",
+    "guidance_id": "184856",
+    "chunk_index": 42,
+    "quoted_text": "manufacturers should demonstrate users' ability to interact with and understand the device as intended in addition to ensuring the device itself meets relevant performance specifications."
+  },
+  {
+    "case_id": "hard-002",
+    "guidance_id": "166704",
+    "chunk_index": 16,
+    "quoted_text": "The PCCP includes a Description of Modifications, Modification Protocol, and Impact Assessment."
+  },
+  {
+    "case_id": "hard-002",
+    "guidance_id": "166704",
+    "chunk_index": 8,
+    "quoted_text": "a supplemental application (section 515C(a)) or new 510(k) (section 515C(b)) is not required for a change to a device that would otherwise require a PMA supplement or a new 510(k) if the change is consistent with a PCCP approved or cleared by FDA."
+  },
+  {
+    "case_id": "hard-002",
+    "guidance_id": "184856",
+    "chunk_index": 42,
+    "quoted_text": "FDA encourages manufacturers to use the Q-Submission Program to discuss considerations related to these AI models early in the development process."
+  },
+  {
+    "case_id": "hard-002",
+    "guidance_id": "184856",
+    "chunk_index": 8,
+    "quoted_text": "These interconnected considerations are important throughout the TPLC and should be incorporated from the earliest stage of device design through decommission."
+  },
+  {
+    "case_id": "hard-002",
+    "guidance_id": "184856",
+    "chunk_index": 9,
+    "quoted_text": "addressing representativeness in data collection for development, testing, and monitoring throughout the product lifecycle, as well as evaluating performance across subgroups of intended use."
+  },
+  {
+    "case_id": "hard-002",
+    "guidance_id": "184856",
+    "chunk_index": 69,
+    "quoted_text": "if not well designed and validated for the target user group, explainability tools or visualizations could also significantly mislead users."
+  },
+  {
+    "case_id": "hard-003",
+    "guidance_id": "95636",
+    "chunk_index": 2,
+    "quoted_text": "interoperability as the ability of two or more products, technologies or systems to exchange information and to use the information that has been exchanged"
+  },
+  {
+    "case_id": "hard-003",
+    "guidance_id": "95636",
+    "chunk_index": 7,
+    "quoted_text": "Manufacturers should, as part of their device design, clearly establish the purpose of electronic interfaces that are included on a medical device"
+  },
+  {
+    "case_id": "hard-003",
+    "guidance_id": "95636",
+    "chunk_index": 8,
+    "quoted_text": "expected flow of information or exchange of information through an application programming interface (API) which may include considerations of acceptable and unacceptable commands on the interface"
+  },
+  {
+    "case_id": "hard-003",
+    "guidance_id": "95636",
+    "chunk_index": 4,
+    "quoted_text": "failure to establish and implement appropriate functional, performance, and interface requirements during product development may lead to the exchange of inaccurate, untimely, or misleading information"
+  },
+  {
+    "case_id": "hard-003",
+    "guidance_id": "95636",
+    "chunk_index": 7,
+    "quoted_text": "Manufacturers should consider the use of consensus standards related to medical device interoperability."
+  },
+  {
+    "case_id": "hard-003",
+    "guidance_id": "95636",
+    "chunk_index": 15,
+    "quoted_text": "Please refer to the FDA Recognized Consensus Standards Database for a current listing of recognized standards"
+  },
+  {
+    "case_id": "hard-003",
+    "guidance_id": "95636",
+    "chunk_index": 16,
+    "quoted_text": "Manufacturers' risk analysis should consider the risks associated with interoperability, reasonably foreseeable misuse, and reasonably foreseeable combinations of events that could result in a hazardous situation."
+  },
+  {
+    "case_id": "hard-003",
+    "guidance_id": "95636",
+    "chunk_index": 16,
+    "quoted_text": "The manufacturer should specify which mitigations are implemented and which are necessary for safe use but may require implementation by other parties, such as the party responsible for set-up or installation."
+  },
+  {
+    "case_id": "hard-003",
+    "guidance_id": "95636",
+    "chunk_index": 15,
+    "quoted_text": "a sponsor should include a discussion of each externally-facing electronic interface found on the device, the purpose of each interface, and the anticipated users of the interface"
+  },
+  {
+    "case_id": "hard-003",
+    "guidance_id": "119933",
+    "chunk_index": 22,
+    "quoted_text": "device manufacturers should assess whether added security controls beneath such communication are needed to ensure the safety and effectiveness of the device"
+  },
+  {
+    "case_id": "hard-003",
+    "guidance_id": "119933",
+    "chunk_index": 22,
+    "quoted_text": "cybersecurity controls should not be intended to prohibit a user from accessing their device data"
+  },
+  {
+    "case_id": "hard-003",
+    "guidance_id": "119933",
+    "chunk_index": 22,
+    "quoted_text": "The methods used for scoring the risk pre- and post-mitigation and the associated acceptance criteria as well as the method for transferring security risks into the safety risk assessment process should also be provided"
+  },
+  {
+    "case_id": "hard-003",
+    "guidance_id": "119933",
+    "chunk_index": 40,
+    "quoted_text": "A list of network ports and other interfaces that are expected to receive and/or send data\u2026instructions to permit secure network deployment and servicing"
+  },
+  {
+    "case_id": "hard-004",
+    "guidance_id": "72674",
+    "chunk_index": 11,
+    "quoted_text": "the probable benefit to health from use of the device outweighs any probable injury or illness from such use"
+  },
+  {
+    "case_id": "hard-004",
+    "guidance_id": "99769",
+    "chunk_index": 5,
+    "quoted_text": "devices classified under this pathway (De Novo devices) are low to moderate risk devices, they may not need to confer as substantial a benefit to patients"
+  },
+  {
+    "case_id": "hard-004",
+    "guidance_id": "99769",
+    "chunk_index": 5,
+    "quoted_text": "Clinical testing methods for medical devices can include, when appropriate, randomized clinical trials in the appropriate target population, well-controlled investigations, partially controlled studies"
+  },
+  {
+    "case_id": "hard-004",
+    "guidance_id": "190201",
+    "chunk_index": 49,
+    "quoted_text": "One was a prospective, repeated measures, single-arm study, which served as the primary clinical evidence to support safety and effectiveness for the De Novo request"
+  },
+  {
+    "case_id": "hard-004",
+    "guidance_id": "99769",
+    "chunk_index": 61,
+    "quoted_text": "Benefit should be considered based on the assessment of the data, whether or not the results are statistically significant."
+  },
+  {
+    "case_id": "hard-004",
+    "guidance_id": "152657",
+    "chunk_index": 36,
+    "quoted_text": "a justification showing that these data and other information are sufficient to reasonably demonstrate the safety and effectiveness of the device when subject to general controls or general and special controls"
+  },
+  {
+    "case_id": "hard-004",
+    "guidance_id": "115672",
+    "chunk_index": 15,
+    "quoted_text": "FDA may be able to accept greater uncertainty due to factors such as whether the device presents minimal risks or whether the imposition of special controls can mitigate the risks"
+  },
+  {
+    "case_id": "hard-004",
+    "guidance_id": "152657",
+    "chunk_index": 34,
+    "quoted_text": "Software level of concern and rationale for the software level of concern."
+  },
+  {
+    "case_id": "hard-004",
+    "guidance_id": "152657",
+    "chunk_index": 36,
+    "quoted_text": "A discussion of how the investigation data represent clinically significant results, pursuant to 21 CFR 860.7(e)."
+  },
+  {
+    "case_id": "hard-004",
+    "guidance_id": "72674",
+    "chunk_index": 10,
+    "quoted_text": "The success of a De Novo request that is filed without a preceding 510(k) or without a Pre-Sub will depend more on how well you search for a potential predicate device, identify the risks to health and special controls"
+  },
+  {
+    "case_id": "hard-005",
+    "guidance_id": "72674",
+    "chunk_index": 2,
+    "quoted_text": "This process provides a pathway to class I or class II classification for medical devices for which general controls or general and special controls provide a reasonable assurance of safety and effectiveness"
+  },
+  {
+    "case_id": "hard-005",
+    "guidance_id": "99769",
+    "chunk_index": 77,
+    "quoted_text": "FDA determines whether there is a reasonable assurance of safety and effectiveness by weighing any benefit to health from the use of the device against any risk of injury or illness"
+  },
+  {
+    "case_id": "hard-005",
+    "guidance_id": "72674",
+    "chunk_index": 10,
+    "quoted_text": "provide adequate valid scientific evidence to support granting the De Novo request"
+  },
+  {
+    "case_id": "hard-005",
+    "guidance_id": "99769",
+    "chunk_index": 5,
+    "quoted_text": "Devices granted marketing authority under De Novo requests should be sufficiently understood to explain all the risks and benefits of the device such that all risks can be appropriately mitigated"
+  },
+  {
+    "case_id": "hard-005",
+    "guidance_id": "190201",
+    "chunk_index": 2,
+    "quoted_text": "data from product and disease registries"
+  },
+  {
+    "case_id": "hard-005",
+    "guidance_id": "190201",
+    "chunk_index": 49,
+    "quoted_text": "This RWE was part of the totality of clinical evidence to support that the probable benefits of the device outweigh the probable risks, and served as the primary basis for supporting approval of the PMA supplement"
+  },
+  {
+    "case_id": "hard-005",
+    "guidance_id": "190201",
+    "chunk_index": 50,
+    "quoted_text": "One was a prospective, repeated measures, single-arm study, which served as the primary clinical evidence to support safety and effectiveness for the De Novo request"
+  },
+  {
+    "case_id": "hard-005",
+    "guidance_id": "190201",
+    "chunk_index": 50,
+    "quoted_text": "the appropriate length of follow-up for the endpoints of interest was available in the RWD source and the data abstraction methods included prespecified, standardized definitions for key variables"
+  },
+  {
+    "case_id": "hard-005",
+    "guidance_id": "190201",
+    "chunk_index": 7,
+    "quoted_text": "Providing information with comparable or even superior characteristics to information collected and analyzed through a traditional clinical study. In some cases, a traditional clinical study may be impractical or excessively challenging to conduct"
+  },
+  {
+    "case_id": "hard-005",
+    "guidance_id": "152657",
+    "chunk_index": 34,
+    "quoted_text": "For all devices that incorporate software, all relevant software information and testing is provided, including: Software level of concern and rationale"
+  },
+  {
+    "case_id": "hard-005",
+    "guidance_id": "190201",
+    "chunk_index": 50,
+    "quoted_text": "data abstraction methods included prespecified, standardized definitions for key variables (including covariates, device and outcome measures) and were considered acceptable"
+  },
+  {
+    "case_id": "hard-005",
+    "guidance_id": "190201",
+    "chunk_index": 49,
+    "quoted_text": "sensitivity analyses demonstrated that the extent of missing data did not change the conclusions of the study"
+  },
+  {
+    "case_id": "hard-005",
+    "guidance_id": "190201",
+    "chunk_index": 49,
+    "quoted_text": "The proxy outcome from the registry was considered clinically acceptable for this particular study by the sponsor and FDA"
+  },
+  {
+    "case_id": "hard-005",
+    "guidance_id": "72674",
+    "chunk_index": 9,
+    "quoted_text": "If clinical data are needed, are the proposed study design and selected control group appropriate?"
+  }
+]
