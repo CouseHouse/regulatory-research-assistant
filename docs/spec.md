@@ -140,19 +140,19 @@ Each subsection follows the same shape. Anchors are stable; Claude Code and revi
 
 ### 4.4 Chunking: hand-rolled structural splitter, 512 tokens, 50-token overlap
 
-**Chosen:** Hand-rolled paragraph→sentence structural splitter (`chunk_text_structural`, `ingest.py`), 512-token budget, 50-token soft overlap. Implemented Day 7 (ADR 0014).
+**Chosen:** Hand-rolled paragraph→sentence structural splitter (`chunk_text_structural`, `ingest.py`), 512-token budget, 50-token soft overlap. Implemented Day 7 (ADR 0014). **Status: live and validated — `corpus.chunks` re-ingested as structural+clean on 2026-06-03 (Resolution A); Day-9 cloud ingest produces the same architecture.**
 
 **Because:** FDA guidance documents have strong structural cues — numbered sections, paragraphs, sentences — that a structural splitter exploits by preferring paragraph then sentence boundaries before falling back to character splits. 512 tokens preserves a typical regulatory paragraph intact; small enough that retrieved chunks stay focused. 50-token overlap hedges against splitting a sentence mid-claim. Structural boundaries directly improve quote-faithfulness: a quote drawn from coherent source text almost always fits within one chunk, avoiding the boundary-straddle failure mode (coverage ≈ 0.5 < τ).
 
-The original plan cited `langchain-text-splitters` `RecursiveCharacterTextSplitter` as the implementation vehicle (triggerable at `recall@10 < 0.75`). That trigger was pre-empted by the Day-7 faithfulness gate (18/47 verified at τ=0.85); the implementation is hand-rolled to preserve ADR 0003's no-LangChain-in-the-dependency-tree constraint.
+The original plan cited `langchain-text-splitters` `RecursiveCharacterTextSplitter` as the implementation vehicle (triggerable at `recall@10 < 0.75`). That trigger was pre-empted by the Day-7 faithfulness gate (386/446 verified at τ=0.85 after matcher preprocessing fixes); the implementation is hand-rolled to preserve ADR 0003's no-LangChain-in-the-dependency-tree constraint.
 
 **Rejected:**
 - *`langchain-text-splitters` `RecursiveCharacterTextSplitter`* — pulls `langchain-core`; violates ADR 0003's thin-dependency spirit. The hand-rolled equivalent is ~40 lines with the same boundary-control guarantees.
 - *Semantic chunking (clustering sentences by embedding similarity)* — theoretically appealing but recent benchmarks (Vecta Feb 2026; NAACL 2025 Findings) show structural splitting matches or beats it on retrieval recall while being 10× cheaper to compute and trivially reproducible.
 
-**Validation:** Recall@10 ≥ 0.85 on the golden set after re-embed. Quote-faithfulness baseline (18/47 at τ=0.85 on dirty corpus) should increase materially after the clean+structural rechunk.
+**Validation:** Day-7 smoke (text-only): 386/446 at τ=0.85, delta=0 across corpus arms — faithfulness gain was entirely in the matcher. Re-validated 2026-06-03 on live structural corpus (2745 chunks, 71 docs): recall@10=1.00 (13/13), faithfulness=386/446 at τ=0.85 — both held after full re-embed.
 
-**Reopen if:** Recall@10 stalls below 0.75 post-swap; or the text-only smoke shows a large gap between best-chunk and doc-level verified counts (Lever D — multi-chunk verification — in `docs/plan/day07-priority3-rechunk.md §6`).
+**Reopen if:** Recall@10 degrades on a larger corpus (fresh ingest already uses the structural chunker; the question is whether the quality gap justifies paying for the re-embed); or the text-only smoke shows a large gap between best-chunk and doc-level verified counts (Lever D — multi-chunk verification — in `docs/plan/day07-priority3-rechunk.md §6`).
 
 ### 4.5 Embedding model: Voyage 3
 

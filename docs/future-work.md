@@ -167,7 +167,7 @@ pytest.ini/pyproject.toml to exclude integration markers from the default run
 with integration run explicitly in CI or on demand. One-line config fix, Day 5 or later.
 Why the test-env Voyage key is invalid when the runtime key works. 
 Probably .env resolution differs under pytest, or there's a test-specific key. 
-Worth understanding before Day 8 CI work, since CI will hit the same wall. Not urgent.
+Worth understanding before CI work (container-build CI is a Day-12 stretch), since CI will hit the same wall. Not urgent.
 
 ---
 
@@ -202,6 +202,20 @@ Worth understanding before Day 8 CI work, since CI will hit the same wall. Not u
 **Reopen trigger:** Any of: (1) a second user, (2) a load test showing queue depth above 2 under expected demo traffic, (3) a Postgres restart that kills a live demo. For production: all four items above before onboarding real users.
 
 **Cost:** Async conversion + pooled checkpointer: 2–3 days. Worker/queue model: 1 week. Full horizontal scaling story: 2 weeks.
+
+---
+
+## 14. Eval scores and datasets in Langfuse
+
+**Status in v1:** Eval results are written to `evals/results/` as Markdown files and tagged in git. Langfuse is used for trace observability only; eval scores do not flow into Langfuse datasets or experiments.
+
+**Why deferred:** The scorer contract stabilized at Day 7 (three scorers: `citation_validity`, `key_fact_coverage`, `position_quality`; golden set is `evals/golden.jsonl`). Porting evals to Langfuse experiments requires that stable contract to already exist — premature integration would couple the eval format to the observability layer before the format settled. At current eval-run volume (one run per dev day, 30 cases), file-based results are sufficient.
+
+**Reopen trigger:** Eval-run volume grows (e.g. nightly CI runs, per-PR gates), OR a versioning need appears (compare Score across model changes without manually diffing Markdown files), OR the "stable scorer contract" from Day 7 is the precondition — it now exists.
+
+**Implementation path:** Use Langfuse datasets API to import `evals/golden.jsonl` as a dataset version; write a thin scorer adapter that logs run results to a Langfuse experiment; replace the `evals/results/*.md` writer with a dual-write (file + Langfuse) or Langfuse-only write.
+
+**Cost:** 1 day including validation that the Langfuse dataset round-trips correctly.
 
 ---
 

@@ -45,8 +45,14 @@ A 6-8 minute video walkthrough. Interviewers will watch this BEFORE reading the 
 
 ### 5:30-6:30 — What broke (pick ONE postmortem to walk through)
 - Open the most compelling postmortem
-- Quick summary: "Eval showed recall@10 was 0.71 on terminology mismatches. My first fix was to swap the embedding model, which didn't help. Real fix was query rephrasing in the researcher — recall went to 0.88."
-- Why this matters: "RAG debugging is mostly retrieval debugging, and you don't know what's broken until you measure it."
+- <!-- TODO (record at Day 14): replace this placeholder with the real Day-7 story.
+     Real story: matcher preprocessing fixes (smart-quote normalization + PDF line-number stripping)
+     lifted quote verification from 309/446 → 386/446 at τ=0.85. recall@10=1.00 on the golden set
+     after matcher fixes. The investigation showed delta=0 across corpus arms — the problem was the
+     matcher, not the corpus or the chunker. The fabricated "recall 0.71 → 0.88 / embedding swap"
+     narrative below is PLACEHOLDER ONLY and must NOT appear in the recorded Loom. -->
+- **[PLACEHOLDER — replace before recording]** Quick summary: "Eval showed quote verification failing on 30% of cases. First hypothesis was corpus cleaning / rechunking. Ran a $0 text-only smoke across both corpus arms — delta was zero, not the corpus. Real fix was normalizing curly-quotes and stripping PDF-embedded line numbers in the matcher — verification went from 309/446 to 386/446 at the same τ."
+- Why this matters: "RAG debugging is mostly retrieval debugging, and you don't know what's broken until you measure it — the corpus-arm delta was the key diagnostic."
 
 ### 6:30-7:30 — Production posture
 - "Day 8-9 was a cloud deploy: Terraform brought up VPC, ECS Fargate, RDS Postgres with pgvector. Round-trip under $5 to deploy and destroy."

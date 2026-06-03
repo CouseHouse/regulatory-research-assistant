@@ -3000,9 +3000,9 @@
     "case_id": "medium-013",
     "guid": "87363",
     "table": "chunks",
-    "best_chunk_score": 0.52,
+    "best_chunk_score": 0.512,
     "best_chunk_verified": false,
-    "doc_level_score": 0.52,
+    "doc_level_score": 0.512,
     "doc_level_verified": false
   },
   {

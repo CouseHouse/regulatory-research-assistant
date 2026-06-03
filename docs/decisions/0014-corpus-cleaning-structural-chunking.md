@@ -4,6 +4,8 @@
 **Date:** 2026-06-02
 **Owner:** Kyle Couse
 
+> **Validated 2026-06-03 (Resolution A):** Structural chunking re-ingested as the live `corpus.chunks` via `chunk_text_structural + clean_text --truncate`: 2745 chunks across 71 docs, 0 boilerplate rows. Re-measured on the live embedded corpus: recall@10=1.00 (13/13), faithfulness=386/446 at τ=0.85 — both held. The prior "DEFERRED" note (delta=0 from Day-7 smoke) reflected that faithfulness didn't require re-embed; Resolution A re-embeds to align code, local corpus, and Day-9 cloud ingest on one architecture. Restore path: `corpus.chunks_fixedsize_backup` (2726 rows, fixed-size+dirty). See dev-log 2026-06-03.
+
 ## Context
 
 The Day-7 quote-faithfulness smoke produced a baseline of **18/47 analyst-emitted quotes verified at τ=0.85** on the dirty corpus. ADR 0010 §Context documents the two root causes:

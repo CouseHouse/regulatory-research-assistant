@@ -65,6 +65,31 @@ c-3 near-miss resolution: the original near-miss band (0.70–0.85) had 31 cases
 
 154 tests pass (excluding pre-existing Voyage live-api test).
 
+### Correction — critic-flip / τ-calibration scheduling (2026-06-03)
+
+The note in the 2026-06-02 entry ("quote-faithfulness activation + critic upgrade are gated on τ-calibration (expected Day 8)") was written before Day 8 was locked. **Day 8 = IaC (Terraform, ECS, RDS, Fargate).** Critic-flip (wiring the analyst's emitted quotes into `check_citation` to make `revise` faithfulness-aware) and τ-recalibration are **NOT Day 8 items**. They remain gated on τ-calibration; the clean smoke distribution now exists (386/446, delta=0 across corpus arms). Both items are currently **unscheduled — need a calendar slot**. Do not insert into Day 8.
+
+### Resolution A — structural corpus adopted as live (2026-06-03)
+
+Prior state: the Day-7 rechunk commit (`300f88c`) switched `ingest.py main()` to `chunk_text_structural + clean_text` but the existing `corpus.chunks` remained fixed-size+dirty (2726 rows) — the validated eval numbers didn't transfer and Day-9 cloud ingest would silently produce an unvalidated structural corpus.
+
+**Backup:** `corpus.chunks_fixedsize_backup` created before re-ingest (2726 rows, fixed-size+dirty). Restore path exists.
+
+**Re-ingest:** `uv run python -m rra.ingest --truncate` — 71 docs ingested (73126 failed again, the known scanned PDF), 2745 chunks via `chunk_text_structural + clean_text`.
+
+**Re-measured on live structural corpus:**
+
+| Metric | Old (fixed-size) | New (structural) | Delta |
+|---|---|---|---|
+| recall@10 | 1.00 (13/13) | **1.00 (13/13)** | 0 |
+| faithfulness (τ=0.85) | 386/446 | **386/446** | 0 |
+| boilerplate rows | unknown | **0** | — |
+| chunk count | 2726 | **2745** | +19 |
+
+Gap=0 (best-chunk == doc-level). All eval numbers transfer to the structural corpus.
+
+**Code == corpus == Day-9 cloud ingest.** A fresh `uv run python -m rra.ingest --limit N` now produces the same structural+clean architecture as the validated local corpus.
+
 ---
 
 ## 2026-06-02 — Day 7: Priority 1 (key_fact_coverage backstop) + pre-rechunk baseline

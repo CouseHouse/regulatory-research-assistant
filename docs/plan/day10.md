@@ -45,6 +45,8 @@ Token math and infrastructure math for the system. Sections:
    - Prompt caching (biggest)
    - Model downsizing where quality holds (Haiku for researcher)
    - Critic loop cap (already at 2)
+   - **Critic `source_text` truncation** — Day-5 trace data showed ~27% critic input bloat from oversized `source_text` passages; truncating to the retrieved chunk text is the cheapest lever after caching
+   - **Analyst prompt-cache verification** — confirm cache hit rate matches the expected rate given the stable system prompt; a miss means the cache is being busted unexpectedly (check for dynamic content in the system prompt)
    - Retrieval result caching (future-work §10)
 
 Length: 2 pages with tables.
