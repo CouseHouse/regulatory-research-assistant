@@ -206,6 +206,9 @@ def check_citation(
 
     quoted_text=None → key-existence mode: verified=True if the chunk exists.
     quoted_text supplied → ADR-0010 three-step matching.
+    quoted_text empty/whitespace (non-None) → verified=False: faithfulness is
+        unassessable and must NOT be scored faithful-by-emptiness (ADR 0013).
+        This is distinct from the None key-existence path.
 
     NOT_FOUND returns CitationCheckResult(verified=False), never ToolError.
     Only DB connection failures raise ToolError.
@@ -259,9 +262,15 @@ def check_citation(
     norm_chunk = _normalize(chunk_text)
 
     if not norm_quoted:
-        # Empty quote after normalization — treat as key-existence.
+        # Empty/whitespace quoted_text (non-None) — faithfulness CANNOT be
+        # assessed, so fail closed: verified=False. This is NOT key-existence
+        # (that is the quoted_text IS None path above, untouched). Returning True
+        # here would be the quote-side of the D1 gate-evasion hole — a citation
+        # scored "faithful by emptiness" (Day-7 plan §7-#3 / ADR 0013). Callers
+        # treat an empty analyst quote as "no quote" and count it separately;
+        # this branch is the defensive backstop if one slips through.
         return CitationCheckResult(
-            verified=True,
+            verified=False,
             source_text=chunk_text,
             matched_doc_span=None,
             similarity_score=None,

@@ -47,6 +47,15 @@ Wrong: "[abc:4, abc:7]."
 omit the claim or acknowledge the gap.
 5. The guidance_id may contain hyphens, underscores, or alphanumeric characters. \
 Preserve them exactly.
+6. After each citation bracket, with NO space, append the shortest verbatim span \
+from that passage's <text> that supports the claim, wrapped in <q></q> — e.g. \
+[72674:3]<q>a risk-based approach to software validation aligned with the intended \
+use</q>. Copy the characters EXACTLY from the <text>: do not paraphrase, summarise, \
+re-order, or fix typos. Keep it to a SINGLE sentence of at most 25 words — quote the \
+specific phrase that supports the claim, never the whole passage. If you cannot copy \
+a verbatim supporting span, OMIT <q> entirely (a bare [guidance_id:chunk_index] is \
+acceptable); never invent, paraphrase, or guess a quote. The <q> wrapper never goes \
+inside the bracket and never replaces it.
 
 ════════════════════════════════════════════
 STRUCTURE RULES
@@ -73,6 +82,8 @@ When a <prior_draft> and <critic_notes> are provided, edit the draft in place:
 - Address "soft" severity notes if they improve accuracy without introducing new issues.
 - Do NOT rewrite sections that have no associated notes.
 - Do NOT regress correct citations in untouched sections.
+- Keep the <q>…</q> supporting quote on every citation you retain or rewrite \
+(rule 6); do not drop quotes when editing.
 - Return the complete revised draft, not a diff.
 """
 

@@ -251,6 +251,65 @@ class TestCheckCitationKeyExistence:
         assert result.source_text == "Important passage."
 
 
+class TestCheckCitationEmptyQuote:
+    """quoted_text="" / whitespace (non-None) → verified=False (ADR 0013).
+
+    This is the quote-side of the D1 gate-evasion hole: an empty quote must NOT
+    short-circuit to verified=True ("faithful by emptiness"). It is distinct from
+    the None key-existence path the critic uses, which stays verified=True.
+    """
+
+    def test_empty_quote_not_verified(self) -> None:
+        row = {"text": "Some chunk text exists.", "char_start": 0, "char_end": 23}
+        with _patch_get_conn(row):
+            result = check_citation("claim", "gd-1", 0, quoted_text="")
+        assert result.verified is False
+        assert result.similarity_score is None
+        # source_text still returned, consistent with every other path.
+        assert result.source_text == "Some chunk text exists."
+
+    def test_whitespace_only_quote_not_verified(self) -> None:
+        row = {"text": "Some chunk text exists.", "char_start": 0, "char_end": 23}
+        with _patch_get_conn(row):
+            result = check_citation("claim", "gd-1", 0, quoted_text="   \n  ")
+        assert result.verified is False
+
+    def test_none_quote_still_key_existence_true(self) -> None:
+        """Guard (Sign-off A): the empty-quote fix must NOT change the None
+        key-existence path — that is the critic's path and stays verified=True."""
+        row = {"text": "Some chunk text exists.", "char_start": 0, "char_end": 23}
+        with _patch_get_conn(row):
+            result = check_citation("claim", "gd-1", 0, quoted_text=None)
+        assert result.verified is True
+
+
+class TestCheckCitationBoilerplateSeam:
+    """The documented dirty-corpus failure mode (Day-7 plan §4): an honest quote
+    split by a mid-chunk boilerplate header. The longest contiguous match is ~half
+    the quote, so coverage < τ and an honest quote reads as verified=False with a
+    mid-band similarity_score — exactly the τ-calibration signal Day 7 measures.
+    """
+
+    def test_seam_split_quote_below_tau_with_score(self) -> None:
+        # The honest analyst quote (contiguous, as a human reads the source):
+        quote = "the manufacturer shall validate the software for its intended use"
+        # Stored chunk: the same words, but a boilerplate header is spliced into
+        # the MIDDLE (the PDF-extraction artifact), breaking the contiguous run.
+        chunk_text = (
+            "the manufacturer shall validate "
+            "Contains Nonbinding Recommendations "
+            "the software for its intended use"
+        )
+        row = {"text": chunk_text, "char_start": 0, "char_end": len(chunk_text)}
+        with _patch_get_conn(row):
+            result = check_citation("claim", "gd-1", 0, quoted_text=quote)
+        # Seam breaks the substring path; coverage falls below τ → verified=False,
+        # but a similarity_score IS returned for the τ-distribution.
+        assert result.verified is False
+        assert result.similarity_score is not None
+        assert 0.3 < result.similarity_score < 0.85
+
+
 class TestCheckCitationSubstringMatch:
     """Step 2: substring match returns correct doc-level span."""
 

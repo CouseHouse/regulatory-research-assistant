@@ -7,13 +7,13 @@ Day 4: replaces the Anthropic call block with the LangGraph orchestrator.
 from __future__ import annotations
 
 import contextlib
-import re
 import uuid
 from typing import Annotated, Any
 
 import structlog
 from fastapi import FastAPI, Header, HTTPException, status
 
+from rra.citations import parse_answer
 from rra.config import settings
 from rra.graph import run_graph
 from rra.schemas import Citation, QueryRequest, QueryResponse, RetrievedPassage
@@ -22,11 +22,6 @@ from rra.tracing import get_langfuse
 log = structlog.get_logger(__name__)
 
 app = FastAPI(title="Regulatory Research Assistant", version="0.1.0")
-
-# Matches any [...] bracket so we can parse the inner content ourselves.
-_BRACKET_RE = re.compile(r"\[([^\]]+)\]")
-# Matches a single `guidance_id:chunk_index` item (after stripping whitespace).
-_SINGLE_CITE_RE = re.compile(r"^([^\]:]+):(\d+)$")
 
 
 def _verify_api_key(x_api_key: str | None) -> None:
@@ -88,7 +83,12 @@ def query(
 
         draft: str = final_state.get("draft", "")
         passages: list[RetrievedPassage] = final_state.get("passages", [])
-        citations = _resolve_citations(draft, passages)
+        # parse_answer (shared with the eval) splits the analyst's draft into the
+        # user-facing prose (with <q>…</q> envelopes stripped) and the citation
+        # triples carrying each analyst-emitted supporting quote (ADR 0013).
+        clean_prose, triples = parse_answer(draft)
+        citations = _resolve_citations(triples, passages, session_id=session_id)
+        no_quote_count = sum(1 for c in citations if not c.quoted_text)
         warning = _build_warning(final_state)
 
         log.info(
@@ -98,18 +98,23 @@ def query(
             cap_hit=final_state.get("cap_hit"),
             revision_count=final_state.get("revision_count", 0),
             citation_count=len(citations),
+            no_quote_citations=no_quote_count,
             total_tokens=sum(final_state.get("token_usage", {}).values()),
         )
 
         if trace_span is not None:
             trace_span.update(
-                output={"answer": draft[:200], "citation_count": len(citations)}
+                output={
+                    "answer": clean_prose[:200],
+                    "citation_count": len(citations),
+                    "no_quote_citations": no_quote_count,
+                }
             )
         if lf is not None:
             lf.flush()
 
         return QueryResponse(
-            answer=draft,
+            answer=clean_prose,
             citations=citations,
             passages=passages,
             trace_id=final_state.get("trace_id") or trace_id,
@@ -117,36 +122,30 @@ def query(
         )
 
 
-def _parse_citation_pairs(answer: str) -> list[tuple[str, int]]:
-    """Extract (guidance_id, chunk_index) pairs from all [...] brackets.
-
-    Handles both single-citation brackets [guid:idx] and grouped citations
-    that the model occasionally emits as [guid:idx, guid:idx, ...].
-    """
-    pairs: list[tuple[str, int]] = []
-    for bracket in _BRACKET_RE.finditer(answer):
-        for item in re.split(r",\s*", bracket.group(1)):
-            m = _SINGLE_CITE_RE.match(item.strip())
-            if m:
-                pairs.append((m.group(1), int(m.group(2))))
-    return pairs
-
-
 def _resolve_citations(
-    answer: str, passages: list[RetrievedPassage]
+    triples: list[tuple[str, int, str | None]],
+    passages: list[RetrievedPassage],
+    session_id: str | None = None,
 ) -> list[Citation]:
-    """Parse inline citations from *answer* and resolve to full Citation objects.
+    """Resolve parsed (guidance_id, chunk_index, quoted_text) triples to Citations.
 
-    char_start, char_end, and quoted_text are resolved from the passage
-    that was shown to the model — not computed or emitted by the model
-    (ADR 0006). quoted_text is the first 150 chars of the chunk, which
-    is a verified substring by construction.
+    char_start/char_end are resolved server-side from the passage shown to the
+    model (ADR 0006); the model never computes them. quoted_text is the analyst's
+    OWN verbatim supporting span (ADR 0013) — it is NOT a slice of the chunk and
+    NOT guaranteed to be a substring of it. A missing/empty analyst quote resolves
+    to quoted_text="" and is logged as citation.no_quote; it is NEVER back-filled
+    with a chunk slice — doing so would reinstate the tautology this change exists
+    to kill (Day-7 plan §7-#1). Quote faithfulness is measured out-of-band by
+    check_citation (the eval scorer), not asserted here.
+
+    Dedup is by (guidance_id, chunk_index), first occurrence wins for the response
+    shape (so its quote is the one surfaced when a chunk is cited more than once).
     """
     passage_map = {(p.guidance_id, p.chunk_index): p for p in passages}
     seen: set[tuple[str, int]] = set()
     citations: list[Citation] = []
 
-    for guidance_id, chunk_index in _parse_citation_pairs(answer):
+    for guidance_id, chunk_index, quote in triples:
         key = (guidance_id, chunk_index)
         if key in seen:
             continue
@@ -158,8 +157,19 @@ def _resolve_citations(
                 "citation.unresolved",
                 guidance_id=guidance_id,
                 chunk_index=chunk_index,
+                session_id=session_id,
             )
             continue
+
+        if not quote:
+            # Honest "no quote" — log and surface as quoted_text="". NEVER fall
+            # back to a chunk slice (Day-7 plan §7-#1 / drop-point D-E).
+            log.info(
+                "citation.no_quote",
+                guidance_id=guidance_id,
+                chunk_index=chunk_index,
+                session_id=session_id,
+            )
 
         citations.append(
             Citation(
@@ -167,7 +177,7 @@ def _resolve_citations(
                 chunk_index=chunk_index,
                 char_start=passage.char_start,
                 char_end=passage.char_end,
-                quoted_text=passage.text[:150],
+                quoted_text=quote or "",  # NO slice fallback — ever (ADR 0013).
             )
         )
 

@@ -4,6 +4,14 @@
 **Date:** 2026-05-31
 **Owner:** Kyle Couse
 
+> **⚠️ Amended by [ADR 0013](0013-quote-faithfulness-activation.md) (2026-06-02).**
+> The Decision below states that `quoted_text` "is verified as a substring of the
+> stored chunk text." **That clause is superseded:** `quoted_text` is now the
+> analyst's verbatim supporting span, no longer guaranteed to be a substring, and
+> faithfulness is measured by `check_citation` (ADR 0010) as a `similarity_score`.
+> The `guidance_id:chunk_index` addressing decision in this ADR remains Active and
+> unchanged — only the `quoted_text` substring clause is affected.
+
 ## Context
 
 Answers cite sources inline as `[guidance_id:span]` (spec §5), but "span" is

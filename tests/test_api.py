@@ -75,7 +75,8 @@ def _make_graph_state(
 def mocked_stack(sample_passage: RetrievedPassage) -> Any:
     """Patch run_graph so no real I/O occurs."""
     answer = (
-        "SaMD requires a risk-based approach to validation. [72674:3] "
+        "SaMD requires a risk-based approach to validation. "
+        "[72674:3]<q>a risk-based approach to software validation</q> "
         "The intended use drives the safety classification."
     )
     mock_state = _make_graph_state(answer, [sample_passage])
@@ -161,24 +162,91 @@ def test_inline_citation_resolved_to_full_citation(
     assert cit["chunk_index"] == 3
     assert cit["char_start"] == 1024
     assert cit["char_end"] == 1280
-    assert len(cit["quoted_text"]) > 0
+    # ADR 0013: quoted_text is the analyst's emitted <q> span, not a chunk slice.
+    assert cit["quoted_text"] == "a risk-based approach to software validation"
 
 
-def test_quoted_text_is_substring_of_chunk(
-    client: TestClient, mocked_stack: Any, sample_passage: RetrievedPassage
-) -> None:
-    """ADR 0006: quoted_text must be a verified substring of the stored chunk text."""
-    resp = client.post(
-        "/query",
-        json={"query": "SaMD validation"},
-        headers={"X-API-Key": VALID_KEY},
+def test_quoted_text_is_analyst_span_not_chunk_slice(client: TestClient) -> None:
+    """ADR 0013 (supersedes ADR 0006's substring clause): quoted_text is the
+    analyst's OWN emitted span — not a slice of the chunk, and NOT required to be
+    a literal substring of it. The resolver surfaces the analyst's words verbatim;
+    faithfulness is verified out-of-band by check_citation (see test_mcp_tools.py),
+    not asserted by the API resolver.
+
+    This is the updated form of the old test_quoted_text_is_substring_of_chunk:
+    the substring invariant is intentionally inverted, not removed (Sign-off B).
+    """
+    # Stored chunk carries a PDF-embedded newline (the documented dirty-corpus
+    # artifact). The analyst quotes the whitespace-normalized span, which is
+    # therefore NOT a raw substring of the stored text — yet it is exactly what
+    # we surface; the matching engine (not the resolver) tolerates the whitespace.
+    passage = RetrievedPassage(
+        guidance_id="72674",
+        guidance_title="SaMD",
+        chunk_index=3,
+        text="SaMD requires a risk-based\napproach to software validation.",
+        char_start=0,
+        char_end=60,
+        score=0.9,
     )
+    quote = "a risk-based approach to software validation"
+    assert quote not in passage.text  # not a literal substring — the newline differs
+
+    answer = f"SaMD validation matters. [72674:3]<q>{quote}</q> Done."
+    mock_state = _make_graph_state(answer, [passage])
+    with patch("rra.api.run_graph", return_value=mock_state):
+        resp = client.post(
+            "/query",
+            json={"query": "SaMD validation"},
+            headers={"X-API-Key": VALID_KEY},
+        )
+
     data = resp.json()
-    for cit in data["citations"]:
-        if cit["guidance_id"] == sample_passage.guidance_id and cit["chunk_index"] == sample_passage.chunk_index:
-            assert cit["quoted_text"] in sample_passage.text, (
-                "quoted_text is not a substring of the stored chunk text — ADR 0006 violation"
-            )
+    cit = next(c for c in data["citations"] if c["guidance_id"] == "72674")
+    assert cit["quoted_text"] == quote  # analyst's span, surfaced verbatim
+    assert cit["quoted_text"] != passage.text[:150]  # NOT the old [:150] slice
+
+
+def test_citation_without_quote_resolves_to_empty_quoted_text(
+    client: TestClient,
+) -> None:
+    """ADR 0013: a citation with no <q> resolves to quoted_text="" — NEVER a chunk
+    slice (no slice fallback; plan §7-#1 / drop-point D-E). The address still
+    resolves; only the quote is absent.
+    """
+    passage = RetrievedPassage(
+        guidance_id="doc",
+        guidance_title="D",
+        chunk_index=0,
+        text="Some regulatory requirement text about device labeling.",
+        char_start=0,
+        char_end=55,
+        score=0.9,
+    )
+    answer = "A claim with no supporting quote. [doc:0]"
+    mock_state = _make_graph_state(answer, [passage])
+    with patch("rra.api.run_graph", return_value=mock_state):
+        resp = client.post(
+            "/query", json={"query": "x"}, headers={"X-API-Key": VALID_KEY}
+        )
+
+    data = resp.json()
+    cit = next(c for c in data["citations"] if c["guidance_id"] == "doc")
+    assert cit["quoted_text"] == ""  # honest no-quote signal
+    assert cit["quoted_text"] != passage.text[:150]  # the slice would be non-empty
+
+
+def test_q_markers_stripped_from_answer(
+    client: TestClient, mocked_stack: Any
+) -> None:
+    """The <q>…</q> envelope never leaks into the user-facing answer; the inline
+    [guid:idx] marker is kept (plan §6-#4)."""
+    resp = client.post(
+        "/query", json={"query": "x"}, headers={"X-API-Key": VALID_KEY}
+    )
+    answer = resp.json()["answer"]
+    assert "<q>" not in answer and "</q>" not in answer
+    assert "[72674:3]" in answer
 
 
 def test_unresolvable_citation_skipped(client: TestClient) -> None:

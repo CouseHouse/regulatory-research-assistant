@@ -64,12 +64,21 @@ def run_agent(case: GoldenCase) -> AgentResponse:
     """Call the real LangGraph graph and return an AgentResponse.
 
     Reads GraphState keys: draft (answer text), passages (retrieved docs),
-    trace_id (Langfuse trace). Citations are parsed from the raw draft text
-    via _parse_citation_pairs — NOT from any post-resolution key in GraphState
-    (there is none). This is the pre-resolution tap: catches hallucinated keys.
+    trace_id (Langfuse trace). Citations AND their analyst-emitted supporting
+    quotes are parsed from the raw draft via the SHARED parse_answer (ADR 0013)
+    — the same parser the API resolver uses, so the measurement and the product
+    surface cannot drift (plan §7-#5). This is the pre-resolution tap: it reads
+    the analyst's own output, catching hallucinated keys.
+
+    Each citation carries quoted_text — the analyst's verbatim span, or "" when
+    the analyst emitted no quote. The parser's None is mapped to "" here so a
+    golden no-quote ("") is distinguishable from the CI fixture's None (which
+    means key-existence mode); the scorer treats the two differently. answer_text
+    is the user-facing prose (clean_prose, <q> envelopes stripped) so the LLM
+    judges grade exactly what the API returns, not raw markup.
     """
     from rra.graph import run_graph
-    from rra.api import _parse_citation_pairs
+    from rra.citations import parse_answer
 
     result = run_graph({
         "query": case.query,
@@ -78,12 +87,15 @@ def run_agent(case: GoldenCase) -> AgentResponse:
     })
 
     draft: str = result.get("draft", "")
-    raw_pairs = _parse_citation_pairs(draft)
-    citations = [{"guidance_id": g, "chunk_index": i} for g, i in raw_pairs]
+    clean_prose, triples = parse_answer(draft)
+    citations = [
+        {"guidance_id": g, "chunk_index": i, "quoted_text": q or ""}
+        for g, i, q in triples
+    ]
     passages = [p.model_dump() for p in result.get("passages", [])]
 
     return AgentResponse(
-        answer_text=draft,
+        answer_text=clean_prose,
         citations=citations,
         retrieved_passages=passages,
         raw_trace_id=result.get("trace_id"),
@@ -95,8 +107,15 @@ def _make_ci_response(case: GoldenCase) -> AgentResponse:
 
     Used for --fixture ci: the case's ci_citations field carries pre-built
     (guidance_id, chunk_index) pairs. No API calls, no embeddings.
+
+    quoted_text=None on every citation keeps the CI gate in KEY-EXISTENCE mode
+    (ADR 0012 D2): deterministic, fixture-keyed, zero-API. The fixture has no
+    quotes, so faithfulness is never (and must never be) computed here.
     """
-    citations = [{"guidance_id": g, "chunk_index": i} for g, i in case.ci_citations]
+    citations = [
+        {"guidance_id": g, "chunk_index": i, "quoted_text": None}
+        for g, i in case.ci_citations
+    ]
     return AgentResponse(
         answer_text="[CI fixture — no graph invocation]",
         citations=citations,
@@ -105,23 +124,31 @@ def _make_ci_response(case: GoldenCase) -> AgentResponse:
     )
 
 
-# ─── Corpus resolver for the deterministic scorer ───────────────────────────
+# ─── Corpus verifier for the deterministic scorer ───────────────────────────
 
-def make_resolver():
-    """Returns resolves(guidance_id, chunk_index) -> bool.
+def make_verifier():
+    """Returns verify(guidance_id, chunk_index, quoted_text) -> (verified, similarity_score).
 
-    Calls check_citation in key-existence mode (quoted_text=None) — verifies
-    that the (guidance_id, chunk_index) pair resolves to a real corpus.chunks
-    row. True iff the row exists. DB failures propagate as ToolError (not
-    caught here; let them surface so CI fails loudly on infra problems).
+    Wraps check_citation, selecting its mode by quoted_text (ADR 0013):
+      - quoted_text=None  → KEY-EXISTENCE (CI gate; ADR 0012 D2): verified iff the
+        (guidance_id, chunk_index) row exists. similarity_score is None.
+      - quoted_text=<str> → ADR-0010 three-step QUOTE MATCHING (faithfulness):
+        returns (verified, similarity_score) — the score feeds τ-calibration.
+
+    DB failures propagate as ToolError (not caught here; let them surface so CI
+    fails loudly on infra problems).
     """
     from rra.mcp_server.tools import check_citation
 
-    def resolves(guidance_id: str, chunk_index: int) -> bool:
-        result = check_citation("eval", guidance_id, chunk_index, quoted_text=None)
-        return result.verified
+    def verify(
+        guidance_id: str, chunk_index: int, quoted_text: str | None
+    ) -> tuple[bool, float | None]:
+        result = check_citation(
+            "eval", guidance_id, chunk_index, quoted_text=quoted_text
+        )
+        return result.verified, result.similarity_score
 
-    return resolves
+    return verify
 
 
 # ─── Runner ─────────────────────────────────────────────────────────────────
@@ -182,6 +209,48 @@ def run_eval(
 
 # ─── Reporting ──────────────────────────────────────────────────────────────
 
+def _faithfulness_summary(runs: list[CaseRun]) -> dict:
+    """Aggregate the quote-faithfulness signal from citation_validity details.
+
+    Surfaces the no-quote guardrail count (ADR 0012 D1 analog) and the
+    similarity_score distribution that τ-calibration needs (ADR 0013; plan §4-§5).
+    A faithfulness record is {"similarity_score": float|None, "verified": bool}:
+      - sim is None, verified      → Step-2 substring hit
+      - sim is None, not verified  → key not found (hallucinated address)
+      - sim is a float             → Step-3 coverage-ratio score (verified iff ≥ τ)
+    """
+    no_quote = 0
+    substring_verified = 0
+    key_not_found = 0
+    coverage_sims: list[float] = []
+    coverage_verified = 0
+    for r in runs:
+        if r.response is None:
+            continue
+        for s in r.scores:
+            if s.scorer != "citation_validity":
+                continue
+            no_quote += s.detail.get("no_quote", 0)
+            for f in s.detail.get("faithfulness", []):
+                sim = f["similarity_score"]
+                if sim is None:
+                    if f["verified"]:
+                        substring_verified += 1
+                    else:
+                        key_not_found += 1
+                else:
+                    coverage_sims.append(sim)
+                    if f["verified"]:
+                        coverage_verified += 1
+    return {
+        "no_quote": no_quote,
+        "substring_verified": substring_verified,
+        "key_not_found": key_not_found,
+        "coverage_sims": coverage_sims,
+        "coverage_verified": coverage_verified,
+    }
+
+
 def write_report(runs: list[CaseRun], scorers: list[Scorer], tag: str) -> Path:
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -193,6 +262,7 @@ def write_report(runs: list[CaseRun], scorers: list[Scorer], tag: str) -> Path:
     zero_citation_count = sum(
         1 for r in scored if r.response is not None and not r.response.citations
     )
+    faith = _faithfulness_summary(runs)
 
     lines = [
         f"# Eval run — {ts}",
@@ -205,6 +275,9 @@ def write_report(runs: list[CaseRun], scorers: list[Scorer], tag: str) -> Path:
         f"**Errors:** {error_count}",
         f"**Zero-citation answers:** {zero_citation_count} of {len(runs)} "
         f"(excluded from citation_validity mean per ADR 0012 D1).",
+        f"**Citations with NO analyst quote:** {faith['no_quote']} "
+        f"(excluded from the citation_validity faithfulness mean — ADR 0012 D1 "
+        f"analog: a shrinking denominator must not inflate the mean).",
         "",
         "## Aggregate scores",
         "",
@@ -231,6 +304,59 @@ def write_report(runs: list[CaseRun], scorers: list[Scorer], tag: str) -> Path:
             f"{'**HARD**' if scorer.gate else 'warn'} | {scorer.threshold} |"
         )
 
+    # ── Quote-faithfulness distribution (ADR 0013 — τ-calibration data) ──────
+    from rra.config import settings
+
+    tau = settings.citation_match_threshold
+    sims = faith["coverage_sims"]
+    total_assessed_quotes = (
+        faith["substring_verified"] + faith["key_not_found"] + len(sims)
+    )
+
+    lines.extend(["", "## Quote-faithfulness (ADR 0013 — τ-calibration data)", ""])
+    if total_assessed_quotes == 0 and faith["no_quote"] == 0:
+        lines.append(
+            "_No quote-faithfulness signal in this run (key-existence fixture — "
+            "ADR 0012 D2). Faithfulness is produced only on golden / out-of-band runs._"
+        )
+    else:
+        verified_quotes = faith["substring_verified"] + faith["coverage_verified"]
+        pct = (
+            f"{verified_quotes / total_assessed_quotes:.1%}"
+            if total_assessed_quotes
+            else "N/A"
+        )
+        lines.extend([
+            f"**τ (citation_match_threshold):** {tau} — sims ≥ τ count as verified.",
+            f"**Quotes assessed:** {total_assessed_quotes}  ·  "
+            f"**Verified faithful:** {verified_quotes} ({pct})  ·  "
+            f"**No analyst quote (excluded):** {faith['no_quote']}",
+            "",
+            "Match-path breakdown:",
+            f"- Substring hit (Step 2, exact after whitespace-normalize): "
+            f"{faith['substring_verified']}",
+            f"- Coverage-ratio scored (Step 3): {len(sims)} "
+            f"(verified ≥ τ: {faith['coverage_verified']})",
+            f"- Key not found (hallucinated address): {faith['key_not_found']}",
+            "",
+            "similarity_score distribution — Step-3 coverage path:",
+            "| Band | Count |",
+            "|---|---|",
+            f"| [0.00, 0.50) | {sum(1 for x in sims if x < 0.50)} |",
+            f"| [0.50, 0.70) | {sum(1 for x in sims if 0.50 <= x < 0.70)} |",
+            f"| [0.70, 0.85) | {sum(1 for x in sims if 0.70 <= x < 0.85)} |",
+            f"| [0.85, 1.00] | {sum(1 for x in sims if x >= 0.85)} |",
+            "",
+            "_The 0.50–0.85 bands are the boilerplate-seam suspects flagged in the "
+            "Day-7 plan §4 (honest quotes split by a mid-chunk header). Do NOT lower "
+            "τ to absorb them — clean the corpus (Priority 3) first, then calibrate._",
+        ])
+        if sims:
+            lines.append(
+                f"_Raw coverage sims (sorted): "
+                f"{', '.join(f'{x:.3f}' for x in sorted(sims))}_"
+            )
+
     lines.extend(["", "## Per-case detail", ""])
     for r in runs:
         lines.append(f"### `{r.case.id}` ({r.case.difficulty})")
@@ -241,7 +367,12 @@ def write_report(runs: list[CaseRun], scorers: list[Scorer], tag: str) -> Path:
         for s in r.scores:
             mark = "✅" if s.passed else ("⬜" if s.score is None else "❌")
             score_str = "N/A" if s.score is None else f"{s.score:.3f}"
-            lines.append(f"- {mark} **{s.scorer}**: {score_str}")
+            extra = ""
+            if s.scorer == "citation_validity":
+                assessed = s.detail.get("assessed")
+                if assessed is not None:
+                    extra = f"  _(assessed {assessed}, no-quote {s.detail.get('no_quote', 0)})_"
+            lines.append(f"- {mark} **{s.scorer}**: {score_str}{extra}")
         lines.append("")
 
     path.write_text("\n".join(lines))
@@ -296,8 +427,8 @@ def main() -> int:
     from rra.config import settings
     from .judge import judge_call
 
-    resolver = make_resolver()
-    scorers: list[Scorer] = [CitationValidityScorer(resolver)]
+    verifier = make_verifier()
+    scorers: list[Scorer] = [CitationValidityScorer(verifier)]
 
     if not args.no_llm_judges:
         scorers.append(KeyFactCoverageScorer(judge_call, model=settings.key_fact_judge_model))

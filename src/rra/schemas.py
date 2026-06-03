@@ -17,11 +17,15 @@ class QueryRequest(BaseModel):
 
 
 class Citation(BaseModel):
-    """Resolved citation per ADR 0006.
+    """Resolved citation per ADR 0006 (addressing) and ADR 0013 (quoted_text).
 
-    The model emits [guidance_id:chunk_index] inline in the answer text.
-    char_start, char_end, and quoted_text are resolved server-side from the
-    corpus.chunks row — the model never computes or emits them directly.
+    The model emits [guidance_id:chunk_index]<q>supporting quote</q> inline in
+    the answer. char_start/char_end are resolved server-side from the
+    corpus.chunks row (ADR 0006) — the model never computes them. quoted_text is
+    the analyst's OWN verbatim supporting span (ADR 0013): it is NOT guaranteed to
+    be a substring of the chunk (superseding ADR 0006's substring clause), and is
+    "" when the analyst supplied no quote. Quote faithfulness is measured
+    separately by check_citation (ADR 0010), not asserted by this field.
     """
 
     guidance_id: str
@@ -30,7 +34,11 @@ class Citation(BaseModel):
     char_end: int
     quoted_text: str = Field(
         ...,
-        description="Verified to be a substring of the stored chunk text.",
+        description=(
+            "The analyst's verbatim supporting span for this citation (ADR 0013). "
+            'NOT guaranteed to be a substring of the chunk; "" when no quote was '
+            "supplied. Faithfulness is verified out-of-band by check_citation."
+        ),
     )
 
 

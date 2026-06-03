@@ -1,5 +1,46 @@
 # Dev log
 
+## 2026-06-02 — Day 7: Priority 1 (key_fact_coverage backstop) + pre-rechunk baseline
+
+### Results — run `day7-prerechunk-baseline` (tag), 2026-06-02T21:24:14Z
+
+Full golden set, all 30 cases, 0 errors, 0 zero-citation answers.
+Report: `evals/results/20260602T212414Z-day7-prerechunk-baseline.md`.
+
+**What this run is:** the recovered `key_fact_coverage` baseline on the **current (pre-rechunk) corpus**, captured right after the Priority 1 JSON-prefill fix made the scorer functional for the first time. This is the clean *before* number for the eventual Priority 4 comparison — `key_fact_coverage`'s ruler (Haiku judge vs. `expected_facts`) does **not** depend on chunk boundaries, so it stays comparable across the Priority 3 re-chunk, unlike `citation_validity` and `position_quality` whose substrate shifts when `chunk_index` values are reassigned (ADR 0012 P2).
+
+| Scorer | Mean | Pass rate | Gate | Threshold |
+|---|---|---|---|---|
+| `citation_validity` | **1.000** | 100.0% | HARD | 0.95 |
+| `key_fact_coverage` | **0.908** | 66.7% (20/30) | warn | 0.80 |
+| `position_quality` | **0.973** | 100.0% | warn | 4.0 (raw) |
+
+30 scored, 0 errors, 0 zero-citation. `citation_validity` unchanged (Priority 1 didn't touch it). `position_quality` 0.973 vs. Day 6's 0.947 is fresh-generation variance, not a substantive change.
+
+### Priority 1 fix (recap)
+
+`key_fact_coverage` returned N/A on all 30 at Day 6 — Haiku wrapped its JSON reply in prose and strict `json.loads` rejected it (both retries failed → `score=None`). Fixed via **Option 1: assistant-turn prefill of `{`** in `judge.py`, forcing raw JSON at the source. Strict-parse + one-retry + `score=None`-on-double-failure all preserved. `PositionQualityScorer` left untouched (it already parsed cleanly). 5/5 unit tests pass, including one new prefill test.
+
+The backstop is now functional **and discriminating** — 10 of 30 cases land below the 0.80 threshold (hence 66.7% pass). At Day 6 this scorer was blind; the under-citing failure mode it guards (ADR 0012 D1) is now actually covered.
+
+### Calibration reading (so the headline isn't misread)
+
+- **Well-calibrated, not lenient.** 66.7% pass = a third of cases fail on partial fact coverage; a rubber-stamp judge would read 100%.
+- **The 0.908 mean is inflated by the refusal band.** 4 of the 5 hard cases score 1.000 (hard-003 is the exception at 0.750 — see below). That is *correct*, not lenient: the hard cases are refusal cases whose `expected_facts` **are** the refusal facts ("no quantitative threshold exists" / "no genAI guidance in corpus" / "RWE supports, not replaces"). A perfect score there means the analyst correctly refused — direct evidence the refuse-to-hallucinate design works. The refusal band therefore sits at/near ceiling and can't improve, so **track easy+medium separately from hard** or real movement gets masked by the headline.
+- **Genuine coverage gaps the Day-6 bug was hiding** (real analyst weaknesses, not judge artifacts):
+  - **easy-005** (software docs in a premarket submission) — persistently weak: 0.500 here (0.000 on the earlier easy-subset run).
+  - **0.750 band on multi-part synthesis questions** — easy-002/003/006/007, medium-004/009/011/014, hard-003 — one of four `expected_facts` missed in each.
+  - **hard-003's 0.750 is expected:** the deliberate partial-coverage case, which needs *both* the real obligation *and* the gap flag.
+
+### Day-7 status
+
+- **Priority 1: done** — `key_fact_coverage` backstop functional; this run is the proof.
+- **Priority 2 (quote-faithfulness):** plan approved, implementation pending.
+- **Critic** remains in key-existence mode; quote-faithfulness activation + critic upgrade are gated on τ-calibration (expected Day 8).
+- **Nothing re-chunked yet** — this baseline stays valid as the pre-rechunk reference for the Priority 4 comparison.
+
+---
+
 ## 2026-06-02 — Day 6: Eval harness baseline
 
 ### Results — run `day06-baseline` (tag), 2026-06-02T17:50:07Z

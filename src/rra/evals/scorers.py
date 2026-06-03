@@ -43,7 +43,11 @@ class AgentResponse:
     """What the agent under test returns. Mirror the FastAPI response shape."""
 
     answer_text: str
-    citations: list[dict]        # [{"guidance_id": str, "chunk_index": int}] — raw parsed pairs
+    # [{"guidance_id": str, "chunk_index": int, "quoted_text": str | None}]
+    # quoted_text (ADR 0013): the analyst's span; "" = golden no-quote;
+    # None = key-existence mode (CI fixture). A value-shape change only — still
+    # list[dict] — so callers building citations=[] are unaffected.
+    citations: list[dict]
     retrieved_passages: list[dict]  # [{"guidance_id": str, "text": str, ...}]
     raw_trace_id: str | None = None
 
@@ -59,22 +63,35 @@ class Scorer(Protocol):
 # ─── Scorer 1: Citation validity (deterministic, HARD GATE) ─────────────────
 
 class CitationValidityScorer:
-    """For every cited (guidance_id, chunk_index) pair, verify the key exists in
-    corpus.chunks via check_citation key-existence mode (ADR 0010 Day 6 baseline).
-    Returns the fraction of valid citations.
+    """Verify each cited (guidance_id, chunk_index) via check_citation, in one of
+    two modes chosen PER CITATION by its quoted_text (ADR 0013):
 
-    Zero-citation answers return score=None (N/A) — excluded from mean, never 0.0
-    (ADR 0012 D1). The runner emits a separate zero-citation count in every report.
+      - quoted_text is None  → KEY-EXISTENCE (CI fixture; ADR 0012 D2 / Day-6
+        baseline): valid iff the corpus row exists. This is the unchanged HARD
+        gate.
+      - quoted_text is a non-empty string → QUOTE FAITHFULNESS (golden): valid iff
+        the analyst's quote faithfully appears in the chunk (ADR 0010 three-step
+        engine). similarity_score is captured for τ-calibration.
+      - quoted_text is "" → NO QUOTE (golden): faithfulness cannot be assessed.
+        Counted in `no_quote` and EXCLUDED from the mean — never scored faithful.
+        This is the ADR 0012 D1 analog: a shrinking denominator must not inflate
+        the mean, so write_report surfaces the no-quote count (plan §7-#3/#8).
+
+    Returns the fraction of ASSESSED citations that are valid. score=None (N/A) —
+    never 0.0 — when there are zero citations or none are assessable (all
+    no-quote); excluded from the mean by the runner (ADR 0012 D1). Faithfulness is
+    measured POST-GRAPH and gates no revise loop (ADR 0013 / Sign-off A); the CI
+    key-existence gate is unchanged.
     """
 
     name = "citation_validity"
     threshold = 0.95
     gate = True
 
-    def __init__(self, resolves):
-        # resolves(guidance_id, chunk_index) -> bool
-        # Backed by check_citation key-existence mode; True iff corpus row exists.
-        self._resolves = resolves
+    def __init__(self, verify):
+        # verify(guidance_id, chunk_index, quoted_text) -> (verified: bool, similarity_score: float | None)
+        # Backed by check_citation: None → key-existence, str → ADR-0010 matching.
+        self._verify = verify
 
     def score(self, case: GoldenCase, response: AgentResponse) -> ScoreResult:
         if not response.citations:
@@ -88,20 +105,61 @@ class CitationValidityScorer:
             )
 
         valid = 0
-        invalid_details = []
+        assessed = 0                  # denominator: citations whose validity we could assess
+        no_quote = 0                  # golden no-quote citations (excluded from mean)
+        key_existence = False         # True if any citation used key-existence mode (CI)
+        faithfulness: list[dict] = [] # per faithfulness-mode citation: {similarity_score, verified}
+        invalid: list[dict] = []
+
         for c in response.citations:
-            if self._resolves(c["guidance_id"], c["chunk_index"]):
+            quoted_text = c["quoted_text"]
+
+            if quoted_text is None:
+                # Key-existence mode (CI fixture) — the unchanged Day-6 gate.
+                key_existence = True
+                verified, _ = self._verify(c["guidance_id"], c["chunk_index"], None)
+                assessed += 1
+                if verified:
+                    valid += 1
+                else:
+                    invalid.append({"citation": c, "reason": "key not found in corpus"})
+                continue
+
+            if not quoted_text.strip():
+                # Golden no-quote — faithfulness unassessable. Count it and EXCLUDE
+                # from the mean; never score it faithful (ADR 0012 D1 analog).
+                no_quote += 1
+                continue
+
+            # Golden faithfulness — ADR-0010 three-step quote matching.
+            verified, sim = self._verify(c["guidance_id"], c["chunk_index"], quoted_text)
+            assessed += 1
+            faithfulness.append({"similarity_score": sim, "verified": verified})
+            if verified:
                 valid += 1
             else:
-                invalid_details.append({"citation": c, "reason": "key not found in corpus"})
+                invalid.append(
+                    {"citation": c, "reason": "quote not faithful", "similarity_score": sim}
+                )
 
-        score = valid / len(response.citations)
-        return ScoreResult(
-            self.name,
-            score,
-            score >= self.threshold,
-            {"valid": valid, "total": len(response.citations), "invalid": invalid_details},
-        )
+        detail = {
+            "valid": valid,
+            "assessed": assessed,
+            "no_quote": no_quote,
+            "key_existence": key_existence,
+            "faithfulness": faithfulness,
+            "invalid": invalid,
+        }
+
+        if assessed == 0:
+            # Every citation was a no-quote — N/A, like a zero-citation answer
+            # (ADR 0012 D1). The no_quote count (surfaced by write_report) is what
+            # keeps this from silently hiding analyst quote-degradation.
+            detail["reason"] = "no assessable citations (all no-quote) — N/A, excluded from mean"
+            return ScoreResult(self.name, None, False, detail)
+
+        score = valid / assessed
+        return ScoreResult(self.name, score, score >= self.threshold, detail)
 
 
 # ─── Scorer 2: Key fact coverage (LLM-as-judge, Haiku) ──────────────────────
@@ -143,9 +201,15 @@ class KeyFactCoverageScorer:
             n=len(facts),
         )
 
+        # Prefill the assistant turn with "{" so Haiku is forced to begin its
+        # reply with raw JSON instead of prose ("Here is the JSON: ..."), the
+        # Day 6 bug that made strict json.loads reject every reply → N/A on all
+        # 30 cases. judge_call prepends the "{" back, so `raw` is a complete
+        # JSON string. Strictness is unchanged: one retry, then score=None on a
+        # second failure (we never silently score 0).
         parsed = None
         for attempt in range(2):
-            raw = self._judge(self._model, prompt)
+            raw = self._judge(self._model, prompt, prefill="{")
             try:
                 parsed = json.loads(raw)
                 break
