@@ -556,6 +556,47 @@ class TestMatchQuoteSpanRecovery:
         assert span is None
 
 
+class TestCurlyQuoteNormalization:
+    """Curly apostrophes and quotation marks in corpus text match analyst straight-quote output.
+
+    pypdf extracts FDA guidance text with typographic quotes (U+2018/19/1C/1D).
+    Analyst models emit straight ASCII quotes. _normalize folds both sides so
+    the mismatch never causes a false verified=False.
+    """
+
+    def test_curly_apostrophe_in_chunk_matches_straight_in_quote(self) -> None:
+        """Chunk with U+2019 RIGHT SINGLE QUOTATION MARK matches straight-apostrophe quote."""
+        chunk = "the device’s intended use must be supported"  # curly apostrophe
+        quote = "the device's intended use must be supported"       # straight apostrophe
+        v, sim, span = match_quote(quote, chunk, 0)
+        assert v is True, "curly apostrophe in chunk should match straight apostrophe in quote"
+        assert sim is None  # substring hit (Step 2) — no LCS needed
+
+    def test_straight_apostrophe_in_chunk_matches_curly_in_quote(self) -> None:
+        """Reverse direction: straight chunk, curly quote — both fold to the same form."""
+        chunk = "the device's intended use must be supported"       # straight apostrophe
+        quote = "the device’s intended use must be supported"  # curly apostrophe
+        v, sim, span = match_quote(quote, chunk, 0)
+        assert v is True, "curly apostrophe in quote should match straight apostrophe in chunk"
+
+    def test_curly_double_quotes_in_chunk_match_straight_in_quote(self) -> None:
+        """Left/right double-quote chars in chunk match straight double-quote in quote."""
+        chunk = '“Software as a Medical Device” (SaMD) guidance'
+        quote = '"Software as a Medical Device" (SaMD) guidance'
+        v, sim, span = match_quote(quote, chunk, 0)
+        assert v is True
+
+    def test_non_quote_unicode_preserved(self) -> None:
+        """Normalization must NOT fold § or en/em dash — those are regulatory content."""
+        chunk = "under § 820.30 of 21 CFR"   # § char
+        quote = "under § 820.30 of 21 CFR"   # identical
+        v, sim, span = match_quote(quote, chunk, 0)
+        assert v is True
+        # Verify that § is unchanged in the normalized form
+        from rra.mcp_server.tools import _normalize
+        assert "§" in _normalize(chunk), "§ must survive _normalize (regulatory content)"
+
+
 # ─── list_recent_guidances ────────────────────────────────────────────────────
 
 

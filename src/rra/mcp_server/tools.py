@@ -188,8 +188,59 @@ class CitationCheckResult(BaseModel):
     similarity_score: float | None = None
 
 
+# Maps typographic quote/apostrophe characters to ASCII equivalents.
+# Narrow: only the six quote/apostrophe variants. Preserves §, en-dash (–),
+# em-dash (—), ×, and all other meaningful regulatory-document characters.
+_CURLY_MAP = str.maketrans({
+    0x2018: "'",  # LEFT SINGLE QUOTATION MARK  → '
+    0x2019: "'",  # RIGHT SINGLE QUOTATION MARK → '
+    0x201C: '"',  # LEFT DOUBLE QUOTATION MARK  → "
+    0x201D: '"',  # RIGHT DOUBLE QUOTATION MARK → "
+    0x2032: "'",  # PRIME                       → '
+    0x2033: '"',  # DOUBLE PRIME                → "
+})
+
+# Strips pypdf-embedded draft-guidance line numbers applied before \s+ collapse.
+# In FDA draft guidances, pypdf injects sequential 2–4 digit line numbers between
+# sentence fragments (e.g. "medical 105 \ndevices" → "medical\ndevices").
+#
+# Lookbehind logic:
+#   (?<!CFR) / (?<!USC) / (?<!art): guard "21 CFR 820\n", "10 USC 7902\n",
+#     "Part 820\n" ("art" = last 3 chars of "Part").
+#   (?<=[\w,;:\.\)]): require a word/punct char immediately before the spaces
+#     so a bare number at start of line (handled by _LINENUM_LINE_RE) is
+#     caught by the second pattern instead.
+#
+# Preserved examples:  "21 CFR 820.30" (dot + digits), "510(k)" (paren),
+#   "§ 820.30" (§ not in lookbehind set), "TLS 1.3" (single digit),
+#   "90 days" (not before \n).
+# Stripped examples:   "medical 105 \ndevices", "controls. 831\nthat".
+_LINENUM_INLINE_RE = re.compile(
+    r"(?<!CFR)(?<!USC)(?<!art)(?<=[\w,;:\.\)])\s+\d{2,4}\s*\n"
+)
+# Isolated lines that contain only a 2–4 digit number (e.g. blank-line runs
+# between sections in numbered guidance PDFs). No lookbehind needed here
+# because the line is standalone.
+_LINENUM_LINE_RE = re.compile(r"(?m)^\s*\d{2,4}\s*\n")
+
+
 def _normalize(s: str) -> str:
-    """Collapse all whitespace runs to a single space and strip."""
+    """Whitespace-normalize; fold typographic quotes; strip PDF line numbers.
+
+    Applied to BOTH quote and chunk before any substring or LCS comparison.
+    Three transformations, applied in order before the final \s+ collapse:
+      1. Curly quote/apostrophe → ASCII (U+2018/19/1C/1D/32/33 → '/"): corpus
+         chunks carry typographic quotes from the PDF; analyst output uses ASCII.
+      2. Inline PDF line numbers stripped: bare 2–4 digit integers that pypdf
+         embeds between sentence fragments, always before \n (see _LINENUM_INLINE_RE
+         guards). Does NOT touch "21 CFR 820", "§ 820.30", "510(k)", etc.
+      3. Isolated number-only lines stripped (_LINENUM_LINE_RE).
+    Only quotes and apostrophes are folded in step 1; all other Unicode (§, –, —)
+    is preserved — those are regulatory content, not noise.
+    """
+    s = s.translate(_CURLY_MAP)
+    s = _LINENUM_INLINE_RE.sub("\n", s)
+    s = _LINENUM_LINE_RE.sub("", s)
     return re.sub(r"\s+", " ", s).strip()
 
 
