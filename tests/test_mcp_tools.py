@@ -38,6 +38,7 @@ from rra.mcp_server.tools import (  # noqa: E402
     check_citation,
     fetch_guidance,
     list_recent_guidances,
+    match_quote,
     search_corpus,
 )
 
@@ -485,6 +486,74 @@ class TestRatioBugRegression:
             f"Short quote in long chunk must verify. "
             f"ratio()={ratio:.4f} would fail, coverage ratio should pass."
         )
+
+
+# ─── match_quote ─────────────────────────────────────────────────────────────
+
+
+class TestMatchQuoteMalformedInput:
+    """Robustness: malformed inputs return (False, 0.0, None) — never an exception.
+
+    An unverifiable chunk (None text, empty text, wrong-type char_start) is a
+    non-match, not a crash.  Same fail-closed principle as the empty-quote guard
+    in check_citation (ADR 0013 / ADR 0014).
+    """
+
+    def test_none_chunk_text(self) -> None:
+        v, sim, span = match_quote("some quote", None, 0)  # type: ignore[arg-type]
+        assert v is False
+        assert sim == 0.0
+        assert span is None
+
+    def test_empty_chunk_text(self) -> None:
+        v, sim, span = match_quote("some quote", "", 0)
+        assert v is False
+        assert sim == 0.0
+        assert span is None
+
+    def test_none_char_start(self) -> None:
+        v, sim, span = match_quote("some quote", "chunk text here", None)  # type: ignore[arg-type]
+        assert v is False
+        assert sim == 0.0
+        assert span is None
+
+    def test_non_int_char_start(self) -> None:
+        v, sim, span = match_quote("some quote", "chunk text here", "abc")  # type: ignore[arg-type]
+        assert v is False
+        assert sim == 0.0
+        assert span is None
+
+    def test_none_quoted_text(self) -> None:
+        v, sim, span = match_quote(None, "chunk text here", 0)  # type: ignore[arg-type]
+        assert v is False
+        assert sim == 0.0
+        assert span is None
+
+    def test_valid_inputs_still_work(self) -> None:
+        """Guard must not break the normal path."""
+        v, sim, span = match_quote("chunk text", "chunk text here for testing", 0)
+        assert v is True
+
+
+class TestMatchQuoteSpanRecovery:
+    """Step 2 span recovery works correctly for stored text with PDF whitespace."""
+
+    def test_pdf_newline_in_stored_text(self) -> None:
+        """Quote normalized from PDF-newline text should recover span in stored text."""
+        stored = "the sponsor\nshould demonstrate adequate safety"
+        quote = "sponsor should demonstrate adequate"  # normalized (spaces)
+        v, sim, span = match_quote(quote, stored, 10)
+        assert v is True
+        # Span should be document-relative (offset by char_start=10)
+        if span is not None:
+            assert span[0] >= 10
+            assert span[1] > span[0]
+
+    def test_span_none_on_no_match(self) -> None:
+        """No span when quote is not in chunk."""
+        v, sim, span = match_quote("completely unrelated phrase", "some chunk text here", 0)
+        assert v is False
+        assert span is None
 
 
 # ─── list_recent_guidances ────────────────────────────────────────────────────

@@ -4,6 +4,13 @@
 **Date:** 2026-06-01
 **Owner:** Kyle Couse
 
+> **ℹ️ Noted by [ADR 0014](0014-corpus-cleaning-structural-chunking.md) (2026-06-02).**
+> The two corpus defects documented in §Context (mid-sentence PDF newlines and
+> "Contains Nonbinding Recommendations" boilerplate) are addressed by ADR 0014's
+> `clean_text` stage. The matching algorithm (Steps 1–3), τ, and the `match_quote`
+> pure-function refactor are unchanged; τ recalibration against the clean distribution
+> follows the atomic table-swap (ADR 0013 reopen trigger).
+
 ## Context
 
 `check_citation` is the system's definition of "verified." Three consumers depend on that definition being precise and stable:

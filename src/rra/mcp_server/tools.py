@@ -193,6 +193,59 @@ def _normalize(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
+def match_quote(
+    quoted_text: str,
+    chunk_text: str,
+    char_start: int,
+) -> tuple[bool, float | None, list[int] | None]:
+    """ADR-0010 three-step matching algorithm — pure function, no DB, no config I/O.
+
+    Returns (verified, similarity_score, matched_doc_span).
+    Called by check_citation (production path) and by the $0 text-only smoke
+    (evals/smoke_rechunk.py — ADR 0014). Sharing one implementation prevents
+    drift between the diagnostic and production matching paths.
+
+    Malformed inputs (None, empty chunk_text, non-int char_start) return
+    (False, 0.0, None) rather than raising — an unverifiable chunk is a
+    non-match, not an exception (same fail-closed principle as the empty-quote
+    guard in check_citation).
+    """
+    # Guard malformed inputs before any _normalize call.
+    if (
+        not isinstance(quoted_text, str)
+        or not isinstance(chunk_text, str)
+        or not chunk_text
+        or not isinstance(char_start, int)
+    ):
+        return False, 0.0, None
+
+    norm_quoted = _normalize(quoted_text)
+    norm_chunk = _normalize(chunk_text)
+
+    if not norm_quoted:
+        return False, None, None
+
+    # Step 2: normalized substring + whitespace-flexible regex for span recovery.
+    if norm_quoted in norm_chunk:
+        # Split into words BEFORE escaping so re.escape does not consume spaces.
+        # re.escape no longer escapes spaces in Python 3.7+, so the old
+        # re.escape(s).split(r"\ ") pattern never splits and \s+ is never joined.
+        words = norm_quoted.split()
+        pattern = re.compile(r"\s+".join(re.escape(w) for w in words))
+        m = pattern.search(chunk_text)
+        if m:
+            return True, None, [char_start + m.start(), char_start + m.end()]
+        return True, None, None
+
+    # Step 3: SequenceMatcher coverage-ratio fallback.
+    matcher = SequenceMatcher(None, norm_quoted, norm_chunk, autojunk=False)
+    longest = matcher.find_longest_match(0, len(norm_quoted), 0, len(norm_chunk))
+    coverage = longest.size / len(norm_quoted)
+
+    tau = settings.citation_match_threshold
+    return coverage >= tau, coverage, None
+
+
 def check_citation(
     claim: str,
     guidance_id: str,
@@ -255,13 +308,7 @@ def check_citation(
             similarity_score=None,
         )
 
-    # ── Three-step matching (ADR 0010) ────────────────────────────────────────
-
-    # Step 1: Normalize both sides.
-    norm_quoted = _normalize(quoted_text)
-    norm_chunk = _normalize(chunk_text)
-
-    if not norm_quoted:
+    if not quoted_text.strip():
         # Empty/whitespace quoted_text (non-None) — faithfulness CANNOT be
         # assessed, so fail closed: verified=False. This is NOT key-existence
         # (that is the quoted_text IS None path above, untouched). Returning True
@@ -276,56 +323,16 @@ def check_citation(
             similarity_score=None,
         )
 
-    # Step 2: Normalized substring check with whitespace-flexible regex for span recovery.
-    if norm_quoted in norm_chunk:
-        # Recover offsets in the STORED (non-normalized) text.
-        # Normalized positions do not map to stored positions because normalization
-        # collapses whitespace sequences and shifts subsequent offsets.
-        escaped_words = re.escape(norm_quoted).split(r"\ ")
-        pattern = re.compile(r"\s+".join(escaped_words))
-        m = pattern.search(chunk_text)
-        if m:
-            doc_start = char_start + m.start()
-            doc_end = char_start + m.end()
-            return CitationCheckResult(
-                verified=True,
-                source_text=chunk_text,
-                matched_doc_span=[doc_start, doc_end],
-                similarity_score=None,
-            )
-        # Substring found in normalized space but regex could not relocate it in
-        # stored text (edge case: normalization changed word boundaries).
-        return CitationCheckResult(
-            verified=True,
-            source_text=chunk_text,
-            matched_doc_span=None,
-            similarity_score=None,
-        )
-
-    # Step 3: SequenceMatcher coverage-ratio fallback.
-    # Metric: longest_match.size / len(norm_quoted) — NOT ratio().
-    # ratio() denominator is dominated by chunk length; returns ~0.05 even on a
-    # perfect short-quote match. Coverage ratio asks the right question: what
-    # fraction of the quote appears contiguously in the chunk?
-    matcher = SequenceMatcher(None, norm_quoted, norm_chunk, autojunk=False)
-    longest = matcher.find_longest_match(0, len(norm_quoted), 0, len(norm_chunk))
-    coverage = longest.size / len(norm_quoted)
-
-    tau = settings.citation_match_threshold
-    if coverage >= tau:
-        return CitationCheckResult(
-            verified=True,
-            source_text=chunk_text,
-            matched_doc_span=None,  # cannot pinpoint from longest-match alone
-            similarity_score=coverage,
-        )
-
-    # No match — return source_text and score for critic reference and τ-calibration.
+    # Three-step matching delegated to pure function (ADR 0014 — shared with
+    # the $0 text-only smoke so production and diagnostic paths are identical).
+    verified, similarity_score, matched_doc_span = match_quote(
+        quoted_text, chunk_text, char_start
+    )
     return CitationCheckResult(
-        verified=False,
+        verified=verified,
         source_text=chunk_text,
-        matched_doc_span=None,
-        similarity_score=coverage,
+        matched_doc_span=matched_doc_span,
+        similarity_score=similarity_score,
     )
 
 
