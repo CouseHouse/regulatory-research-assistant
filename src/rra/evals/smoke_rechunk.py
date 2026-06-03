@@ -32,6 +32,7 @@ import json
 import sys
 from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 import psycopg
 from psycopg.rows import dict_row
@@ -60,7 +61,7 @@ def save_baseline(limit: int | None = None) -> None:
     if limit is not None:
         cases = cases[:limit]
 
-    quotes: list[dict] = []
+    quotes: list[dict[str, Any]] = []
     for case in cases:
         print(f"  running {case.id}...", flush=True)
         try:
@@ -111,7 +112,7 @@ def run_smoke(table: str = "chunks_rechunk") -> None:
         )
         sys.exit(1)
 
-    quotes: list[dict] = json.loads(BASELINE_PATH.read_text())
+    quotes: list[dict[str, Any]] = json.loads(BASELINE_PATH.read_text())
     total = len(quotes)
     tau = settings.citation_match_threshold
 
@@ -134,7 +135,7 @@ def run_smoke(table: str = "chunks_rechunk") -> None:
             )
         sys.exit(1)
 
-    by_guid: dict[str, list[dict]] = defaultdict(list)
+    by_guid: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         by_guid[row["guidance_id"]].append(row)
 
@@ -149,7 +150,7 @@ def run_smoke(table: str = "chunks_rechunk") -> None:
     best_chunk_scores: list[float] = []
     doc_level_scores: list[float] = []
     missing_guid = 0
-    per_quote: list[dict] = []
+    per_quote: list[dict[str, Any]] = []
 
     for q in quotes:
         guid = q["guidance_id"]
