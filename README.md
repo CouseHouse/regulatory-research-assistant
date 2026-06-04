@@ -37,7 +37,7 @@ Short version below. Full reasoning with rejected alternatives in [`docs/spec.md
 | Pattern | Planner-worker-critic | Simplest multi-agent pattern that pays for itself here |
 | Models | Claude Sonnet + Haiku | Role-to-model matched to per-step difficulty and cost |
 | Vector store | pgvector in Postgres | One DB does state + vectors; no SaaS dependency |
-| Chunking | Recursive, 512 tokens, 50 overlap | Fixed-size beats semantic chunking on recall benchmarks for this content |
+| Chunking | Structural splitter (paragraph→sentence), 512-token budget, 50 overlap | Structural boundaries keep quotes intact; recall@10=1.00, faithfulness 386/446 (ADR 0014) |
 | Embeddings | Voyage 3 | Current MTEB leader at the price point |
 | Reranker | Voyage rerank-2 | 5–15 point precision@5 lift; latency acceptable |
 | Tool layer | Custom MCP server | Reusable by any MCP client; includes a real `check_citation` tool |

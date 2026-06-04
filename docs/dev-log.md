@@ -1,5 +1,48 @@
 # Dev log
 
+## 2026-06-03 — Planning pass: τ / matcher-v2 / Langfuse settled; eval-maturation renumbered to Day 8
+
+**Where we are.** The autonomous planning pass (Architect → Critic → Reviewer, each handed artifacts
+not the prior role's conclusions) produced `docs/plan/next-session-plan.md` +
+`docs/decisions/PENDING-DECISIONS.md`. This session inspected the residual, settled the open
+decisions, and renumbered the schedule. **Supersedes the "Day 8 = IaC / critic-flip unscheduled" note
+in the Day-7 Correction below** — forward-pointer only; that entry is left intact.
+
+### Near-miss band inspection → KEEP τ = 0.85
+Classified the 13 residual quotes in the **[0.70, 0.85)** near-miss band by hand: **12/13 are matcher
+false-negatives** — PDF line-number / whitespace noise the Day-7 v1 `_normalize` didn't catch
+(mid-line line-numbers, digits glued to words, intra-word line-break splits) — and **1/13 is a genuine
+borderline** (ellipsis stitch, #9). **Decision: keep τ = 0.85; the lever is matcher-preprocessing v2,
+not the threshold.** Lowering τ would launder fixable matcher noise + the one real borderline into a
+"pass." **The Day-7 lesson repeating: fix the matcher, don't lower the bar.**
+
+### Decisions settled (PENDING-DECISIONS.md)
+- **D1 — τ = 0.85 + matcher-v2.** Lever is the matcher; critic-flip slot unchanged. Item 3b BLOCKED→READY.
+- **D2 — Langfuse gets a real slot**, pulled into the Day-8 eval-maturation phase **after critic-delta**
+  (captures post-flip scores). Overrides the sub-agents' "keep in future-work" lean. Item 10 BLOCKED→SCHEDULED.
+- **D3 — accept the residual.** matcher-v2 recovers ~9 clean cases (**386 → ~395/446**); footnote-splices
+  (#4, #7) + ellipsis (#9) + debatable enumerator (#13) stay **accepted residual, documented in the
+  Day-13 postmortem**. No analyst-prompt change.
+- **D5 — no action** (`--save-baseline` is an *analyst* API call, not Voyage; stays forbidden in planning passes).
+- **D4a still OPEN** — atomic-swap-vs-`--truncate` ADR reconciliation (pointer note vs. a tiny new ADR).
+  Left open deliberately; the planning commit is **not pushed** so D4a can land in the same branch.
+
+### Plan renumbered — +1 shift (eval-maturation inserted as Day 8)
+Chose "insert + shift everything +1." New schedule: **Day 8 = eval-maturation** (matcher-v2 → τ-confirm
+→ critic-flip → critic-delta → Langfuse) → **Day 9 = IaC** → **Day 10 = cloud demo** → **Day 11 =
+sessions** → **Day 12 = design docs** → **Days 13–16 = postmortems / polish / Loom / buffer.**
+Eval-maturation runs **before the cloud demo** so the demo shows the matured matcher + faithfulness-aware
+critic. **Item numbers and `dayNN.md` filenames are kept as stable IDs** — only day *numbers* shifted, so
+e.g. `day08.md` now describes Day-9 (IaC) work.
+
+### Highest-risk item flagged for next session
+matcher-v2's **mid-line line-number rule drops the `\n` anchor** that v1 used to tell a pypdf line-number
+from real content. With that anchor gone, the lookbehind guards (`CFR`/`USC`/`art`, dotted/paren
+preservation) carry all the false-positive weight against real reg numbers ("21 CFR 209", "30 days",
+"Form FDA 3500A"). **The zero-regression gate on the 386 currently-passing quotes is load-bearing** —
+validate $0 text-only (`smoke_rechunk --table chunks`), no `--save-baseline`. Full task:
+`docs/plan/matcher-preprocessing-v2.md`.
+
 ## 2026-06-03 — Day 7: $0 matcher preprocessing fixes (quote faithfulness)
 
 ### Count reconciliation: 137 vs 106
