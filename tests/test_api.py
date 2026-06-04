@@ -111,6 +111,15 @@ def test_correct_api_key_is_accepted(
     assert resp.status_code == 200
 
 
+# ─── Health check (ALB target group) ────────────────────────────────────────────
+
+def test_health_returns_200_without_api_key(client: TestClient) -> None:
+    """GET /health is unauthenticated and returns 200 — the ALB health probe."""
+    resp = client.get("/health")
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "ok"}
+
+
 # ─── Response schema ───────────────────────────────────────────────────────────
 
 def test_response_parses_as_query_response(
