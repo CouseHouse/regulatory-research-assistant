@@ -68,3 +68,4 @@ docs/dev-log-private-notes.md
 .coverage
 README_UPDATES.MD
 Scratch
+infra/terraform/tfplan*
