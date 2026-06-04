@@ -1,5 +1,6 @@
 # Dev log
 
+
 ## 2026-06-04 — eval-maturation Steps 2+3: τ-confirm (keep 0.85) + critic-flip (faithfulness-aware)
 
 **Branch `eval-maturation`**, off matcher-v2 (6836cb4). `CRITIC_FORCE_VERDICT` confirmed UNSET
@@ -103,6 +104,48 @@ alphanumeric IDs like `p53`, a real cap-hyphen-cap pair before a lowercase word 
 title number in `21 CFR Part 820` (the `(?<!CFR)` guard only protects numbers *after* CFR). An existing
 span-recovery test failed → added a forward reg-word guard and strengthened the CFR/USC tests to
 full-string equality. Exactly the discipline working: net `+N` is not enough; the row-by-row `−0` is.
+
+## 2026-06-03 — Day 9 build (unattended): Terraform IaC + Langfuse eval integration
+
+**Where we are.** Autonomous build session on `day09-iac-langfuse`. Both Day-9 deliverables
+built BUILD-ONLY via architect → engineer → independent-critic passes; nothing applied or
+populated. Full write-up: [`docs/plan/session-report.md`](plan/session-report.md). Two commits
+(`feat(evals)` Langfuse, `feat(infra)` IaC), **not pushed**.
+
+### Built
+- **IaC** (`infra/terraform/`): VPC (2-AZ, single NAT) · security-group chain (ALB→ECS→RDS) ·
+  RDS Postgres 16 (encrypted, private) · **ECR** · Secrets Manager (API keys + generated DB
+  password) · ECS Fargate (cluster/taskdef/service) + ALB/TG/listener · IAM least-privilege ·
+  CloudWatch logs · outputs/vars/README/lockfile. Plus repo-root **Dockerfile** (multi-stage uv,
+  non-root, no `.env`) + `.dockerignore`. `terraform fmt` clean · `init` (aws v5.100.0, random
+  v3.9.0) · **`validate` → Success**. NOT applied (no creds; that's Day-10).
+- **Langfuse** (`src/rra/evals/langfuse_eval.py` + `run.py --langfuse-sync`): dataset push +
+  per-case scores linked to a trace, reusing the shared `tracing.get_langfuse()` client. 21
+  mocked unit tests; **population gated** behind `POPULATION_GATED` until the critic-flip.
+
+### Unilateral implementation decisions (no new ADR — implements settled spec §4.10 + PENDING D2)
+- **`GET /health`** added to `api.py` (unauthenticated, no DB): the ALB target group needs a GET
+  health check; `/query` is POST + API-key-gated. ALB health-check path defaults to `/health`.
+- **`enable_langfuse` toggle (default off)** in the IaC: Secrets Manager rejects an empty
+  `SecretString`, so the Langfuse secrets are created only when explicitly enabled — otherwise a
+  default apply would fail. (Critic Bug A. The "filter on the value" alternative was rejected:
+  it would taint the `for_each` key set as sensitive.)
+- **`health_check_grace_period_seconds = 60`** on the ECS service (critic Bug B — avoid a cold
+  first-boot crash-loop).
+- **Langfuse trace model:** post-hoc one `eval-case` span per case (the graph gets no trace_id in
+  eval), mirroring api.py's idiom; scores attach to that span's trace. Sync is **best-effort**
+  (a Langfuse outage never fails the eval). Dataset name `rra-golden-eval`.
+- **Env/tooling:** Terraform 1.15.5 downloaded to `~/.local/bin` to run `validate` ($0).
+  `ecr.tf`/`iam` split: ECR is its own file; IAM lives in `ecs.tf`. Single NAT + single-AZ RDS +
+  HTTP-only listener are deliberate demo-scope choices (HTTPS/ACM, multi-AZ, VPC endpoints
+  deferred — see infra README).
+
+### Gated / next
+Langfuse population needs critic-flip → critic-delta → flip `POPULATION_GATED=False` → a paid
+`--langfuse-sync` eval. IaC deploy needs AWS creds + the Day-10 work (docker build/push to ECR,
+DB bootstrap, smoke, destroy). Docker `build`/`--check` couldn't run here (sandbox can't auth to
+Docker Hub — environmental, not a Dockerfile defect).
+
 
 ## 2026-06-03 — Planning pass: τ / matcher-v2 / Langfuse settled; eval-maturation renumbered to Day 8
 

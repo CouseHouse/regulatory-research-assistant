@@ -1,0 +1,26 @@
+# Terraform state — may contain secrets; never commit.
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+
+# Provider plugins / modules cache.
+.terraform/
+
+# Real variable files (keep only the .example).
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+
+# Saved plans (can embed sensitive values) and crash logs.
+*.tfplan
+crash.log
+crash.*.log
+
+# Local CLI config overrides.
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# NOTE: .terraform.lock.hcl is intentionally NOT ignored — commit it to pin
+# provider versions/hashes for reproducible `init`.
