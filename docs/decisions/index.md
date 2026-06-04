@@ -17,7 +17,7 @@ A flat list of all ADRs with status and one-line summary. Keep current — updat
 | 0011  | [MCP tools as in-process functions; server as exposure layer](0011-mcp-tools-in-process.md) | Active | 2026-06-01 | Day 5 |
 | 0012  | [Day 6 eval-harness scoring and CI policy](0012-eval-harness-scoring-and-ci-policy.md) | Active | 2026-06-02 | Day 6 |
 | 0013  | [Quote-faithfulness: analyst-emitted supporting quotes](0013-quote-faithfulness-activation.md) | Active | 2026-06-02 | Day 7; amends 0006 |
-| 0014  | [Corpus cleaning + structural chunking](0014-corpus-cleaning-structural-chunking.md) | Active | 2026-06-02 | Day 7; resolves ADR 0006 orphan-row Q |
+| 0014  | [Corpus cleaning + structural chunking](0014-corpus-cleaning-structural-chunking.md) | Active | 2026-06-02 | Day 7; resolves ADR 0006 orphan-row Q; **D4a:** cutover ran via `--truncate` not swap — see 0014 validation banner |
 | 0015  | [Session tracking: persist and surface session_id](0015-session-tracking.md) | Active | 2026-06-02 | Day 10 (new); amends 0008; opens ADR 0016 |
 
 
