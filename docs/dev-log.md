@@ -1,5 +1,38 @@
 # Dev log
 
+## 2026-06-03 — eval-maturation Step 1: matcher-preprocessing v2 (386 → 402/446, 0 regressions)
+
+**Branch `eval-maturation`** (off `main`). Implemented matcher-v2 in `_normalize`
+(`src/rra/mcp_server/tools.py`) — the narrow line-number / word-split recovery scoped in
+`docs/plan/matcher-preprocessing-v2.md`. **No τ change, no analyst-prompt change, no critic-flip,
+no re-embed, no Langfuse.** `CRITIC_FORCE_VERDICT` confirmed UNSET before the smoke.
+
+**Result (`smoke_rechunk --table chunks`, $0): 386 → 402/446 faithful, ZERO regressions** (row-by-row
+vs `main`'s committed detail: 16 failing→passing, 0 passing→failing). Every recovery lands at **≥0.99**
+— exact matches once pypdf line-numbers are removed, not near-τ laundering.
+- **9 from the [0.70,0.85) near-miss band** (as planned): mid-line line-numbers (`regulatory \n376
+  action`), digits glued to words/parens (`only16`, `3500A)74`, `AI-DSFs)3`, `mode31`), the intra-word
+  split (`Q-S ubmission`→`Q-Submission`), the hyphen-fused line-number (`Q-220 Submission`→`Q-Submission`).
+- **7 bonus from the <0.70 band** — same noise morphology, more line-numbers per quote (easy-003
+  "Minor change" bullets w/ `855/856/867/868`, footnote `list.15`). The ~9 estimate was conservative;
+  the rules generalized to multi-noise quotes without over-reaching.
+
+**Stayed residual (as planned, D3):** ellipsis stitch (#9, medium-004, 0.759), footnote-splices
+(#4/#7), inline enumerator (#13, hard-005 `a. Software`, 0.743 — deferred, not chased).
+
+**Guards carry the load now that the `\n` anchor is gone:** reg-word backward+forward guards keep
+`21 CFR 803.52` (both `21` and `803` survive), `Part 11`, `Form FDA 3500A`, `Title 21`; a unit/measure
+denylist keeps `within 30 days` / `10 mg`; a 2–3-digit cap keeps 4-digit content (`1995`, `ISO 9001`);
+case-gating keeps `COVID-19`, `N95`, `Type-A submission`, `Part11`. 18 content-safety/recovery unit
+tests added (`tests/test_mcp_tools.py`); full suite green (184 passed). **Documented blind spots** (held
+safe by symmetric normalization + the zero-regression smoke): a 2–3-digit count before an unlisted noun,
+alphanumeric IDs like `p53`, a real cap-hyphen-cap pair before a lowercase word (`X-Y coordinate`).
+
+**The zero-regression gate caught a real bug mid-build:** the first mid-line rule stripped the *leading*
+title number in `21 CFR Part 820` (the `(?<!CFR)` guard only protects numbers *after* CFR). An existing
+span-recovery test failed → added a forward reg-word guard and strengthened the CFR/USC tests to
+full-string equality. Exactly the discipline working: net `+N` is not enough; the row-by-row `−0` is.
+
 ## 2026-06-03 — Planning pass: τ / matcher-v2 / Langfuse settled; eval-maturation renumbered to Day 8
 
 **Where we are.** The autonomous planning pass (Architect → Critic → Reviewer, each handed artifacts

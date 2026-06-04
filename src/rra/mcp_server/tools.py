@@ -223,24 +223,100 @@ _LINENUM_INLINE_RE = re.compile(
 # because the line is standalone.
 _LINENUM_LINE_RE = re.compile(r"(?m)^\s*\d{2,4}\s*\n")
 
+# ── matcher-preprocessing v2 (docs/plan/matcher-preprocessing-v2.md) ──────────
+# The v1 rules above only fire on a trailing newline. pypdf also drops
+# line-numbers MID-LINE, glues them onto adjacent tokens, and splits words across
+# the line break. The v2 rules below recover those, grounded in the real
+# 0.70–0.85 near-miss band (the 9 cleanly-fixable citations).
+#
+# Dropping the newline anchor removes the strongest "this digit is a line-number,
+# not content" signal, so each rule carries heavy guards:
+#   - reg-word backward guards (CFR/USC/Part/Form/FDA/Section) keep "21 CFR 209",
+#     "Part 11", "Form FDA 3500A", "Section 510"…
+#   - a unit/measure forward denylist keeps "within 30 days", "90 days", "10 mg"…
+#   - the mid-line / hyphen rules cap the run at 2–3 digits, so 4-digit content
+#     survives untouched: years ("1995"/"2024"), standards ("ISO 9001"), FDA
+#     forms ("1572").
+#   - the word-rejoin rules are case-gated, keeping "COVID-19 vaccine", "N95",
+#     "Type-A submission".
+# Documented residual blind spots (NOT chased): a 2–3-digit count before an
+# unlisted noun, an alphanumeric identifier ("p53"), or a real cap-hyphen-cap
+# pair before a lowercase word ("X-Y coordinate"). These are held safe in
+# practice by SYMMETRIC normalization — the same transform runs on both quote and
+# chunk, so a previously-passing match cannot break from a transform alone — and
+# are verified by the zero-regression smoke (smoke_rechunk --table chunks).
+
+# Unit/measure tokens that mark a preceding number as CONTENT, not a line-number.
+_UNIT_WORDS = (
+    r"days?|months?|weeks?|years?|hours?|minutes?|seconds?"
+    r"|mg|mcg|ng|kg|g|mL|L|dL|mm|cm|nm|Hz|kHz|percent"
+    r"|patients?|subjects?|participants?|devices?|samples?|cases?|sites?"
+)
+
+# Rule 3 — intra-word PDF line-break split inside a cap-hyphen-cap compound:
+#   "Q-S ubmission" → "Q-Submission".  (cap-hyphen-cap, space, 3+ lowercase)
+_WORDSPLIT_RE = re.compile(r"(?<=[A-Z]-[A-Z])\s+(?=[a-z]{3,})")
+
+# Rule 1b — line-number fused after a hyphen, before a Capitalized continuation:
+#   "Q-220 Submission" → "Q-Submission".  Upper+lower lookahead keeps
+#   "COVID-19 vaccine"; the 2–3 digit cap keeps "ISO-9001 Standard".
+_HYPHEN_LINENUM_RE = re.compile(r"(?<=-)\d{2,3}\s+(?=[A-Z][a-z])")
+
+# Rule 1 — mid-line line-number: a 2–3 digit run BETWEEN two same-line word
+# tokens (no newline anchor):  "regulatory 376 action" → "regulatory action".
+# Reg numbers are content on BOTH sides of the reg-word: "CFR 820" (number after)
+# is caught by the backward guards; "21 CFR" / "Title 21" (number before) by the
+# forward guard. Without the forward guard the leading title number is stripped.
+_LINENUM_MIDLINE_RE = re.compile(
+    r"(?<!CFR)(?<!USC)(?<!art)(?<!Form)(?<!FDA)(?<!ection)(?<!itle)"  # number AFTER reg-word
+    r"(?<=[\w,;:.)])\s+\d{2,3}\s+"                                    # ' 376 '
+    r"(?!(?:" + _UNIT_WORDS + r")\b)"                                 # not ' 30 days'
+    r"(?!(?:CFR|USC|Part|Section)\b)"                                 # number BEFORE reg-word
+    r"(?=[A-Za-z])"                                                   # before a word
+)
+
+# Rule 2a — digit run fused directly after a closing paren (footnote/line marker):
+#   "3500A)74" → "3500A)",  "AI-DSFs)3" → "AI-DSFs)".  Leaves "510(k)" untouched.
+_PAREN_MARKER_RE = re.compile(r"(?<=\))\d{1,3}(?=$|\s|[.,;:])")
+
+# Rule 2b — 2–3 digit run fused to the end of a lowercase word, before a boundary:
+#   "only16" → "only",  "mode31," → "mode,".  Reg-word guard keeps "Part11";
+#   the lowercase requirement keeps "N95", "B12".
+_GLUED_WORD_RE = re.compile(
+    r"(?<!Part)(?<!Form)(?<!FDA)(?<!CFR)(?<!USC)(?<!ection)(?<!Title)(?<!Annex)"
+    r"(?<=[a-z])\d{2,3}(?=$|\s|[.,;:)])"
+)
+# Rule 2b' — same, fused after a word-final period: "population.33" → "population."
+#   A LETTER before the period is required, so "§ 820.30" / "v1.33" survive.
+_GLUED_DOTWORD_RE = re.compile(r"(?<=[a-z]\.)\d{2,3}(?=$|\s|[.,;:)])")
+
 
 def _normalize(s: str) -> str:
-    """Whitespace-normalize; fold typographic quotes; strip PDF line numbers.
+    """Whitespace-normalize; fold typographic quotes; strip PDF line-number noise.
 
-    Applied to BOTH quote and chunk before any substring or LCS comparison.
-    Three transformations, applied in order before the final \s+ collapse:
-      1. Curly quote/apostrophe → ASCII (U+2018/19/1C/1D/32/33 → '/"): corpus
-         chunks carry typographic quotes from the PDF; analyst output uses ASCII.
-      2. Inline PDF line numbers stripped: bare 2–4 digit integers that pypdf
-         embeds between sentence fragments, always before \n (see _LINENUM_INLINE_RE
-         guards). Does NOT touch "21 CFR 820", "§ 820.30", "510(k)", etc.
-      3. Isolated number-only lines stripped (_LINENUM_LINE_RE).
-    Only quotes and apostrophes are folded in step 1; all other Unicode (§, –, —)
-    is preserved — those are regulatory content, not noise.
+    Applied to BOTH quote and chunk before any substring or LCS comparison. Because
+    the same deterministic transform runs on both sides, a previously-passing match
+    cannot break from a transform alone — the basis of the zero-regression gate.
+
+    Order (v1 = Day-7 newline-anchored; v2 = matcher-preprocessing-v2):
+      1. Curly quote/apostrophe to ASCII (U+2018/19/1C/1D/32/33).
+      2. v2 word-rejoins FIRST (intra-word split, hyphen-fused line-number), so the
+         line-number passes see reconstructed words.
+      3. v1 inline line-numbers (newline-anchored), then v2 mid-line, paren-fused
+         and word-fused line-numbers.
+      4. v1 isolated number-only lines.
+      5. Final whitespace collapse.
+    Non-quote Unicode (§, en/em dash) is preserved — regulatory content, not noise.
     """
     s = s.translate(_CURLY_MAP)
-    s = _LINENUM_INLINE_RE.sub("\n", s)
-    s = _LINENUM_LINE_RE.sub("", s)
+    s = _WORDSPLIT_RE.sub("", s)          # "Q-S ubmission"       -> "Q-Submission"
+    s = _HYPHEN_LINENUM_RE.sub("", s)     # "Q-220 Submission"    -> "Q-Submission"
+    s = _LINENUM_INLINE_RE.sub("\n", s)   # v1: " 105\n"           -> "\n"
+    s = _LINENUM_MIDLINE_RE.sub(" ", s)   # "regulatory 376 act"  -> "regulatory act"
+    s = _PAREN_MARKER_RE.sub("", s)       # "3500A)74"            -> "3500A)"
+    s = _GLUED_DOTWORD_RE.sub("", s)      # "population.33"       -> "population."
+    s = _GLUED_WORD_RE.sub("", s)         # "only16"              -> "only"
+    s = _LINENUM_LINE_RE.sub("", s)       # v1: isolated number-only lines
     return re.sub(r"\s+", " ", s).strip()
 
 

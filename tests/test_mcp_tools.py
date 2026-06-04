@@ -113,6 +113,126 @@ class TestNormalize:
         assert _normalize("foo\t \n bar") == "foo bar"
 
 
+# ─── matcher-preprocessing v2 ─────────────────────────────────────────────────
+
+
+class TestMatcherV2Recovery:
+    """The 9 cleanly-fixable 0.70–0.85 near-miss corruptions normalize to the
+    clean analyst quote. Each chunk fragment below is a real pypdf artifact from
+    the near-miss band (docs/plan/matcher-preprocessing-v2.md)."""
+
+    def test_midline_linenumber_stripped(self) -> None:
+        # cases 3/5/7: "regulatory 376 action", "those 860 for", "be 209 required"
+        assert _normalize("regulatory 376 action") == _normalize("regulatory action")
+        assert _normalize("to those 860 for the") == _normalize("to those for the")
+        assert _normalize("shall not be 209 required") == _normalize("shall not be required")
+
+    def test_glued_word_linenumber_stripped(self) -> None:
+        # cases 1/12: "only16", "mode31,", "language32", "population.33"
+        assert _normalize("software only16 function") == _normalize("software only function")
+        assert (
+            _normalize("mode31, language32 or population.33")
+            == _normalize("mode, language or population.")
+        )
+
+    def test_paren_glued_marker_stripped(self) -> None:
+        # cases 6/11: "3500A)74", "AI-DSFs)3"
+        assert _normalize("Form 3500A)74 must") == _normalize("Form 3500A) must")
+        assert _normalize("or AI-DSFs)3 is") == _normalize("or AI-DSFs) is")
+
+    def test_intraword_split_rejoined(self) -> None:
+        # case 0: "Q-S ubmission" -> "Q-Submission"
+        assert _normalize("the Q-S ubmission Program") == _normalize("the Q-Submission Program")
+
+    def test_hyphen_fused_linenumber_stripped(self) -> None:
+        # case 8: "Q-220 Submission" -> "Q-Submission"
+        assert _normalize("the Q-220 Submission Program") == _normalize("the Q-Submission Program")
+
+    def test_recovered_quote_matches_dirty_chunk(self) -> None:
+        """End-to-end: a clean analyst quote verifies against the dirty chunk fragment."""
+        quote = "regulatory action against violations"
+        chunk = "take legal or regulatory 376 action against violations of prohibited acts"
+        v, sim, _ = match_quote(quote, chunk, 0)
+        assert v is True
+
+
+class TestMatcherV2ContentSafety:
+    """HARD GATE (docs/plan/matcher-preprocessing-v2.md): the v2 strip rules must
+    NOT mangle real regulatory numbers. Dropping the newline anchor put all the
+    false-positive weight on these guards — this is the proof they hold."""
+
+    # — reg references keep their numbers (on BOTH sides of the reg-word) —
+    def test_cfr_reference_preserved(self) -> None:
+        # full-string equality: the title number (21, before CFR) AND the part
+        # number (803.52 / 209, after CFR) must both survive untouched
+        assert _normalize("described in 21 CFR 803.52 that is") == "described in 21 CFR 803.52 that is"
+        assert _normalize("under 21 CFR 209 of the") == "under 21 CFR 209 of the"
+
+    def test_usc_reference_preserved(self) -> None:
+        assert _normalize("pursuant to 10 USC 7902 and") == "pursuant to 10 USC 7902 and"
+
+    def test_title_reference_preserved(self) -> None:
+        assert "21" in _normalize("under Title 21 of the regulations")
+
+    def test_fda_form_preserved(self) -> None:
+        assert "3500A" in _normalize("the FDA Form 3500A must contain")
+
+    def test_section_510k_preserved(self) -> None:
+        assert _normalize("cleared under section 510(k), if such") == "cleared under section 510(k), if such"
+
+    def test_section_symbol_dotted_number_preserved(self) -> None:
+        assert "820.30" in _normalize("under § 820.30 of the")
+
+    def test_part_spaced_preserved(self) -> None:
+        assert "11" in _normalize("records under Part 11 are")
+
+    def test_part_glued_preserved(self) -> None:
+        # the reg-word guard: "Part11" must NOT be stripped to "Part"
+        assert "Part11" in _normalize("electronic records Part11 compliance")
+
+    # — durations / measures keep their numbers (unit denylist) —
+    def test_within_30_days_preserved(self) -> None:
+        assert "30" in _normalize("report within 30 days of becoming")
+
+    def test_90_days_preserved(self) -> None:
+        assert "90" in _normalize("a 90 days review period")
+
+    def test_measurements_preserved(self) -> None:
+        assert "10" in _normalize("a dose of 10 mg administered")
+        assert "12" in _normalize("over 12 months of follow-up")
+
+    # — 4-digit content survives the 2–3 digit cap —
+    def test_year_preserved(self) -> None:
+        assert "1995" in _normalize("published December 11, 1995 in the")
+        assert "2024" in _normalize("issued in 2024 by the agency")
+
+    def test_iso_standard_preserved(self) -> None:
+        assert "9001" in _normalize("conforms to ISO 9001 quality")
+
+    # — single-digit / version tokens survive (rules require 2+ digits) —
+    def test_single_digit_and_version_preserved(self) -> None:
+        assert _normalize("uses TLS 1.3 for transport") == "uses TLS 1.3 for transport"
+        assert "5" in _normalize("see Figure 5 below")
+
+    # — the paren seam: ")74" strips but "(k)" does not —
+    def test_paren_seam_strips_digits_after_keeps_letter_inside(self) -> None:
+        assert "74" not in _normalize("Form 3500A)74 must contain")   # digits-after-paren: stripped
+        assert "510(k)" in _normalize("cleared under section 510(k) if")  # letter-in-paren: kept
+
+    # — case-gated rejoin rules don't eat legit hyphenated tokens —
+    def test_covid19_preserved(self) -> None:
+        # hyphen-fused rule is uppercase-gated; "vaccine" is lowercase -> no strip
+        assert "19" in _normalize("the COVID-19 vaccine was")
+
+    def test_type_a_submission_preserved(self) -> None:
+        # word-split rule needs cap-hyphen-cap; "Type-A" has lowercase before hyphen
+        assert _normalize("a Type-A submission requires") == "a Type-A submission requires"
+
+    def test_n95_preserved(self) -> None:
+        # glued-word rule requires lowercase before digits; "N95" has uppercase N
+        assert "N95" in _normalize("an N95 respirator must")
+
+
 # ─── search_corpus ────────────────────────────────────────────────────────────
 
 
