@@ -8,6 +8,11 @@
 > Each decision: the **question**, the **options**, the **tradeoffs**, the **sub-agents'
 > recommendation** (reconciled across the three passes), and **what it unblocks**. When you decide
 > one, the matching plan item flips from BLOCKED → READY/GATED.
+>
+> **✅ STATUS — 2026-06-03: ALL FIVE SETTLED.** D1 (τ=0.85 + matcher-v2) · D2 (Langfuse → Day-8 phase) ·
+> D3 (accept residual, document Day-13) · D4 (4a pointer note, 4b keep both tables) · D5 (no action).
+> Each resolution is in its **▶ SETTLED** block below; unblocked plan items are updated in
+> [`../plan/next-session-plan.md`](../plan/next-session-plan.md).
 
 ---
 
@@ -138,6 +143,18 @@ Day-13 postmortem narrative. No new build item.
 
 ## Decision 4 — Atomic-swap-vs-`--truncate` documentation integrity (+ leftover scratch tables)
 
+> **▶ SETTLED — 2026-06-03. (4a) pointer note, NOT a new ADR. (4b) keep both tables.**
+> **4a:** reconcile the swap-vs-`--truncate` mismatch with a **one-line pointer note appended to ADR
+> 0014's validation banner** (append-only — Decision body untouched) **+ a cross-ref in `index.md`**.
+> A whole new ADR for a benign *documented-preferred (swap) vs. executed (`--truncate`)* footnote is
+> ceremony: the outcome is correct (`--truncate` clears orphan rows; ADR 0014 §Alternatives permits it
+> on a dev box; validated 386/446 + recall@10=1.00) and the banner already records `--truncate`.
+> Rejected **(B)** new ADR (disproportionate) and **(C)** leave-it (the bare "swap" cross-refs read as
+> a contradiction). **4b:** **KEEP** both `corpus.chunks_rechunk` (live tooling references it —
+> `smoke_rechunk._VALID_TABLES`; the `DROP` is irreversible for near-zero gain) **and**
+> `corpus.chunks_fixedsize_backup` (restore path); reclaiming the scratch table later stays a GATED
+> future action. **With D4 closed, all five decisions (D1–D5) are settled.**
+
 **Question.** Two linked sub-questions:
 - **(4a)** ADRs 0014 (Decision step 4; rationale at 0014:39,48,64), 0006:17, and 0010:12 document
   the cutover as an **atomic RENAME swap** (`BEGIN; RENAME chunks→chunks_old; RENAME
@@ -184,6 +201,10 @@ plan's READY hygiene batch, precisely because it touches append-only ADRs.)
 
 ## Decision 5 — `--save-baseline` cost-source correction (acknowledge only — no action)
 
+> **▶ SETTLED — 2026-06-03. No action.** Acknowledged: `--save-baseline` re-runs the **analyst** model
+> (a paid call), **not** Voyage — the critic's correction stands; it stays forbidden in any planning
+> pass. Nothing to implement; recorded only to kill the latent "it's safe, it's not Voyage" mis-rationale.
+
 **Question.** The architect pass asserted `--save-baseline` is "the paid **Voyage** step." The
 critic flagged this as wrong. Does it change anything?
 
@@ -209,5 +230,5 @@ paid call under a false "$0" belief.
 | 1 | critic-flip slot + τ target | Item 3b (BLOCKED→**READY**) | **✅ SETTLED: KEEP τ=0.85; lever = matcher-v2, not threshold** (supersedes the high-0.7s lean) |
 | 2 | Langfuse: future-work vs slot | Item 10 (BLOCKED→**SCHEDULED**) | **✅ SETTLED: pulled into Day-8 eval-maturation, after critic-delta** (overrides the keep-in-future-work lean) |
 | 3 | faithfulness residual handling | Item 3 scope + Day-13 postmortem | **✅ SETTLED: matcher-v2 recovers ~9; accept+document #4/#7/#9/#13; no prompt change** |
-| 4 | ADR swap-vs-truncate + scratch tables | doc integrity; corpus-schema cleanup | pointer note; keep both tables |
-| 5 | `--save-baseline` cost rationale | — (acknowledge) | critic correct; analyst cost; stays forbidden |
+| 4 | ADR swap-vs-truncate + scratch tables | doc integrity; corpus-schema cleanup | **✅ SETTLED: (4a) pointer note in 0014 banner — not a new ADR; (4b) keep both tables** |
+| 5 | `--save-baseline` cost rationale | — (acknowledge) | **✅ SETTLED (no action): critic correct — analyst cost, not Voyage; stays forbidden** |

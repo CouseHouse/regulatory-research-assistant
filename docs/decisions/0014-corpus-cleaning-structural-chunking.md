@@ -5,6 +5,8 @@
 **Owner:** Kyle Couse
 
 > **Validated 2026-06-03 (Resolution A):** Structural chunking re-ingested as the live `corpus.chunks` via `chunk_text_structural + clean_text --truncate`: 2745 chunks across 71 docs, 0 boilerplate rows. Re-measured on the live embedded corpus: recall@10=1.00 (13/13), faithfulness=386/446 at τ=0.85 — both held. The prior "DEFERRED" note (delta=0 from Day-7 smoke) reflected that faithfulness didn't require re-embed; Resolution A re-embeds to align code, local corpus, and Day-9 cloud ingest on one architecture. Restore path: `corpus.chunks_fixedsize_backup` (2726 rows, fixed-size+dirty). See dev-log 2026-06-03.
+>
+> **Cutover reconciliation (D4a, 2026-06-03):** the cutover was executed via `uv run python -m rra.ingest --truncate`, **not** the atomic RENAME swap that the Decision section (step 4) and the `0006:17` / `0010:12` cross-refs describe. Outcome is equivalent — `--truncate` also clears orphan rows; validated **386/446** faithfulness + **recall@10=1.00**. The "swap" references are the *documented-preferred* approach; `--truncate` is the *executed* one — both acceptable per this ADR (§Alternatives: "`--truncate` remains viable on a dev box"). Append-only note; Decision/Context/Consequences bodies unchanged.
 
 ## Context
 
