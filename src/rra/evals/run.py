@@ -407,6 +407,16 @@ def main() -> int:
         action="store_true",
         help="Skip KeyFactCoverageScorer and PositionQualityScorer. Use for CI (no API key needed).",
     )
+    parser.add_argument(
+        "--langfuse-sync",
+        action="store_true",
+        help=(
+            "Push the golden set as a Langfuse dataset and emit each scorer's "
+            "result as a score linked to a per-case trace. GATED: a hard no-op "
+            "until POPULATION_GATED is flipped at the critic-flip (see "
+            "rra.evals.langfuse_eval) — pre-flip key-existence scores would go stale."
+        ),
+    )
     args = parser.parse_args()
 
     use_ci_fixture = args.fixture in ("ci", "ci-valid")
@@ -443,6 +453,16 @@ def main() -> int:
     )
     report_path = write_report(runs, scorers, args.tag)
     print(f"Report: {report_path}")
+
+    # Optional Langfuse sync (dataset push + per-case scores). GATED: a no-op
+    # until the critic-flip flips POPULATION_GATED — see rra.evals.langfuse_eval.
+    # The gate/disabled/not-requested paths return synced=False without touching
+    # Langfuse, so this never affects a normal run or the CI gate below.
+    from .langfuse_eval import maybe_sync_langfuse
+
+    sync_status = maybe_sync_langfuse(runs, enabled=args.langfuse_sync)
+    if args.langfuse_sync:
+        print(f"Langfuse sync: {sync_status}")
 
     return 0 if gates_passed else 1
 

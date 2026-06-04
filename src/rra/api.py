@@ -24,6 +24,17 @@ log = structlog.get_logger(__name__)
 app = FastAPI(title="Regulatory Research Assistant", version="0.1.0")
 
 
+@app.get("/health")
+def health() -> dict[str, str]:
+    """Liveness probe for the ALB target group (infra/terraform/ecs.tf).
+
+    Unauthenticated and dependency-free by design: /query requires X-API-Key and
+    is a POST, so it can't serve as a health check. This must stay a cheap 200
+    that does NOT touch Postgres — a DB blip should not pull tasks out of service.
+    """
+    return {"status": "ok"}
+
+
 def _verify_api_key(x_api_key: str | None) -> None:
     if x_api_key != settings.rra_api_key.get_secret_value():
         raise HTTPException(

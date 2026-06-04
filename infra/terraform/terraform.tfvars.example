@@ -1,0 +1,31 @@
+# Copy to terraform.tfvars (gitignored) and fill in. Or set TF_VAR_* env vars.
+# `terraform validate` does NOT need these; `plan`/`apply` do.
+
+aws_region   = "us-east-1"
+project_name = "rra"
+environment  = "demo"
+
+# ─── Secrets (sensitive) ──────────────────────────────────────────────────────
+# NEVER commit real values. The DB password is generated automatically and is
+# NOT set here.
+anthropic_api_key = "sk-ant-..."
+voyage_api_key    = "pa-..."
+rra_api_key       = "change-me-to-a-strong-key"
+
+# Langfuse is optional and OFF by default (enable_langfuse = false): the keys
+# are not turned into secrets, and the app no-ops tracing cleanly. To enable it,
+# set enable_langfuse = true AND provide both keys below (Secrets Manager rejects
+# an empty secret, so enabling with blank keys fails apply).
+# enable_langfuse     = true
+langfuse_host       = "http://localhost:3000"
+langfuse_public_key = ""
+langfuse_secret_key = ""
+
+# ─── Sizing (optional — defaults are demo-grade) ──────────────────────────────
+# db_instance_class = "db.t4g.micro"
+# fargate_cpu       = 512
+# fargate_memory    = 1024
+# desired_count     = 1
+
+# Lock the ALB down to your IP for a non-public demo, e.g. "203.0.113.4/32".
+# alb_ingress_cidr = "0.0.0.0/0"

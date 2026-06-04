@@ -1,0 +1,40 @@
+# Keep secrets OUT of the build context — the image must never contain these.
+.env
+.env.*
+
+# The build only needs: pyproject.toml, uv.lock, README.md, src/.
+# Everything below is excluded to keep the context small and secret-free.
+
+# VCS + CI
+.git
+.gitignore
+.github
+
+# Python caches / local venv / coverage
+.venv
+__pycache__
+**/__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+
+# Infra / docs / data / dev tooling — not part of the runtime image
+infra
+docs
+data
+evals
+tests
+scripts
+init-db
+notebooks
+memory
+.claude
+Scratch
+
+# Compose + editor cruft
+docker-compose.yml
+*.swp
+.DS_Store
