@@ -1,5 +1,76 @@
 # Dev log
 
+## 2026-06-04 — eval-maturation Steps 2+3: τ-confirm (keep 0.85) + critic-flip (faithfulness-aware)
+
+**Branch `eval-maturation`**, off matcher-v2 (6836cb4). `CRITIC_FORCE_VERDICT` confirmed UNSET
+before and after. **Flip-only — no paid eval; the citation_validity / critic-delta (Step 4) is
+deferred for human review of this diff.**
+
+### Step 2 — τ-confirm: KEEP τ = 0.85 (no config change)
+Re-ran the $0 text-only smoke (`smoke_rechunk --table chunks`) against the post-v2 live corpus:
+**402/446** verified (best-chunk == doc-level, gap 0) — reproduces the matcher-v2 number exactly.
+The `best_chunk_score` distribution (n=446) is sharply bimodal with an **empty valley straddling τ**:
+
+| band | n |
+|---|---|
+| ==1.0 | 328 |
+| 0.99–1.0 | 56 |
+| 0.95–0.99 | 14 |
+| 0.90–0.95 | 1 |
+| 0.85–0.90 (just above τ) | 3 |
+| 0.80–0.85 (just below τ) | 2 |
+| 0.70–0.80 | 2 |
+| 0.50–0.70 | 31 |
+| <0.50 | 9 |
+
+- **384 of 402 verified land ≥0.99** — the v2 recoveries are exact-after-denoise, nowhere near τ,
+  so they exert zero pull on the threshold (as predicted in the highest-risk flag).
+- **τ bisects a 0.037-wide empty gap**: nearest below = medium-001 @0.835, nearest above =
+  medium-014 @0.872; nothing lives in [0.835, 0.872]. Any τ in ~[0.836, 0.871] yields the identical
+  verdict — maximally robust placement.
+- **Sensitivity is flat**: τ=0.80→404, 0.85→402, 0.90→399 (at most +2/−3 across the whole band).
+- The 4 sub-τ cases are **genuine borderlines, not recoverable matcher noise**: medium-004 @0.759
+  (ellipsis stitch #9) and hard-005 @0.743 (inline enumerator #13) — both documented D3 residual —
+  plus two partial-divergence cases (easy-008 @0.815, medium-001 @0.835). Lowering τ would launder
+  real faithfulness misses into passes (the Day-7 lesson). **Nothing argues for a change.**
+
+### Step 3 — critic-flip: parse-then-flip, single file (`src/rra/agents/critic.py`)
+Wired the analyst's emitted `<q>…</q>` supporting quote into `check_citation` so the critic's
+`revise` verdict is now faithfulness-aware (activates ADR-0010 matching / ADR-0013 quote-
+faithfulness at the critic's point in the graph). **Not a graph change** — the quote already
+reached the critic in `state["draft"]`; the critic previously discarded it at parse time.
+
+- **3a — parser reuse + de-dedup.** Replaced the address-only `_citation_re` (captured only
+  `(guid, idx)`, deduped to a SET) with the SHARED `rra.citations.parse_answer` (the same parser
+  used by `api.py:89` and `run.py:90`) → `(guid, idx, quote|None)` triples. Dedup now on the
+  **full triple** (`dict.fromkeys`, order-preserving): the old address-only set collapsed a
+  same-chunk/different-quote pair (one faithful, one not), which matters once the quote is what
+  gets checked. Exact-duplicate triples still collapse to one DB read + one `<check>`.
+- **3b — quote passthrough.** `check_citation(..., quoted_text=quote)`. A bare citation (no `<q>`,
+  allowed by analyst rule 6 → `parse_answer` yields `None`) stays key-existence mode, so a valid
+  bare address is never a faithfulness failure.
+- **3c — de-conflate the two failures.** `verified="false"` split into an ADDRESS failure
+  (`source_text==""` → `reason="address_not_found"`) and a QUOTE-FAITHFULNESS failure (chunk
+  present, quote not matched → `reason="quote_unfaithful"` + similarity score). Each `<check>`
+  now carries `check="address|quote"`. System prompt + per-call instruction reworded so the
+  critic distinguishes them, treats `quote_unfaithful` as a fixable hard-severity revise (not
+  escalate), and does not flag a bare-but-valid address as unfaithful.
+
+**Implementation choice (logged):** dedup on the full `(guid, idx, quote)` triple rather than
+literal per-occurrence — preserves the distinct-quote fix while avoiding redundant identical DB
+reads / `<check>` entries. Not architectural; within ADR 0010/0013. The `source_text==""`
+discriminator for address-vs-quote failures relies on `check_citation`'s contract (NOT_FOUND →
+empty `source_text`; every other path returns the stored chunk text).
+
+**Validation ($0):** 6 new unit tests (`TestCriticFlipFaithfulness`) pin the deterministic
+pre-validation contract — faithful→clean quote check, unfaithful→`quote_unfaithful`, bare→address
+key-existence, address-vs-quote de-conflation, distinct-quote de-dedup, exact-dup collapse —
+with `check_citation` mocked (no PG). **Existing critic/agent tests green; 190 non-integration
+tests pass (+6, zero regressions); mypy clean.** No config change, no new deps, no graph change.
+
+**Pending (human review gate):** Step 4 critic-delta — a paid full-harness run to measure the
+flip's effect on `citation_validity`. Not run; awaiting review of this diff.
+
 ## 2026-06-03 — eval-maturation Step 1: matcher-preprocessing v2 (386 → 402/446, 0 regressions)
 
 **Branch `eval-maturation`** (off `main`). Implemented matcher-v2 in `_normalize`

@@ -2,11 +2,21 @@
 
 Model: claude-sonnet-4-6 (settings.critic_model).
 
-Day 5: pre-validates every [guid:idx] citation via check_citation (in-process,
-key-existence mode — ADR 0010/0011) before the LLM call. Results are injected
-as <citation_checks> XML. ToolError(retryable=True) → inconclusive; critic
-instructed not to penalize those. ToolError(retryable=False) and verified=False
-→ evidence for revise note (ADR 0010 retryability invariant).
+Pre-validates every [guid:idx] citation via check_citation (in-process,
+ADR 0010/0011) before the LLM call, injecting the results as <citation_checks>
+XML.
+
+Day 5 ran address-only (key-existence, quoted_text=None). Day 8 (critic-flip,
+ADR 0013) parses each citation's optional <q>…</q> supporting quote with the
+SHARED parser (rra.citations.parse_answer) and passes it to check_citation as
+quoted_text, activating ADR-0010 faithfulness matching. A bare citation (no <q>)
+stays address-only, so a valid bare address is never a faithfulness failure. The
+<citation_checks> XML now distinguishes an address failure (cited chunk missing)
+from a quote-faithfulness failure (chunk present, quote not faithful).
+
+ToolError(retryable=True) → inconclusive; critic instructed not to penalize those.
+ToolError(retryable=False) and verified=False → evidence for revise note (ADR 0010
+retryability invariant).
 
 Verdict semantics (ADR 0009 — unchanged):
   approve   — all citations valid; exit graph.
@@ -23,7 +33,6 @@ from __future__ import annotations
 
 import contextlib
 import json
-import re
 from typing import Any
 
 import structlog
@@ -36,6 +45,7 @@ from anthropic.types import (
 )
 
 from rra.agents.types import CriticNote, CriticOutput
+from rra.citations import parse_answer
 from rra.config import settings
 from rra.mcp_server.tools import CitationCheckResult, ToolError, check_citation
 from rra.schemas import RetrievedPassage
@@ -52,10 +62,14 @@ relevance, then return a structured verdict.
 CITATION FORMAT
 ════════════════════════════════════════════
 Citations appear as [guidance_id:chunk_index] inline in the draft, e.g. [abc123:4]. \
+A citation may be followed by a verbatim supporting quote in <q>…</q> — e.g. \
+[abc123:4]<q>substantial equivalence</q>. A bare citation with no <q> is also allowed. \
 You are provided with the full set of source passages that were available to the \
 analyst. A citation is valid only if:
   (a) the cited (guidance_id, chunk_index) pair matches an actual provided passage, AND
   (b) that passage plausibly supports the specific claim it follows.
+Any <q> quote's faithfulness to the cited passage is checked for you deterministically \
+— see CITATION CHECKS below. A bare citation (no quote) is checked for address only.
 
 ════════════════════════════════════════════
 VERDICT CRITERIA
@@ -65,12 +79,13 @@ approve
 well-grounded in the provided passages. Minor wording issues do not require revision.
 
 revise
-  Use when one or more specific citations fail check (a) or (b), but the failure \
-is fixable: a different passage in the provided set could support the claim, or the \
-claim could be narrowed to match what the cited passage actually says. For each \
-fixable issue, include a CriticNote. Use severity "hard" for citations that directly \
-contradict or do not appear in the provided passages; use "soft" for overclaimed or \
-imprecise citations that could be improved.
+  Use when one or more specific citations fail check (a) or (b), or carry an unfaithful \
+supporting quote (reason="quote_unfaithful"), but the failure is fixable: a different \
+passage in the provided set could support the claim, the claim could be narrowed to \
+match what the cited passage actually says, or the quote could be replaced with a \
+verbatim span. For each fixable issue, include a CriticNote. Use severity "hard" for \
+citations that directly contradict, do not appear in the provided passages, or carry an \
+unfaithful quote; use "soft" for overclaimed or imprecise citations that could be improved.
 
 escalate
   Use when the question fundamentally cannot be grounded in the available corpus — \
@@ -98,12 +113,24 @@ has already detected a corpus gap. Use verdict "escalate" in this case.
 CITATION CHECKS (deterministic pre-validation)
 ════════════════════════════════════════════
 You will receive a <citation_checks> block with one <check> entry per inline citation. \
-Each entry carries verified="true|false|unknown" and inconclusive="true|false".
+Each entry carries verified="true|false|unknown", inconclusive="true|false", and — when \
+the check actually ran — a check="address|quote" attribute. The reason a citation fails \
+is NOT monolithic; keep these cases distinct:
 
-- verified="true"  — the citation key resolves to a real corpus chunk; source_text \
-is the authoritative stored text. Assess whether source_text supports the claim.
-- verified="false" — the citation key does not exist in the corpus. This is definitive; \
-include a hard-severity CriticNote for this citation.
+- verified="true" check="address" — the cited chunk exists and the analyst supplied NO \
+quote (a bare citation, which is allowed). source_text is the authoritative stored text; \
+assess whether it supports the claim, but do NOT flag the citation as unfaithful merely \
+for lacking a quote.
+- verified="true" check="quote" — the cited chunk exists AND the analyst's quoted_text \
+is faithfully present in it. Assess whether the quoted span supports the claim.
+- verified="false" reason="address_not_found" — the cited (guidance_id, chunk_index) does \
+not resolve to any corpus chunk. This is an ADDRESS error; it is definitive — include a \
+hard-severity CriticNote.
+- verified="false" reason="quote_unfaithful" — the cited chunk EXISTS, but the analyst's \
+quoted_text is not faithfully present in it (the quote misquotes or misrepresents the \
+source; similarity is below threshold). This is a QUOTE-FAITHFULNESS error, distinct from \
+a missing address — include a hard-severity CriticNote so the analyst replaces the quote \
+with a verbatim span or narrows the claim. Do NOT escalate for this; it is fixable.
 - inconclusive="true" (tool error) — the check could not run due to an infrastructure \
 failure. Treat this as if the check was not run — do NOT use it as evidence for a revise \
 verdict, and do NOT penalize the draft for it.
@@ -228,25 +255,40 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
         passage_summary_parts.append("</passages>")
         passage_xml = "\n".join(passage_summary_parts)
 
-        # ── check_citation pre-validation (ADR 0010/0011) ────────────────────
-        # Parse all [guidance_id:chunk_index] inline citations from the draft.
-        # Call check_citation in-process for each unique citation (key-existence
-        # mode, quoted_text=None — matching engine built but not yet activated;
-        # see ADR 0010 consequences / Day 7 activation note).
-        _citation_re = re.compile(r"\[([^:\]]+):(\d+)\]")
-        inline_citations: list[tuple[str, int]] = list({
-            (m.group(1), int(m.group(2)))
-            for m in _citation_re.finditer(draft)
-        })
+        # ── check_citation pre-validation (ADR 0010/0011/0013) ───────────────
+        # Parse every inline [guidance_id:chunk_index] citation AND its optional
+        # <q>…</q> supporting quote with the SHARED parser (rra.citations.parse_answer)
+        # — the same parser the API resolver (api.py) and the eval runner (run.py)
+        # use, so the critic, the product surface, and the measurement surface can
+        # never drift on what a citation or quote is (ADR 0013).
+        #
+        # Day-8 critic-flip: the analyst's quote now reaches check_citation as
+        # quoted_text, activating ADR-0010 faithfulness matching. A bare citation
+        # (no <q>, allowed by the analyst contract) parses to quote=None →
+        # check_citation stays in key-existence mode, so a valid bare address is
+        # NOT penalised as a faithfulness failure.
+        #
+        # Dedup on the FULL (guid, idx, quote) triple, not the address alone:
+        # collapsing on the address would hide a same-chunk/different-quote pair
+        # (one faithful, one not) now that the quote is what gets checked. Exact
+        # duplicate triples still collapse to one DB read + one <check>; order is
+        # preserved (dict.fromkeys) so the XML is deterministic.
+        _, triples = parse_answer(draft)
+        inline_citations: list[tuple[str, int, str | None]] = list(
+            dict.fromkeys(triples)
+        )
 
-        check_results: dict[str, CitationCheckResult | ToolError] = {}
-        for guidance_id, chunk_index in inline_citations:
+        # (citation_key, quoted_text|None, result) per check — a list, not a dict
+        # keyed by citation_key, so two checks of the SAME address with different
+        # quotes both survive into the XML.
+        checks: list[tuple[str, str | None, CitationCheckResult | ToolError]] = []
+        for guidance_id, chunk_index, quote in inline_citations:
             ckey = f"{guidance_id}:{chunk_index}"
             cc_cm = (
                 span.start_as_current_observation(
                     name="check_citation",
                     as_type="span",
-                    input={"citation_key": ckey},
+                    input={"citation_key": ckey, "has_quote": quote is not None},
                 )
                 if span is not None
                 else contextlib.nullcontext(None)
@@ -257,13 +299,18 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
                         claim=query,
                         guidance_id=guidance_id,
                         chunk_index=chunk_index,
-                        quoted_text=None,
+                        quoted_text=quote,
                     )
-                    check_results[ckey] = cc_result
+                    checks.append((ckey, quote, cc_result))
                     if cc_span is not None:
-                        cc_span.update(output={"verified": cc_result.verified})
+                        cc_span.update(
+                            output={
+                                "verified": cc_result.verified,
+                                "similarity_score": cc_result.similarity_score,
+                            }
+                        )
                 except ToolError as exc:
-                    check_results[ckey] = exc
+                    checks.append((ckey, quote, exc))
                     if cc_span is not None:
                         cc_span.update(
                             output={"error": exc.code, "retryable": exc.retryable}
@@ -275,13 +322,18 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
                         tool="check_citation",
                         retryable=True,
                     )
-                    check_results[ckey] = tool_err
+                    checks.append((ckey, quote, tool_err))
                     if cc_span is not None:
                         cc_span.update(output={"error": "UNKNOWN", "retryable": True})
 
-        # Build <citation_checks> XML block.
+        # Build <citation_checks> XML. After the flip, verified="false" is no
+        # longer monolithic: it splits into an ADDRESS failure (cited chunk
+        # absent) and a QUOTE-FAITHFULNESS failure (chunk present, quote not
+        # faithful). Each <check> carries check="address|quote" plus a machine
+        # reason so the critic can tell a hallucinated address from an unfaithful
+        # quote (ADR 0013); a valid bare address stays a clean key-existence pass.
         check_parts = ["<citation_checks>"]
-        for ckey, result in check_results.items():
+        for ckey, quote, result in checks:
             if isinstance(result, ToolError):
                 label = "transient" if result.retryable else "permanent"
                 check_parts.append(
@@ -289,17 +341,40 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
                     f"    <reason>tool error: {result.code} ({label})</reason>\n"
                     f"  </check>"
                 )
-            elif result.verified:
+            elif result.verified and quote is None:
+                # Bare citation, address resolves — key-existence mode (no quote).
                 check_parts.append(
-                    f'  <check citation_key="{ckey}" verified="true" inconclusive="false">\n'
+                    f'  <check citation_key="{ckey}" verified="true" inconclusive="false" check="address">\n'
                     f"    <source_text>{result.source_text}</source_text>\n"
                     f"  </check>"
                 )
-            else:
+            elif result.verified:
+                # Quote supplied AND faithfully present in the cited chunk.
                 check_parts.append(
-                    f'  <check citation_key="{ckey}" verified="false" inconclusive="false">\n'
+                    f'  <check citation_key="{ckey}" verified="true" inconclusive="false" check="quote">\n'
+                    f"    <quoted_text>{quote}</quoted_text>\n"
                     f"    <source_text>{result.source_text}</source_text>\n"
-                    f"    <reason>chunk not found in corpus</reason>\n"
+                    f"  </check>"
+                )
+            elif not result.source_text:
+                # Address failure: the cited chunk does not exist in the corpus.
+                check_parts.append(
+                    f'  <check citation_key="{ckey}" verified="false" inconclusive="false" check="address" reason="address_not_found">\n'
+                    f"    <reason>cited chunk does not exist in the corpus</reason>\n"
+                    f"  </check>"
+                )
+            else:
+                # Quote-faithfulness failure: chunk exists, quote not faithful.
+                score = (
+                    "n/a"
+                    if result.similarity_score is None
+                    else f"{result.similarity_score:.2f}"
+                )
+                check_parts.append(
+                    f'  <check citation_key="{ckey}" verified="false" inconclusive="false" check="quote" reason="quote_unfaithful">\n'
+                    f"    <quoted_text>{quote}</quoted_text>\n"
+                    f"    <source_text>{result.source_text}</source_text>\n"
+                    f"    <similarity_score>{score}</similarity_score>\n"
                     f"  </check>"
                 )
         check_parts.append("</citation_checks>")
@@ -310,11 +385,17 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
             f"{citation_checks_xml}\n\n"
             f"<query>{query}</query>\n\n"
             f"<draft>\n{draft}\n</draft>\n\n"
-            "Audit every citation in the draft. For citations marked verified='true', "
-            "assess whether the source_text supports the claim. For citations marked "
-            "verified='false', they are definitively wrong — note them with hard severity. "
-            "For citations marked inconclusive='true' (tool error), treat as not-run — "
-            "do not penalize the draft for those citations. "
+            "Audit every citation in the draft using the <citation_checks> results. "
+            "verified='true' check='address' — the chunk exists and no quote was supplied "
+            "(a bare citation is allowed); assess support but do NOT flag it for lacking a "
+            "quote. verified='true' check='quote' — the chunk exists and the quoted_text is "
+            "faithfully present; assess whether it supports the claim. "
+            "verified='false' reason='address_not_found' — the cited chunk does not exist; "
+            "definitively wrong; note with hard severity. "
+            "verified='false' reason='quote_unfaithful' — the chunk exists but the quoted_text "
+            "is not faithfully present (it misrepresents the source); note with hard severity "
+            "so the analyst fixes the quote or narrows the claim. "
+            "inconclusive='true' (tool error) — treat as not-run; do not penalize. "
             "Return your verdict via the submit_verdict tool."
         )
 
