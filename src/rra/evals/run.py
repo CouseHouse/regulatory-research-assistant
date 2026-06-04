@@ -478,6 +478,26 @@ def main() -> int:
             "revert. Implies --langfuse-sync; without it, population is a no-op."
         ),
     )
+    parser.add_argument(
+        "--run-name",
+        default=None,
+        help=(
+            "Name of the Langfuse dataset RUN this eval populates (Datasets→Runs). "
+            "Defaults to cheap-validate-<timestamp>. Set distinct names to compare "
+            "runs side by side, e.g. critic-delta-arm1-forced-approve."
+        ),
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Run only the first N cases (applied after --difficulty). For "
+            "cents-scale smoke tests of the harness / Langfuse plumbing — NOT a "
+            "real eval."
+        ),
+    )
     args = parser.parse_args()
 
     use_ci_fixture = args.fixture in ("ci", "ci-valid")
@@ -494,6 +514,9 @@ def main() -> int:
 
     if args.difficulty:
         cases = [c for c in cases if c.difficulty == args.difficulty]
+
+    if args.limit is not None:
+        cases = cases[: args.limit]
 
     from rra.config import settings
     from .judge import judge_call
@@ -529,10 +552,16 @@ def main() -> int:
     # AND opens the gate (which still requires keys). --langfuse-sync alone stays
     # a gated no-op so an existing invocation can't suddenly start publishing.
     sync_requested = args.langfuse_sync or args.allow_population
+    # A fresh run_name per invocation (Datasets→Runs is keyed by it; the two
+    # critic-delta arms pass distinct --run-name values to compare side by side).
+    run_name = args.run_name or (
+        f"cheap-validate-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+    )
     sync_status = maybe_sync_langfuse(
         runs,
         enabled=sync_requested,
         allow_population=args.allow_population,
+        run_name=run_name,
     )
     if sync_requested:
         print(f"Langfuse sync: {sync_status}")

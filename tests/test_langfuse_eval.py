@@ -23,6 +23,7 @@ from rra.evals.langfuse_eval import (  # noqa: E402
     GOLDEN_DATASET_NAME,
     POPULATION_GATED,
     emit_scores,
+    link_run_item,
     maybe_sync_langfuse,
     push_golden_dataset,
     score_value_and_type,
@@ -172,19 +173,40 @@ def test_emit_scores_uses_idempotent_score_id() -> None:
     assert client.create_score.call_args.kwargs["score_id"] == "t-citation_validity"
 
 
+# ─── link_run_item (dataset-run linkage) ─────────────────────────────────────
+
+
+def test_link_run_item_creates_dataset_run_item() -> None:
+    """link_run_item calls the low-level dataset_run_items API with the case id as
+    dataset_item_id and the per-case trace_id, under the given run_name."""
+    client = MagicMock()
+    link_run_item(
+        client,
+        run_name="critic-delta-arm1",
+        dataset_item_id="easy-001",
+        trace_id="trace-1",
+        metadata={"difficulty": "easy"},
+    )
+    kwargs = client.api.dataset_run_items.create.call_args.kwargs
+    assert kwargs["run_name"] == "critic-delta-arm1"
+    assert kwargs["dataset_item_id"] == "easy-001"
+    assert kwargs["trace_id"] == "trace-1"
+
+
 # ─── sync_eval_to_langfuse (orchestration) ───────────────────────────────────
 
 
 def test_sync_attaches_scores_to_runtime_trace() -> None:
     """Scores attach to each run's raw_trace_id (the run-time eval-case trace from
-    run_agent); NO post-hoc span is opened (that would orphan the scores)."""
+    run_agent), each trace is linked to the named dataset run, and NO post-hoc
+    span is opened (that would orphan the scores)."""
     client = MagicMock()
     runs = [
         CaseRun(_case(1), _response(raw_trace_id="trace-1"), [_numeric_score(), _na_score()]),
         CaseRun(_case(2), _response(raw_trace_id="trace-2"), [_numeric_score()]),
     ]
 
-    summary = sync_eval_to_langfuse(client, runs)
+    summary = sync_eval_to_langfuse(client, runs, run_name="run-x")
 
     # Dataset pushed for both cases.
     client.create_dataset.assert_called_once()
@@ -195,20 +217,29 @@ def test_sync_attaches_scores_to_runtime_trace() -> None:
     assert client.create_score.call_count == 3
     trace_ids = sorted(c.kwargs["trace_id"] for c in client.create_score.call_args_list)
     assert trace_ids == ["trace-1", "trace-1", "trace-2"]
+    # Each case's trace linked to the named dataset run, keyed by case.id.
+    create_ri = client.api.dataset_run_items.create
+    assert create_ri.call_count == 2
+    links = {(c.kwargs["dataset_item_id"], c.kwargs["trace_id"]) for c in create_ri.call_args_list}
+    assert links == {("easy-001", "trace-1"), ("easy-002", "trace-2")}
+    assert all(c.kwargs["run_name"] == "run-x" for c in create_ri.call_args_list)
     client.flush.assert_called_once()
 
     assert summary == {
         "dataset": GOLDEN_DATASET_NAME,
+        "run_name": "run-x",
         "items": 2,
         "cases": 2,
         "scores": 3,
+        "run_items": 2,
         "skipped_no_trace": 0,
     }
 
 
 def test_sync_skips_case_without_runtime_trace() -> None:
     """A case with no run-time trace (errored → no response, or a response with
-    raw_trace_id=None) is skipped: no scores, counted in skipped_no_trace."""
+    raw_trace_id=None) is skipped: no scores, no run-item link, counted in
+    skipped_no_trace."""
     client = MagicMock()
     runs = [
         CaseRun(_case(9), None, [], error="boom"),            # errored → no response
@@ -219,7 +250,9 @@ def test_sync_skips_case_without_runtime_trace() -> None:
 
     client.create_score.assert_not_called()
     client.start_as_current_observation.assert_not_called()
+    client.api.dataset_run_items.create.assert_not_called()
     assert summary["scores"] == 0
+    assert summary["run_items"] == 0
     assert summary["skipped_no_trace"] == 2
     assert summary["cases"] == 2
 
@@ -361,6 +394,20 @@ def test_maybe_sync_failure_is_non_fatal() -> None:
     assert status["synced"] is False
     assert "non-fatal" in status["reason"]
     assert "langfuse down" in status["reason"]
+
+
+def test_maybe_sync_forwards_run_name() -> None:
+    """run_name (the dataset-run name, parameterized for the two critic-delta
+    arms) threads through the glue to sync_eval_to_langfuse."""
+    with (
+        patch("rra.tracing.get_langfuse", return_value=MagicMock()),
+        patch("rra.evals.langfuse_eval.sync_eval_to_langfuse", return_value={}) as sync,
+    ):
+        maybe_sync_langfuse(
+            [], enabled=True, allow_population=True, run_name="critic-delta-arm2-live-critic"
+        )
+
+    assert sync.call_args.kwargs["run_name"] == "critic-delta-arm2-live-critic"
 
 
 # ─── run_agent eval-case parenting (Phase 3: orphan-span fix) ────────────────

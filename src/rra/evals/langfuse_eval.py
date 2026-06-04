@@ -68,6 +68,11 @@ POPULATION_GATED = True
 # rather than forking a new copy each run.
 GOLDEN_DATASET_NAME = "rra-golden-eval"
 
+# Fallback dataset-run name when the caller doesn't pass one. run.py always
+# supplies an explicit name (cheap-validate-<ts>, or --run-name for the two
+# critic-delta arms); this benign default only matters for a bare library call.
+DEFAULT_RUN_NAME = "adhoc-eval"
+
 DATASET_DESCRIPTION = (
     "RRA golden eval set (evals/golden.jsonl). Inputs: query + product_context. "
     "Expected outputs: expected_facts + expected_guidance_ids. Scored by "
@@ -202,6 +207,36 @@ def emit_scores(client: Any, trace_id: str | None, scores: list[ScoreResult]) ->
     return emitted
 
 
+def link_run_item(
+    client: Any,
+    *,
+    run_name: str,
+    dataset_item_id: str,
+    trace_id: str,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    """Link an eval-case trace to a NAMED dataset run (Datasets→Runs view).
+
+    Uses the low-level dataset-run-items API — langfuse v4 removed the v2/v3
+    `dataset_item.run(run_name=...)` context manager; this is the supported
+    equivalent (the exact call run_experiment makes internally). The dataset is
+    resolved from `dataset_item_id` (our case.id, set as the item id in
+    push_golden_dataset), so no dataset_name is needed; `trace_id` alone links the
+    run item to the per-case trace whose scores then aggregate under the run.
+
+    Idempotency is by run_name UNIQUENESS: each eval run uses a fresh run_name
+    (the cheap-validate timestamp, or the distinct critic-delta arm names), so a
+    run item is created once per (run, case). There is no client-supplied run-item
+    id to dedupe on (unlike scores' score_id) — do NOT reuse a run_name across runs.
+    """
+    client.api.dataset_run_items.create(
+        run_name=run_name,
+        dataset_item_id=dataset_item_id,
+        trace_id=trace_id,
+        metadata=metadata,
+    )
+
+
 # ─── Orchestration ───────────────────────────────────────────────────────────
 
 
@@ -209,21 +244,26 @@ def sync_eval_to_langfuse(
     client: Any,
     runs: list[CaseRun],
     *,
+    run_name: str = DEFAULT_RUN_NAME,
     dataset_name: str = GOLDEN_DATASET_NAME,
 ) -> dict[str, Any]:
-    """Push the dataset, then attach each case's scores to the per-case trace that
-    run_agent opened at run time (`raw_trace_id`).
+    """Push the dataset, attach each case's scores to the per-case trace that
+    run_agent opened at run time (`raw_trace_id`), and link that trace to the
+    named dataset run `run_name` (Datasets→Runs).
 
     Scores land on the SAME trace whose children are the agent spans — NOT on a
-    post-hoc orphan span. Assumes the gate has already been cleared by the caller
-    (`maybe_sync_langfuse` / `should_populate`) and that the runs were produced
-    with --allow-population (so run_agent captured `raw_trace_id`). A case with no
-    `raw_trace_id` (errored, or produced without the flag) has no trace to attach
-    to and is skipped. Flushes once at the end. Returns a summary dict.
+    post-hoc orphan span — and the trace is linked to `run_name` so the run's
+    aggregated scores appear in Datasets→Runs. Assumes the gate has already been
+    cleared by the caller (`maybe_sync_langfuse` / `should_populate`) and that the
+    runs were produced with --allow-population (so run_agent captured
+    `raw_trace_id`). A case with no `raw_trace_id` (errored, or produced without
+    the flag) has no trace to attach to or link and is skipped. Flushes once at
+    the end. Returns a summary dict.
     """
     pushed = push_golden_dataset(client, [r.case for r in runs], dataset_name=dataset_name)
 
     emitted = 0
+    linked = 0
     skipped = 0
     for run in runs:
         trace_id = getattr(run.response, "raw_trace_id", None)
@@ -231,13 +271,23 @@ def sync_eval_to_langfuse(
             skipped += 1
             continue
         emitted += emit_scores(client, trace_id, run.scores)
+        link_run_item(
+            client,
+            run_name=run_name,
+            dataset_item_id=run.case.id,
+            trace_id=trace_id,
+            metadata={"difficulty": run.case.difficulty},
+        )
+        linked += 1
 
     client.flush()
     return {
         "dataset": dataset_name,
+        "run_name": run_name,
         "items": pushed,
         "cases": len(runs),
         "scores": emitted,
+        "run_items": linked,
         "skipped_no_trace": skipped,
     }
 
@@ -247,6 +297,7 @@ def maybe_sync_langfuse(
     *,
     enabled: bool,
     allow_population: bool = False,
+    run_name: str = DEFAULT_RUN_NAME,
     gated: bool = POPULATION_GATED,
 ) -> dict[str, Any]:
     """Glue called from run.py: fetch the SHARED tracing client, apply the gate,
@@ -272,7 +323,7 @@ def maybe_sync_langfuse(
         return {"synced": False, "reason": reason}
 
     try:
-        summary = sync_eval_to_langfuse(client, runs)
+        summary = sync_eval_to_langfuse(client, runs, run_name=run_name)
     except Exception as exc:  # noqa: BLE001 — Langfuse must never fail the eval
         return {"synced": False, "reason": f"langfuse sync failed (non-fatal): {exc}"}
     return {"synced": True, **summary}
