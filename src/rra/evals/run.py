@@ -22,6 +22,7 @@ CI integration:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import sys
 import uuid
 from dataclasses import dataclass
@@ -60,15 +61,15 @@ class CaseRun:
 
 # ─── Agent invocation ───────────────────────────────────────────────────────
 
-def run_agent(case: GoldenCase) -> AgentResponse:
+def run_agent(case: GoldenCase, *, trace_to_langfuse: bool = False) -> AgentResponse:
     """Call the real LangGraph graph and return an AgentResponse.
 
-    Reads GraphState keys: draft (answer text), passages (retrieved docs),
-    trace_id (Langfuse trace). Citations AND their analyst-emitted supporting
-    quotes are parsed from the raw draft via the SHARED parse_answer (ADR 0013)
-    — the same parser the API resolver uses, so the measurement and the product
-    surface cannot drift (plan §7-#5). This is the pre-resolution tap: it reads
-    the analyst's own output, catching hallucinated keys.
+    Reads GraphState keys: draft (answer text), passages (retrieved docs).
+    Citations AND their analyst-emitted supporting quotes are parsed from the raw
+    draft via the SHARED parse_answer (ADR 0013) — the same parser the API
+    resolver uses, so the measurement and the product surface cannot drift (plan
+    §7-#5). This is the pre-resolution tap: it reads the analyst's own output,
+    catching hallucinated keys.
 
     Each citation carries quoted_text — the analyst's verbatim span, or "" when
     the analyst emitted no quote. The parser's None is mapped to "" here so a
@@ -76,18 +77,60 @@ def run_agent(case: GoldenCase) -> AgentResponse:
     means key-existence mode); the scorer treats the two differently. answer_text
     is the user-facing prose (clean_prose, <q> envelopes stripped) so the LLM
     judges grade exactly what the API returns, not raw markup.
+
+    Langfuse parenting (trace_to_langfuse=True, set by --allow-population): the
+    graph runs INSIDE one per-case "eval-case" span so the agents' own spans
+    (planner/researcher/analyst/critic/retrieval) nest under a single trace
+    instead of each flushing as an orphan root (the confirmed bug). The session
+    is propagated onto the parent AND every child via propagate_attributes, and
+    the captured trace_id rides out on raw_trace_id for the Phase-4 score writes
+    and Phase-5 dataset-run linkage. With the flag off (default) or keys absent,
+    the graph runs exactly as before with raw_trace_id=None — no Langfuse side
+    effect (mirrors the gate philosophy: no Langfuse writes without the opt-in).
     """
     from rra.graph import run_graph
     from rra.citations import parse_answer
+    from rra.tracing import get_langfuse
 
-    result = run_graph({
-        "query": case.query,
-        "product_context": case.product_context,
-        "session_id": str(uuid.uuid4()),
-    })
+    session_id = str(uuid.uuid4())
+    lf = get_langfuse() if trace_to_langfuse else None
 
-    draft: str = result.get("draft", "")
-    clean_prose, triples = parse_answer(draft)
+    span = None
+    trace_id: str | None = None
+    with contextlib.ExitStack() as stack:
+        if lf is not None:
+            from langfuse import propagate_attributes
+
+            # propagate_attributes FIRST so the eval-case span — and every agent
+            # span opened inside run_graph — starts within the session context.
+            stack.enter_context(propagate_attributes(session_id=session_id))
+            span = stack.enter_context(
+                lf.start_as_current_observation(
+                    name="eval-case",
+                    as_type="span",
+                    input={"query": case.query, "product_context": case.product_context},
+                    metadata={"case_id": case.id, "difficulty": case.difficulty},
+                )
+            )
+            trace_id = lf.get_current_trace_id()
+
+        result = run_graph({
+            "query": case.query,
+            "product_context": case.product_context,
+            "session_id": session_id,
+        })
+
+        draft: str = result.get("draft", "")
+        clean_prose, triples = parse_answer(draft)
+
+        if span is not None:
+            span.update(
+                output={
+                    "answer_preview": clean_prose[:200],
+                    "citation_count": len(triples),
+                }
+            )
+
     citations = [
         {"guidance_id": g, "chunk_index": i, "quoted_text": q or ""}
         for g, i, q in triples
@@ -98,7 +141,7 @@ def run_agent(case: GoldenCase) -> AgentResponse:
         answer_text=clean_prose,
         citations=citations,
         retrieved_passages=passages,
-        raw_trace_id=result.get("trace_id"),
+        raw_trace_id=trace_id,
     )
 
 
@@ -159,8 +202,13 @@ def run_eval(
     tag: str = "",
     enforce_gates: bool = True,
     use_ci_fixture: bool = False,
+    trace_to_langfuse: bool = False,
 ) -> tuple[list[CaseRun], bool]:
     """Returns (runs, all_gates_passed).
+
+    trace_to_langfuse (from --allow-population) is forwarded to run_agent so each
+    case's graph runs under one eval-case Langfuse trace (orphan fix); it has no
+    effect on the CI-fixture path, which never invokes the graph.
 
     Gate hardening (ADR 0012 D2):
     - Any error → gate fails (broken harness must not report green)
@@ -171,7 +219,11 @@ def run_eval(
     runs: list[CaseRun] = []
     for case in cases:
         try:
-            response = _make_ci_response(case) if use_ci_fixture else run_agent(case)
+            response = (
+                _make_ci_response(case)
+                if use_ci_fixture
+                else run_agent(case, trace_to_langfuse=trace_to_langfuse)
+            )
         except Exception as e:
             runs.append(CaseRun(case=case, response=None, scores=[], error=str(e)))
             continue
@@ -413,8 +465,17 @@ def main() -> int:
         help=(
             "Push the golden set as a Langfuse dataset and emit each scorer's "
             "result as a score linked to a per-case trace. GATED: a hard no-op "
-            "until POPULATION_GATED is flipped at the critic-flip (see "
-            "rra.evals.langfuse_eval) — pre-flip key-existence scores would go stale."
+            "unless --allow-population is ALSO passed (see rra.evals.langfuse_eval)."
+        ),
+    )
+    parser.add_argument(
+        "--allow-population",
+        action="store_true",
+        help=(
+            "Open the population gate for THIS invocation only (also requires "
+            "Langfuse keys). POPULATION_GATED stays True as the committed default "
+            "— this flag never flips it, so there is no constant to forget to "
+            "revert. Implies --langfuse-sync; without it, population is a no-op."
         ),
     )
     args = parser.parse_args()
@@ -450,18 +511,30 @@ def main() -> int:
         tag=args.tag,
         enforce_gates=not args.no_gate,
         use_ci_fixture=use_ci_fixture,
+        # Open per-case eval-case traces only when populating (keys handled by
+        # get_langfuse() returning None when absent) — same opt-in as the gate.
+        trace_to_langfuse=args.allow_population,
     )
     report_path = write_report(runs, scorers, args.tag)
     print(f"Report: {report_path}")
 
     # Optional Langfuse sync (dataset push + per-case scores). GATED: a no-op
-    # until the critic-flip flips POPULATION_GATED — see rra.evals.langfuse_eval.
-    # The gate/disabled/not-requested paths return synced=False without touching
-    # Langfuse, so this never affects a normal run or the CI gate below.
+    # unless --allow-population is passed (and Langfuse keys are present) — see
+    # rra.evals.langfuse_eval. The gate/disabled/not-requested paths return
+    # synced=False without touching Langfuse, so this never affects a normal run
+    # or the CI gate below.
     from .langfuse_eval import maybe_sync_langfuse
 
-    sync_status = maybe_sync_langfuse(runs, enabled=args.langfuse_sync)
-    if args.langfuse_sync:
+    # --allow-population is the single per-run opt-in: it implies a sync request
+    # AND opens the gate (which still requires keys). --langfuse-sync alone stays
+    # a gated no-op so an existing invocation can't suddenly start publishing.
+    sync_requested = args.langfuse_sync or args.allow_population
+    sync_status = maybe_sync_langfuse(
+        runs,
+        enabled=sync_requested,
+        allow_population=args.allow_population,
+    )
+    if sync_requested:
         print(f"Langfuse sync: {sync_status}")
 
     return 0 if gates_passed else 1
