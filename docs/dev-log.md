@@ -1,6 +1,41 @@
 # Dev log
 
 
+## 2026-06-04 — eval-maturation: test-isolation guard + Langfuse cleanup (end of session)
+
+**Branch `eval-maturation`**, commit `6b53329` (pushed).
+
+### Langfuse tracing verified intact
+
+Phase 7 parenting confirmed at trace `9ee44be4` (easy-001): 49 observations, 1 root `eval-case` span, 48 children properly nested, sessionId present, linked to dataset-run `cheap-validate-20260604T173754Z` (both easy-001 and easy-002 present). The apparent "regression" was test pollution, not a code regression.
+
+### Root cause of the orphan traces
+
+pytest run with live Langfuse keys in env (loaded from `.env` via Pydantic Settings). `test_graph.py` force-verdict tests (`test_force_verdict_revise_hits_cap`, `test_force_verdict_escalate_exits_immediately`) patch planner/researcher/analyst but **not** `run_critic`, so the real critic node ran and called `get_langfuse()` — emitting orphan spans (null parent, null session) with synthetic fixture inputs (`gd-001`, `Draft answer.`, `Refusal text.`). Other test files emitted additional orphans via mocked `run_agent` calls (agent/api tests).
+
+### Fix: `tests/conftest.py` session-scoped autouse isolation guard
+
+Session-scoped autouse fixture runs before any test:
+- `get_langfuse.cache_clear()` — the non-obvious necessary piece; the `@lru_cache` would otherwise serve a live client cached during module import if any code had called it before the fixture ran.
+- `settings.langfuse_public_key = None`, `settings.langfuse_secret_key = None` → `langfuse_enabled → False` → all subsequent `get_langfuse()` calls return `None`.
+- `settings.critic_force_verdict = None` — guards against ambient `.env`/shell leakage; function-scoped `monkeypatch` in individual tests still overrides and restores correctly.
+
+`test_langfuse_disabled_in_test_session()` added to `test_graph.py` as regression guard — fails immediately if the conftest fixture is removed or broken. Suite: **223 passed** (1 pre-existing integration failure: `test_search_corpus_returns_results_from_live_db` hits live Voyage API with a stub key; fails identically with and without the guard; unrelated).
+
+### Cleanup: 34 fixture orphan traces deleted
+
+All 34 traces timestamped `2026-06-04T17:40:40Z` deleted via Langfuse API. Synthetic inputs: `gd-100`, `gd-999`, `q`, `x`, `test`, `anything`, `Bogus claim`, `sub_questions: ['q1','q2']`, etc. Legitimate validate traces (`easy-001`, `easy-002`) confirmed surviving with full observation counts.
+
+### CRITIC_FORCE_VERDICT swept clean
+
+Not set in shell env, `.env` (confirmed via runtime settings check), `config.py` default (`None`), or `.env.example` (commented-out). Critic-delta paid eval is safe to run.
+
+### Next
+
+**critic-delta** — paid, ~$3–6, two arms (`arm1-forced-approve` / `arm2-live-critic`), diff `citation_validity` to measure the critic-flip's effect. ADR-0009 theater verdict check. Deferred to a fresh session.
+
+---
+
 ## 2026-06-04 — eval-maturation Steps 2+3: τ-confirm (keep 0.85) + critic-flip (faithfulness-aware)
 
 **Branch `eval-maturation`**, off matcher-v2 (6836cb4). `CRITIC_FORCE_VERDICT` confirmed UNSET
