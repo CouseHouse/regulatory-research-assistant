@@ -1,6 +1,123 @@
 # Dev log
 
 
+## 2026-06-05 — eval-maturation: trace the LLM judges + pricing audit (close the $2.26 cost gap)
+
+**Branch `eval-maturation`**, HEAD `bda1576`. Follow-up on the previous entry's LESSON ("Langfuse
+cost is a FLOOR"): make traced cost trustworthy by (A) tracing the two LLM judges and (B) auditing
+model pricing. No ADR — observability plumbing, no trace/span model change.
+
+### Part A — judges now attach to the per-case trace (DONE, unit-tested)
+
+The judges fire in the scorer layer AFTER `run_agent` closes the `eval-case` span (`run.py:231`), so
+there is no live span to nest under. Mirrored `emit_scores`' approach: attach to the *closed* trace
+by id rather than opening a child span.
+
+- `judge.py`: `judge_call(model, prompt, prefill=None, trace_id=None)` now captures `msg.usage`
+  (previously discarded) and, when `trace_id` is set, calls `_emit_judge_observation` →
+  `lf.start_observation(trace_context={"trace_id": …}, as_type="generation", model=…,
+  usage_details={"input":…, "output":…})` then `.end()`. The `model` + `usage_details` are what make
+  Langfuse COMPUTE the judge's cost.
+- `scorers.py`: both LLM judges pass `trace_id=response.raw_trace_id` (already carried to the scorer
+  on the `AgentResponse`) — no `run.py`/`run_eval` signature changes; `score()` signature unchanged.
+- **Gating (both natural no-ops):** `raw_trace_id` is non-None only on `--allow-population` runs, and
+  `get_langfuse()` returns None when keys are absent. So `judge_call` still works standalone with
+  zero Langfuse side-effect. Emission wrapped in try/except — a tracing hiccup can never fail a judge.
+- Tests: `tests/test_evals_scorers.py` — scorer threads `raw_trace_id`; `judge_call` emits a priced
+  generation when a trace is active; hard no-op when `trace_id=None` or Langfuse disabled. Full suite
+  227 passed (1 pre-existing live-DB/Voyage-key failure, unrelated). Free CI eval green
+  (`--fixture ci` exits 1 gate-bite, `ci-valid` exits 0).
+
+### Part B — pricing audit: the gap was 100% judges, NOT unpriced models
+
+Enumerated distinct model strings across all observations in both run traces
+(`critic-delta-arm1-forced-approve`, `critic-delta-arm2-live-critic`):
+
+| Model | Observations | Priced |
+|---|---|---|
+| `claude-haiku-4-5` | 233 | 233 (0 null) |
+| `claude-sonnet-4-6` | 200 | 200 (0 null) |
+
+Both already have Langfuse price entries (`claude-haiku-4-5` matched by the
+`claude-haiku-4-5-20251001` regex; `claude-sonnet-4-6` exact). **cost.py's cause-(2) hypothesis
+(unpriced graph models) does NOT apply to these runs** — every observation was priced. The judges
+reuse those same two model strings, so once Part A traces them they price automatically — **no new
+model definitions were needed.** cost.py re-pull confirms arm1 $1.7496 + arm2 $6.9008 = **$8.65**
+(unchanged; old runs' judge calls were never traced and can't be retroactively reconciled). So the
+full **$2.26 gap = untraced judges**, which Part A closes for future runs.
+
+**Latent gap (flagged, not fixed):** no `claude-opus-4-8` definition exists in Langfuse (only opus
+`4-5`/`4-6`/`4-7`). No project role uses opus-4-8 today, so it doesn't affect this eval — but if a
+role ever switches to it, its observations would price to null. Future-work note.
+
+### Not yet done
+
+Paid validation deferred at user's request — wiring is unit-test verified but NOT yet proven on a
+live run. To confirm judge spend lands + prices in Langfuse, run a cents-scale smoke:
+`uv run python -m rra.evals.run --limit 1 --allow-population --run-name judge-trace-smoke-<ts>`,
+then re-pull `cost.py` and confirm 2 priced `llm-judge` generations on the case trace.
+
+
+## 2026-06-05 — eval-maturation: critic-delta PAID 2-arm eval (ADR-0009 "is the critic theater?")
+
+**Branch `eval-maturation`**, HEAD `bda1576`. Full 30-case golden set run twice, judges ON, both
+arms published to Langfuse Datasets→Runs (dataset `rra-golden-eval`). Staged/gated paid execution
+(~$20 ceiling); each arm green-lit individually.
+
+### Result — the critic moves citation_validity materially
+
+| Scorer | Arm 1 critic OFF | Arm 2 critic ON | Δ |
+|---|---|---|---|
+| citation_validity (HARD 0.95) | 0.842 (6.7% pass) | **0.972** (73.3% pass) | **+0.130** |
+| key_fact_coverage (warn 0.80) | 0.783 | 0.808 | +0.025 |
+| position_quality (warn 4.0/5, normalized) | 0.913 (≈4.56/5) | 0.960 (≈4.80/5) | +0.047 |
+
+Both arms 30/30 scored, 0 errors. Quote-faithfulness: arm1 385/455 verified (84.6%), arm2
+449/461 (97.4%); no-quote citations 6→10 under the live critic. Reports:
+`evals/results/20260605T235950Z.md` (arm1), `evals/results/20260606T004425Z.md` (arm2). Run-names:
+`critic-delta-arm1-forced-approve`, `critic-delta-arm2-live-critic`.
+
+The +0.130 lift clears the ≥2% "critic earns its cost" bar by a wide margin — but the verdict call
+is the user's, made in a separate planning session. Not asserting it here.
+
+### Actual cost — $10.91 total (Anthropic Console = ground truth)
+
+Reconciliation: Langfuse-traced graph cost was arm 1 **$1.7496** + arm 2 **$6.9008** = **$8.65**;
+the Console bill was **$10.91**, leaving a **$2.26 untraced gap**. Under the $12–16 estimate and
+the $20 ceiling. Arm 2 ~3.9× arm 1 on the graph (live critic ~17–23k input tokens/pass + revision
+re-runs).
+
+**LESSON — Langfuse-computed cost is a FLOOR, not the bill.** I estimated the untraced portion at
+~$0.65 and reported "~$9.3 total"; the real untraced spend was **$2.26** (~3.5× my estimate). Two
+causes: (1) the two LLM judges (`KeyFactCoverageScorer` Haiku-4.5, `PositionQualityScorer`
+**Sonnet-4.6**) run in the scorer layer AFTER `run_agent` closes the per-case trace (`run.py:231`)
+and `judge_call` (`judge.py:25`) opens no span — 120 judge calls (2/case × 30 × 2 arms) are
+entirely untraced, and the Sonnet judge over full answer text is the dominant cost; (2) `cost.py`
+only checks each trace has a non-null `total_cost`, not that every nested observation was priced,
+so any graph model lacking a Langfuse pricing entry makes even the $8.65 a floor. To trust
+Langfuse for spend in future: trace the judges (or price them separately) AND verify every model
+has a Langfuse pricing entry. Treat the Console as the billing source of truth.
+
+### Follow-up (open) — revision cap may be biting before convergence
+
+Arm 2: **14/30 cases hit `cap_hit=True`** (39 `revise` vs 46 `approve` verdicts across all passes).
+On ~47% of cases the critic was still demanding revisions when `max_critic_revisions` ran out.
+Open question: does raising the cap lift citation_validity further, or just burn tokens on cases the
+critic will never approve? Candidate for a future cheap-ish targeted run.
+
+### Process notes (operational, for repeatability)
+
+- **Workspace usage-limit footgun:** first two arm-1 launches failed 30/30 with HTTP 400
+  "workspace API usage limits … regain access 2026-07-01" at **$0** (400s are pre-billing). Root
+  cause was an org/wrong-workspace limit, not code. The per-case 400s land in the REPORT file, not
+  stdout — a log-only grep gave a false "healthy" reading once; authoritative fail signal is the
+  log's `Langfuse sync … 'skipped_no_trace': 30` + a `Report:` line within ~2s of launch.
+- `CRITIC_FORCE_VERDICT` set ONLY via inline command-prefix on arm 1 (never exported); verified
+  empty in shell before each arm and `.env` stayed commented. No leak across arms.
+- Runs backgrounded with `nohup … & disown` (detached, survive polling timeouts); PID+log on disk;
+  a `run_in_background` watcher blocks on the PID and notifies on exit.
+
+
 ## 2026-06-04 — eval-maturation: test-isolation guard + Langfuse cleanup (end of session)
 
 **Branch `eval-maturation`**, commit `6b53329` (pushed).
