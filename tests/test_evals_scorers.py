@@ -92,8 +92,9 @@ def test_keyfact_scorer_returns_real_score_with_prefilled_json():
     """
     calls = {}
 
-    def fake_judge(model, prompt, prefill=None):
+    def fake_judge(model, prompt, prefill=None, trace_id=None):
         calls["prefill"] = prefill
+        calls["trace_id"] = trace_id
         # Simulates judge_call's contract: a complete JSON string (the "{" has
         # already been prepended back). Previously this arrived prose-wrapped.
         return '{"present": [true, false], "notes": "ok"}'
@@ -110,7 +111,7 @@ def test_keyfact_scorer_preserves_strictness_on_persistent_garbage():
     """Strictness guarantee retained: if the judge returns non-JSON on BOTH
     attempts, the scorer still returns score=None (N/A) — never a silent 0.0.
     """
-    def garbage_judge(model, prompt, prefill=None):
+    def garbage_judge(model, prompt, prefill=None, trace_id=None):
         return "I refuse to emit JSON today."
 
     scorer = KeyFactCoverageScorer(garbage_judge, model="claude-haiku-4-5")
@@ -152,3 +153,78 @@ def test_keyfact_scorer_through_real_judge_call_neutralizes_prose_model():
     # The scorer actually opted into the prefill: an assistant "{" turn was sent.
     sent = fake.messages.create.call_args.kwargs["messages"]
     assert sent[-1] == {"role": "assistant", "content": "{"}
+
+
+# ─── Judge → Langfuse cost tracing (the cost-floor fix) ─────────────────────
+
+
+def _client_with_usage(text: str, *, input_tokens: int, output_tokens: int):
+    """A mocked Anthropic client whose one response carries token usage."""
+    fake = MagicMock()
+    fake.messages.create.return_value = MagicMock(
+        content=[MagicMock(text=text)],
+        usage=MagicMock(input_tokens=input_tokens, output_tokens=output_tokens),
+    )
+    return fake
+
+
+def test_scorer_threads_raw_trace_id_into_judge_call():
+    """The scorer passes the response's eval-case trace_id to judge_call, so the
+    judge's usage can be attached to the SAME per-case trace as the graph spans."""
+    calls = {}
+
+    def fake_judge(model, prompt, prefill=None, trace_id=None):
+        calls["trace_id"] = trace_id
+        return '{"present": [true], "notes": "ok"}'
+
+    scorer = KeyFactCoverageScorer(fake_judge, model="claude-haiku-4-5")
+    resp = AgentResponse(
+        answer_text="a", citations=[], retrieved_passages=[], raw_trace_id="trace-42"
+    )
+    scorer.score(_case(("fact a",)), resp)
+
+    assert calls["trace_id"] == "trace-42"
+
+
+def test_judge_call_emits_priced_generation_when_trace_active():
+    """trace_id set + Langfuse available → a generation is attached to that trace
+    carrying model + usage_details, which is what makes Langfuse COMPUTE cost."""
+    fake = _client_with_usage('{"score": 5}', input_tokens=120, output_tokens=8)
+    lf = MagicMock()
+    with patch("rra.evals.judge._get_client", return_value=fake), patch(
+        "rra.tracing.get_langfuse", return_value=lf
+    ):
+        judge_call("claude-sonnet-4-6", "grade this", trace_id="trace-1")
+
+    lf.start_observation.assert_called_once()
+    kwargs = lf.start_observation.call_args.kwargs
+    assert kwargs["trace_context"] == {"trace_id": "trace-1"}
+    assert kwargs["as_type"] == "generation"
+    assert kwargs["model"] == "claude-sonnet-4-6"
+    assert kwargs["usage_details"] == {"input": 120, "output": 8}
+    lf.start_observation.return_value.end.assert_called_once()
+
+
+def test_judge_call_no_trace_id_never_touches_langfuse():
+    """trace_id=None (non-population runs, standalone use) is a hard no-op:
+    get_langfuse is never even consulted."""
+    fake = _client_with_usage('{"score": 5}', input_tokens=10, output_tokens=2)
+    with patch("rra.evals.judge._get_client", return_value=fake), patch(
+        "rra.tracing.get_langfuse"
+    ) as get_lf:
+        result = judge_call("claude-sonnet-4-6", "grade this")  # trace_id defaults None
+
+    assert result == '{"score": 5}'
+    get_lf.assert_not_called()
+
+
+def test_judge_call_trace_id_set_but_langfuse_disabled_is_noop():
+    """trace_id set but keys absent (get_langfuse() → None): no emission, no error,
+    judge_call still returns its text. Mirrors the disabled gate everywhere else."""
+    fake = _client_with_usage('{"score": 5}', input_tokens=10, output_tokens=2)
+    with patch("rra.evals.judge._get_client", return_value=fake), patch(
+        "rra.tracing.get_langfuse", return_value=None
+    ):
+        result = judge_call("claude-sonnet-4-6", "grade this", trace_id="trace-1")
+
+    assert result == '{"score": 5}'
