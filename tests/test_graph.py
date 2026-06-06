@@ -276,6 +276,17 @@ def test_force_verdict_default_is_none() -> None:
     assert settings.critic_force_verdict is None
 
 
+def test_langfuse_disabled_in_test_session() -> None:
+    """Langfuse must be a no-op during tests — conftest nulls the keys.
+
+    Regression guard: if the conftest fixture breaks or is removed, this test
+    catches it before a test run silently emits orphan spans to the live server.
+    """
+    from rra.tracing import get_langfuse
+
+    assert get_langfuse() is None
+
+
 def test_force_verdict_revise_hits_cap(
     monkeypatch: Any, sample_passage: RetrievedPassage
 ) -> None:

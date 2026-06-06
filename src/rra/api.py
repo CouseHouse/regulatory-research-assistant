@@ -69,6 +69,20 @@ def query(
     log.info("query.start", session_id=session_id, query=request.query[:120])
 
     lf = get_langfuse()
+    # Propagate session_id onto the parent span AND the child spans the graph
+    # opens, so Langfuse's Sessions view groups this request's whole trace —
+    # metadata={"session_id": ...} alone does NOT populate Sessions (v4). The
+    # "query" span must START INSIDE this context to inherit it, so session_cm is
+    # the OUTER with-context. Imported lazily to keep langfuse off the cold-path
+    # when tracing is disabled (mirrors tracing.get_langfuse).
+    session_cm: Any
+    if lf is not None:
+        from langfuse import propagate_attributes
+
+        session_cm = propagate_attributes(session_id=session_id)
+    else:
+        session_cm = contextlib.nullcontext()
+
     trace_cm = (
         lf.start_as_current_observation(
             name="query",
@@ -80,7 +94,7 @@ def query(
         else contextlib.nullcontext(None)
     )
 
-    with trace_cm as trace_span:
+    with session_cm, trace_cm as trace_span:
         trace_id = lf.get_current_trace_id() if lf is not None else None
 
         final_state = run_graph(

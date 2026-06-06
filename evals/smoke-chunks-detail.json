@@ -282,10 +282,10 @@
     "case_id": "easy-002",
     "guid": "180978",
     "table": "chunks",
-    "best_chunk_score": 0.799,
-    "best_chunk_verified": false,
-    "doc_level_score": 0.799,
-    "doc_level_verified": false
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
   },
   {
     "case_id": "easy-002",
@@ -354,10 +354,10 @@
     "case_id": "easy-003",
     "guid": "180978",
     "table": "chunks",
-    "best_chunk_score": 0.603,
-    "best_chunk_verified": false,
-    "doc_level_score": 0.603,
-    "doc_level_verified": false
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
   },
   {
     "case_id": "easy-003",
@@ -381,10 +381,10 @@
     "case_id": "easy-003",
     "guid": "180978",
     "table": "chunks",
-    "best_chunk_score": 0.772,
-    "best_chunk_verified": false,
-    "doc_level_score": 0.772,
-    "doc_level_verified": false
+    "best_chunk_score": 0.991,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.991,
+    "doc_level_verified": true
   },
   {
     "case_id": "easy-003",
@@ -393,24 +393,6 @@
     "best_chunk_score": 0.987,
     "best_chunk_verified": true,
     "doc_level_score": 0.987,
-    "doc_level_verified": true
-  },
-  {
-    "case_id": "easy-003",
-    "guid": "180978",
-    "table": "chunks",
-    "best_chunk_score": 0.473,
-    "best_chunk_verified": false,
-    "doc_level_score": 0.473,
-    "doc_level_verified": false
-  },
-  {
-    "case_id": "easy-003",
-    "guid": "180978",
-    "table": "chunks",
-    "best_chunk_score": 0.864,
-    "best_chunk_verified": true,
-    "doc_level_score": 0.864,
     "doc_level_verified": true
   },
   {
@@ -426,19 +408,37 @@
     "case_id": "easy-003",
     "guid": "180978",
     "table": "chunks",
-    "best_chunk_score": 0.521,
-    "best_chunk_verified": false,
-    "doc_level_score": 0.521,
-    "doc_level_verified": false
+    "best_chunk_score": 0.989,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.989,
+    "doc_level_verified": true
   },
   {
     "case_id": "easy-003",
     "guid": "180978",
     "table": "chunks",
-    "best_chunk_score": 0.672,
-    "best_chunk_verified": false,
-    "doc_level_score": 0.672,
-    "doc_level_verified": false
+    "best_chunk_score": 0.995,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.995,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-003",
+    "guid": "180978",
+    "table": "chunks",
+    "best_chunk_score": 0.994,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.994,
+    "doc_level_verified": true
+  },
+  {
+    "case_id": "easy-003",
+    "guid": "180978",
+    "table": "chunks",
+    "best_chunk_score": 0.993,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.993,
+    "doc_level_verified": true
   },
   {
     "case_id": "easy-003",
@@ -633,10 +633,10 @@
     "case_id": "easy-005",
     "guid": "153781",
     "table": "chunks",
-    "best_chunk_score": 0.726,
-    "best_chunk_verified": false,
-    "doc_level_score": 0.726,
-    "doc_level_verified": false
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
   },
   {
     "case_id": "easy-005",
@@ -669,9 +669,9 @@
     "case_id": "easy-005",
     "guid": "153781",
     "table": "chunks",
-    "best_chunk_score": 0.875,
+    "best_chunk_score": 1.0,
     "best_chunk_verified": true,
-    "doc_level_score": 0.875,
+    "doc_level_score": 1.0,
     "doc_level_verified": true
   },
   {
@@ -804,9 +804,9 @@
     "case_id": "easy-006",
     "guid": "119933",
     "table": "chunks",
-    "best_chunk_score": 0.911,
+    "best_chunk_score": 1.0,
     "best_chunk_verified": true,
-    "doc_level_score": 0.911,
+    "doc_level_score": 1.0,
     "doc_level_verified": true
   },
   {
@@ -1182,10 +1182,10 @@
     "case_id": "easy-008",
     "guid": "80958",
     "table": "chunks",
-    "best_chunk_score": 0.774,
-    "best_chunk_verified": false,
-    "doc_level_score": 0.774,
-    "doc_level_verified": false
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
   },
   {
     "case_id": "easy-008",
@@ -1326,10 +1326,10 @@
     "case_id": "easy-009",
     "guid": "152657",
     "table": "chunks",
-    "best_chunk_score": 0.61,
-    "best_chunk_verified": false,
-    "doc_level_score": 0.61,
-    "doc_level_verified": false
+    "best_chunk_score": 0.992,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.992,
+    "doc_level_verified": true
   },
   {
     "case_id": "easy-009",
@@ -1497,10 +1497,10 @@
     "case_id": "easy-010",
     "guid": "141565",
     "table": "chunks",
-    "best_chunk_score": 0.847,
-    "best_chunk_verified": false,
-    "doc_level_score": 0.847,
-    "doc_level_verified": false
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
   },
   {
     "case_id": "easy-010",
@@ -1596,19 +1596,19 @@
     "case_id": "medium-001",
     "guid": "180978",
     "table": "chunks",
-    "best_chunk_score": 0.758,
-    "best_chunk_verified": false,
-    "doc_level_score": 0.758,
-    "doc_level_verified": false
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
   },
   {
     "case_id": "medium-001",
     "guid": "166704",
     "table": "chunks",
-    "best_chunk_score": 0.649,
-    "best_chunk_verified": false,
-    "doc_level_score": 0.649,
-    "doc_level_verified": false
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
   },
   {
     "case_id": "medium-001",
@@ -1911,9 +1911,9 @@
     "case_id": "medium-004",
     "guid": "153781",
     "table": "chunks",
-    "best_chunk_score": 0.881,
+    "best_chunk_score": 1.0,
     "best_chunk_verified": true,
-    "doc_level_score": 0.881,
+    "doc_level_score": 1.0,
     "doc_level_verified": true
   },
   {
@@ -2055,10 +2055,10 @@
     "case_id": "medium-005",
     "guid": "184856",
     "table": "chunks",
-    "best_chunk_score": 0.459,
-    "best_chunk_verified": false,
-    "doc_level_score": 0.459,
-    "doc_level_verified": false
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
   },
   {
     "case_id": "medium-005",
@@ -2145,9 +2145,9 @@
     "case_id": "medium-006",
     "guid": "119933",
     "table": "chunks",
-    "best_chunk_score": 0.911,
+    "best_chunk_score": 1.0,
     "best_chunk_verified": true,
-    "doc_level_score": 0.911,
+    "doc_level_score": 1.0,
     "doc_level_verified": true
   },
   {
@@ -3207,9 +3207,9 @@
     "case_id": "medium-014",
     "guid": "190201",
     "table": "chunks",
-    "best_chunk_score": 0.889,
+    "best_chunk_score": 1.0,
     "best_chunk_verified": true,
-    "doc_level_score": 0.889,
+    "doc_level_score": 1.0,
     "doc_level_verified": true
   },
   {
@@ -3252,9 +3252,9 @@
     "case_id": "medium-014",
     "guid": "190201",
     "table": "chunks",
-    "best_chunk_score": 0.919,
+    "best_chunk_score": 1.0,
     "best_chunk_verified": true,
-    "doc_level_score": 0.919,
+    "doc_level_score": 1.0,
     "doc_level_verified": true
   },
   {
@@ -3549,19 +3549,19 @@
     "case_id": "hard-002",
     "guid": "166704",
     "table": "chunks",
-    "best_chunk_score": 0.836,
-    "best_chunk_verified": false,
-    "doc_level_score": 0.836,
-    "doc_level_verified": false
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
   },
   {
     "case_id": "hard-002",
     "guid": "184856",
     "table": "chunks",
-    "best_chunk_score": 0.804,
-    "best_chunk_verified": false,
-    "doc_level_score": 0.804,
-    "doc_level_verified": false
+    "best_chunk_score": 1.0,
+    "best_chunk_verified": true,
+    "doc_level_score": 1.0,
+    "doc_level_verified": true
   },
   {
     "case_id": "hard-002",
@@ -3648,10 +3648,10 @@
     "case_id": "hard-002",
     "guid": "184856",
     "table": "chunks",
-    "best_chunk_score": 0.701,
-    "best_chunk_verified": false,
-    "doc_level_score": 0.701,
-    "doc_level_verified": false
+    "best_chunk_score": 0.993,
+    "best_chunk_verified": true,
+    "doc_level_score": 0.993,
+    "doc_level_verified": true
   },
   {
     "case_id": "hard-002",

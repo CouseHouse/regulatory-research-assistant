@@ -209,7 +209,9 @@ class KeyFactCoverageScorer:
         # second failure (we never silently score 0).
         parsed = None
         for attempt in range(2):
-            raw = self._judge(self._model, prompt, prefill="{")
+            raw = self._judge(
+                self._model, prompt, prefill="{", trace_id=response.raw_trace_id
+            )
             try:
                 parsed = json.loads(raw)
                 break
@@ -287,7 +289,7 @@ class PositionQualityScorer:
 
         parsed = None
         for attempt in range(2):
-            raw = self._judge(self._model, prompt)
+            raw = self._judge(self._model, prompt, trace_id=response.raw_trace_id)
             try:
                 parsed = json.loads(raw)
                 break

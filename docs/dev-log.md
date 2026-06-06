@@ -1,5 +1,262 @@
 # Dev log
 
+
+## 2026-06-05 — eval-maturation: trace the LLM judges + pricing audit (close the $2.26 cost gap)
+
+**Branch `eval-maturation`**, HEAD `bda1576`. Follow-up on the previous entry's LESSON ("Langfuse
+cost is a FLOOR"): make traced cost trustworthy by (A) tracing the two LLM judges and (B) auditing
+model pricing. No ADR — observability plumbing, no trace/span model change.
+
+### Part A — judges now attach to the per-case trace (DONE, unit-tested)
+
+The judges fire in the scorer layer AFTER `run_agent` closes the `eval-case` span (`run.py:231`), so
+there is no live span to nest under. Mirrored `emit_scores`' approach: attach to the *closed* trace
+by id rather than opening a child span.
+
+- `judge.py`: `judge_call(model, prompt, prefill=None, trace_id=None)` now captures `msg.usage`
+  (previously discarded) and, when `trace_id` is set, calls `_emit_judge_observation` →
+  `lf.start_observation(trace_context={"trace_id": …}, as_type="generation", model=…,
+  usage_details={"input":…, "output":…})` then `.end()`. The `model` + `usage_details` are what make
+  Langfuse COMPUTE the judge's cost.
+- `scorers.py`: both LLM judges pass `trace_id=response.raw_trace_id` (already carried to the scorer
+  on the `AgentResponse`) — no `run.py`/`run_eval` signature changes; `score()` signature unchanged.
+- **Gating (both natural no-ops):** `raw_trace_id` is non-None only on `--allow-population` runs, and
+  `get_langfuse()` returns None when keys are absent. So `judge_call` still works standalone with
+  zero Langfuse side-effect. Emission wrapped in try/except — a tracing hiccup can never fail a judge.
+- Tests: `tests/test_evals_scorers.py` — scorer threads `raw_trace_id`; `judge_call` emits a priced
+  generation when a trace is active; hard no-op when `trace_id=None` or Langfuse disabled. Full suite
+  227 passed (1 pre-existing live-DB/Voyage-key failure, unrelated). Free CI eval green
+  (`--fixture ci` exits 1 gate-bite, `ci-valid` exits 0).
+
+### Part B — pricing audit: the gap was 100% judges, NOT unpriced models
+
+Enumerated distinct model strings across all observations in both run traces
+(`critic-delta-arm1-forced-approve`, `critic-delta-arm2-live-critic`):
+
+| Model | Observations | Priced |
+|---|---|---|
+| `claude-haiku-4-5` | 233 | 233 (0 null) |
+| `claude-sonnet-4-6` | 200 | 200 (0 null) |
+
+Both already have Langfuse price entries (`claude-haiku-4-5` matched by the
+`claude-haiku-4-5-20251001` regex; `claude-sonnet-4-6` exact). **cost.py's cause-(2) hypothesis
+(unpriced graph models) does NOT apply to these runs** — every observation was priced. The judges
+reuse those same two model strings, so once Part A traces them they price automatically — **no new
+model definitions were needed.** cost.py re-pull confirms arm1 $1.7496 + arm2 $6.9008 = **$8.65**
+(unchanged; old runs' judge calls were never traced and can't be retroactively reconciled). So the
+full **$2.26 gap = untraced judges**, which Part A closes for future runs.
+
+**Latent gap (flagged, not fixed):** no `claude-opus-4-8` definition exists in Langfuse (only opus
+`4-5`/`4-6`/`4-7`). No project role uses opus-4-8 today, so it doesn't affect this eval — but if a
+role ever switches to it, its observations would price to null. Future-work note.
+
+### Not yet done
+
+Paid validation deferred at user's request — wiring is unit-test verified but NOT yet proven on a
+live run. To confirm judge spend lands + prices in Langfuse, run a cents-scale smoke:
+`uv run python -m rra.evals.run --limit 1 --allow-population --run-name judge-trace-smoke-<ts>`,
+then re-pull `cost.py` and confirm 2 priced `llm-judge` generations on the case trace.
+
+
+## 2026-06-05 — eval-maturation: critic-delta PAID 2-arm eval (ADR-0009 "is the critic theater?")
+
+**Branch `eval-maturation`**, HEAD `bda1576`. Full 30-case golden set run twice, judges ON, both
+arms published to Langfuse Datasets→Runs (dataset `rra-golden-eval`). Staged/gated paid execution
+(~$20 ceiling); each arm green-lit individually.
+
+### Result — the critic moves citation_validity materially
+
+| Scorer | Arm 1 critic OFF | Arm 2 critic ON | Δ |
+|---|---|---|---|
+| citation_validity (HARD 0.95) | 0.842 (6.7% pass) | **0.972** (73.3% pass) | **+0.130** |
+| key_fact_coverage (warn 0.80) | 0.783 | 0.808 | +0.025 |
+| position_quality (warn 4.0/5, normalized) | 0.913 (≈4.56/5) | 0.960 (≈4.80/5) | +0.047 |
+
+Both arms 30/30 scored, 0 errors. Quote-faithfulness: arm1 385/455 verified (84.6%), arm2
+449/461 (97.4%); no-quote citations 6→10 under the live critic. Reports:
+`evals/results/20260605T235950Z.md` (arm1), `evals/results/20260606T004425Z.md` (arm2). Run-names:
+`critic-delta-arm1-forced-approve`, `critic-delta-arm2-live-critic`.
+
+The +0.130 lift clears the ≥2% "critic earns its cost" bar by a wide margin — but the verdict call
+is the user's, made in a separate planning session. Not asserting it here.
+
+### Actual cost — $10.91 total (Anthropic Console = ground truth)
+
+Reconciliation: Langfuse-traced graph cost was arm 1 **$1.7496** + arm 2 **$6.9008** = **$8.65**;
+the Console bill was **$10.91**, leaving a **$2.26 untraced gap**. Under the $12–16 estimate and
+the $20 ceiling. Arm 2 ~3.9× arm 1 on the graph (live critic ~17–23k input tokens/pass + revision
+re-runs).
+
+**LESSON — Langfuse-computed cost is a FLOOR, not the bill.** I estimated the untraced portion at
+~$0.65 and reported "~$9.3 total"; the real untraced spend was **$2.26** (~3.5× my estimate). Two
+causes: (1) the two LLM judges (`KeyFactCoverageScorer` Haiku-4.5, `PositionQualityScorer`
+**Sonnet-4.6**) run in the scorer layer AFTER `run_agent` closes the per-case trace (`run.py:231`)
+and `judge_call` (`judge.py:25`) opens no span — 120 judge calls (2/case × 30 × 2 arms) are
+entirely untraced, and the Sonnet judge over full answer text is the dominant cost; (2) `cost.py`
+only checks each trace has a non-null `total_cost`, not that every nested observation was priced,
+so any graph model lacking a Langfuse pricing entry makes even the $8.65 a floor. To trust
+Langfuse for spend in future: trace the judges (or price them separately) AND verify every model
+has a Langfuse pricing entry. Treat the Console as the billing source of truth.
+
+### Follow-up (open) — revision cap may be biting before convergence
+
+Arm 2: **14/30 cases hit `cap_hit=True`** (39 `revise` vs 46 `approve` verdicts across all passes).
+On ~47% of cases the critic was still demanding revisions when `max_critic_revisions` ran out.
+Open question: does raising the cap lift citation_validity further, or just burn tokens on cases the
+critic will never approve? Candidate for a future cheap-ish targeted run.
+
+### Process notes (operational, for repeatability)
+
+- **Workspace usage-limit footgun:** first two arm-1 launches failed 30/30 with HTTP 400
+  "workspace API usage limits … regain access 2026-07-01" at **$0** (400s are pre-billing). Root
+  cause was an org/wrong-workspace limit, not code. The per-case 400s land in the REPORT file, not
+  stdout — a log-only grep gave a false "healthy" reading once; authoritative fail signal is the
+  log's `Langfuse sync … 'skipped_no_trace': 30` + a `Report:` line within ~2s of launch.
+- `CRITIC_FORCE_VERDICT` set ONLY via inline command-prefix on arm 1 (never exported); verified
+  empty in shell before each arm and `.env` stayed commented. No leak across arms.
+- Runs backgrounded with `nohup … & disown` (detached, survive polling timeouts); PID+log on disk;
+  a `run_in_background` watcher blocks on the PID and notifies on exit.
+
+
+## 2026-06-04 — eval-maturation: test-isolation guard + Langfuse cleanup (end of session)
+
+**Branch `eval-maturation`**, commit `6b53329` (pushed).
+
+### Langfuse tracing verified intact
+
+Phase 7 parenting confirmed at trace `9ee44be4` (easy-001): 49 observations, 1 root `eval-case` span, 48 children properly nested, sessionId present, linked to dataset-run `cheap-validate-20260604T173754Z` (both easy-001 and easy-002 present). The apparent "regression" was test pollution, not a code regression.
+
+### Root cause of the orphan traces
+
+pytest run with live Langfuse keys in env (loaded from `.env` via Pydantic Settings). `test_graph.py` force-verdict tests (`test_force_verdict_revise_hits_cap`, `test_force_verdict_escalate_exits_immediately`) patch planner/researcher/analyst but **not** `run_critic`, so the real critic node ran and called `get_langfuse()` — emitting orphan spans (null parent, null session) with synthetic fixture inputs (`gd-001`, `Draft answer.`, `Refusal text.`). Other test files emitted additional orphans via mocked `run_agent` calls (agent/api tests).
+
+### Fix: `tests/conftest.py` session-scoped autouse isolation guard
+
+Session-scoped autouse fixture runs before any test:
+- `get_langfuse.cache_clear()` — the non-obvious necessary piece; the `@lru_cache` would otherwise serve a live client cached during module import if any code had called it before the fixture ran.
+- `settings.langfuse_public_key = None`, `settings.langfuse_secret_key = None` → `langfuse_enabled → False` → all subsequent `get_langfuse()` calls return `None`.
+- `settings.critic_force_verdict = None` — guards against ambient `.env`/shell leakage; function-scoped `monkeypatch` in individual tests still overrides and restores correctly.
+
+`test_langfuse_disabled_in_test_session()` added to `test_graph.py` as regression guard — fails immediately if the conftest fixture is removed or broken. Suite: **223 passed** (1 pre-existing integration failure: `test_search_corpus_returns_results_from_live_db` hits live Voyage API with a stub key; fails identically with and without the guard; unrelated).
+
+### Cleanup: 34 fixture orphan traces deleted
+
+All 34 traces timestamped `2026-06-04T17:40:40Z` deleted via Langfuse API. Synthetic inputs: `gd-100`, `gd-999`, `q`, `x`, `test`, `anything`, `Bogus claim`, `sub_questions: ['q1','q2']`, etc. Legitimate validate traces (`easy-001`, `easy-002`) confirmed surviving with full observation counts.
+
+### CRITIC_FORCE_VERDICT swept clean
+
+Not set in shell env, `.env` (confirmed via runtime settings check), `config.py` default (`None`), or `.env.example` (commented-out). Critic-delta paid eval is safe to run.
+
+### Next
+
+**critic-delta** — paid, ~$3–6, two arms (`arm1-forced-approve` / `arm2-live-critic`), diff `citation_validity` to measure the critic-flip's effect. ADR-0009 theater verdict check. Deferred to a fresh session.
+
+---
+
+## 2026-06-04 — eval-maturation Steps 2+3: τ-confirm (keep 0.85) + critic-flip (faithfulness-aware)
+
+**Branch `eval-maturation`**, off matcher-v2 (6836cb4). `CRITIC_FORCE_VERDICT` confirmed UNSET
+before and after. **Flip-only — no paid eval; the citation_validity / critic-delta (Step 4) is
+deferred for human review of this diff.**
+
+### Step 2 — τ-confirm: KEEP τ = 0.85 (no config change)
+Re-ran the $0 text-only smoke (`smoke_rechunk --table chunks`) against the post-v2 live corpus:
+**402/446** verified (best-chunk == doc-level, gap 0) — reproduces the matcher-v2 number exactly.
+The `best_chunk_score` distribution (n=446) is sharply bimodal with an **empty valley straddling τ**:
+
+| band | n |
+|---|---|
+| ==1.0 | 328 |
+| 0.99–1.0 | 56 |
+| 0.95–0.99 | 14 |
+| 0.90–0.95 | 1 |
+| 0.85–0.90 (just above τ) | 3 |
+| 0.80–0.85 (just below τ) | 2 |
+| 0.70–0.80 | 2 |
+| 0.50–0.70 | 31 |
+| <0.50 | 9 |
+
+- **384 of 402 verified land ≥0.99** — the v2 recoveries are exact-after-denoise, nowhere near τ,
+  so they exert zero pull on the threshold (as predicted in the highest-risk flag).
+- **τ bisects a 0.037-wide empty gap**: nearest below = medium-001 @0.835, nearest above =
+  medium-014 @0.872; nothing lives in [0.835, 0.872]. Any τ in ~[0.836, 0.871] yields the identical
+  verdict — maximally robust placement.
+- **Sensitivity is flat**: τ=0.80→404, 0.85→402, 0.90→399 (at most +2/−3 across the whole band).
+- The 4 sub-τ cases are **genuine borderlines, not recoverable matcher noise**: medium-004 @0.759
+  (ellipsis stitch #9) and hard-005 @0.743 (inline enumerator #13) — both documented D3 residual —
+  plus two partial-divergence cases (easy-008 @0.815, medium-001 @0.835). Lowering τ would launder
+  real faithfulness misses into passes (the Day-7 lesson). **Nothing argues for a change.**
+
+### Step 3 — critic-flip: parse-then-flip, single file (`src/rra/agents/critic.py`)
+Wired the analyst's emitted `<q>…</q>` supporting quote into `check_citation` so the critic's
+`revise` verdict is now faithfulness-aware (activates ADR-0010 matching / ADR-0013 quote-
+faithfulness at the critic's point in the graph). **Not a graph change** — the quote already
+reached the critic in `state["draft"]`; the critic previously discarded it at parse time.
+
+- **3a — parser reuse + de-dedup.** Replaced the address-only `_citation_re` (captured only
+  `(guid, idx)`, deduped to a SET) with the SHARED `rra.citations.parse_answer` (the same parser
+  used by `api.py:89` and `run.py:90`) → `(guid, idx, quote|None)` triples. Dedup now on the
+  **full triple** (`dict.fromkeys`, order-preserving): the old address-only set collapsed a
+  same-chunk/different-quote pair (one faithful, one not), which matters once the quote is what
+  gets checked. Exact-duplicate triples still collapse to one DB read + one `<check>`.
+- **3b — quote passthrough.** `check_citation(..., quoted_text=quote)`. A bare citation (no `<q>`,
+  allowed by analyst rule 6 → `parse_answer` yields `None`) stays key-existence mode, so a valid
+  bare address is never a faithfulness failure.
+- **3c — de-conflate the two failures.** `verified="false"` split into an ADDRESS failure
+  (`source_text==""` → `reason="address_not_found"`) and a QUOTE-FAITHFULNESS failure (chunk
+  present, quote not matched → `reason="quote_unfaithful"` + similarity score). Each `<check>`
+  now carries `check="address|quote"`. System prompt + per-call instruction reworded so the
+  critic distinguishes them, treats `quote_unfaithful` as a fixable hard-severity revise (not
+  escalate), and does not flag a bare-but-valid address as unfaithful.
+
+**Implementation choice (logged):** dedup on the full `(guid, idx, quote)` triple rather than
+literal per-occurrence — preserves the distinct-quote fix while avoiding redundant identical DB
+reads / `<check>` entries. Not architectural; within ADR 0010/0013. The `source_text==""`
+discriminator for address-vs-quote failures relies on `check_citation`'s contract (NOT_FOUND →
+empty `source_text`; every other path returns the stored chunk text).
+
+**Validation ($0):** 6 new unit tests (`TestCriticFlipFaithfulness`) pin the deterministic
+pre-validation contract — faithful→clean quote check, unfaithful→`quote_unfaithful`, bare→address
+key-existence, address-vs-quote de-conflation, distinct-quote de-dedup, exact-dup collapse —
+with `check_citation` mocked (no PG). **Existing critic/agent tests green; 190 non-integration
+tests pass (+6, zero regressions); mypy clean.** No config change, no new deps, no graph change.
+
+**Pending (human review gate):** Step 4 critic-delta — a paid full-harness run to measure the
+flip's effect on `citation_validity`. Not run; awaiting review of this diff.
+
+## 2026-06-03 — eval-maturation Step 1: matcher-preprocessing v2 (386 → 402/446, 0 regressions)
+
+**Branch `eval-maturation`** (off `main`). Implemented matcher-v2 in `_normalize`
+(`src/rra/mcp_server/tools.py`) — the narrow line-number / word-split recovery scoped in
+`docs/plan/matcher-preprocessing-v2.md`. **No τ change, no analyst-prompt change, no critic-flip,
+no re-embed, no Langfuse.** `CRITIC_FORCE_VERDICT` confirmed UNSET before the smoke.
+
+**Result (`smoke_rechunk --table chunks`, $0): 386 → 402/446 faithful, ZERO regressions** (row-by-row
+vs `main`'s committed detail: 16 failing→passing, 0 passing→failing). Every recovery lands at **≥0.99**
+— exact matches once pypdf line-numbers are removed, not near-τ laundering.
+- **9 from the [0.70,0.85) near-miss band** (as planned): mid-line line-numbers (`regulatory \n376
+  action`), digits glued to words/parens (`only16`, `3500A)74`, `AI-DSFs)3`, `mode31`), the intra-word
+  split (`Q-S ubmission`→`Q-Submission`), the hyphen-fused line-number (`Q-220 Submission`→`Q-Submission`).
+- **7 bonus from the <0.70 band** — same noise morphology, more line-numbers per quote (easy-003
+  "Minor change" bullets w/ `855/856/867/868`, footnote `list.15`). The ~9 estimate was conservative;
+  the rules generalized to multi-noise quotes without over-reaching.
+
+**Stayed residual (as planned, D3):** ellipsis stitch (#9, medium-004, 0.759), footnote-splices
+(#4/#7), inline enumerator (#13, hard-005 `a. Software`, 0.743 — deferred, not chased).
+
+**Guards carry the load now that the `\n` anchor is gone:** reg-word backward+forward guards keep
+`21 CFR 803.52` (both `21` and `803` survive), `Part 11`, `Form FDA 3500A`, `Title 21`; a unit/measure
+denylist keeps `within 30 days` / `10 mg`; a 2–3-digit cap keeps 4-digit content (`1995`, `ISO 9001`);
+case-gating keeps `COVID-19`, `N95`, `Type-A submission`, `Part11`. 18 content-safety/recovery unit
+tests added (`tests/test_mcp_tools.py`); full suite green (184 passed). **Documented blind spots** (held
+safe by symmetric normalization + the zero-regression smoke): a 2–3-digit count before an unlisted noun,
+alphanumeric IDs like `p53`, a real cap-hyphen-cap pair before a lowercase word (`X-Y coordinate`).
+
+**The zero-regression gate caught a real bug mid-build:** the first mid-line rule stripped the *leading*
+title number in `21 CFR Part 820` (the `(?<!CFR)` guard only protects numbers *after* CFR). An existing
+span-recovery test failed → added a forward reg-word guard and strengthened the CFR/USC tests to
+full-string equality. Exactly the discipline working: net `+N` is not enough; the row-by-row `−0` is.
+
 ## 2026-06-03 — Day 9 build (unattended): Terraform IaC + Langfuse eval integration
 
 **Where we are.** Autonomous build session on `day09-iac-langfuse`. Both Day-9 deliverables
@@ -40,6 +297,7 @@ Langfuse population needs critic-flip → critic-delta → flip `POPULATION_GATE
 `--langfuse-sync` eval. IaC deploy needs AWS creds + the Day-10 work (docker build/push to ECR,
 DB bootstrap, smoke, destroy). Docker `build`/`--check` couldn't run here (sandbox can't auth to
 Docker Hub — environmental, not a Dockerfile defect).
+
 
 ## 2026-06-03 — Planning pass: τ / matcher-v2 / Langfuse settled; eval-maturation renumbered to Day 8
 

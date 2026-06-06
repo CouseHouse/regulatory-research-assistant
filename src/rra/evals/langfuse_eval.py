@@ -23,24 +23,26 @@ Langfuse scores/datasets are pulled into the Day-8 eval-maturation phase, run
 ║  misleading — the moment the critic flips. The required order is            ║
 ║  matcher-v2 → τ-confirm → critic-flip → critic-delta → Langfuse.            ║
 ║                                                                            ║
-║  To populate (AFTER the critic-flip + critic-delta land): set              ║
-║  POPULATION_GATED = False in this file, in the same commit as the          ║
-║  critic-flip's eval-maturation work, then run:                             ║
-║      uv run python -m rra.evals.run --langfuse-sync                         ║
+║  To populate (AFTER the critic-flip + critic-delta land): do NOT edit       ║
+║  POPULATION_GATED. Pass the per-run --allow-population flag (keys must      ║
+║  be present). It opens the gate for ONE invocation only, so there is        ║
+║  no committed constant to forget to revert:                                 ║
+║      uv run python -m rra.evals.run --langfuse-sync --allow-population      ║
 ╚══════════════════════════════════════════════════════════════════════════╝
 
 Client reuse: every call here uses the SHARED process-lifetime client from
 `rra.tracing.get_langfuse()` (the same singleton api.py uses for request
 traces). We never construct a second Langfuse client — see ADR 0015 / tracing.py.
 
-Trace model (post-hoc eval record): during an eval run the graph is invoked
-WITHOUT a trace_id (run_agent builds its own initial state), so no request
-trace exists to attach scores to. `sync_eval_to_langfuse` therefore opens one
-`eval-case` span per case — mirroring the api.py idiom
-(`start_as_current_observation(as_type="span")` + `get_current_trace_id()`) —
-and attaches that case's scores to the span's trace. If a response ever carries
-a `raw_trace_id` (e.g. a future eval that threads a trace into the graph), it is
-cross-referenced in the span metadata.
+Trace model (run-time parent trace): run_agent (run.py) opens one `eval-case`
+span PER CASE and runs the graph INSIDE it (gated by --allow-population), so the
+agents' spans nest under a single per-case trace instead of orphaning, and that
+trace's id rides out on the response's `raw_trace_id`. `sync_eval_to_langfuse`
+attaches each case's scores to its `raw_trace_id` (idempotent by
+`{trace_id}-{scorer}`) rather than opening its own span — a post-hoc span would
+put the scores on an empty orphan, not on the trace whose children are the agent
+spans. A case with no `raw_trace_id` (errored, or produced without the flag) is
+skipped.
 """
 
 from __future__ import annotations
@@ -55,14 +57,21 @@ if TYPE_CHECKING:
 
 
 # ─── Gate ────────────────────────────────────────────────────────────────────
-# Flip to False ONLY in the eval-maturation commit that lands the critic-flip.
-# See the module banner above for the full rationale. Until then, the wired-in
-# path is a hard no-op so a stray --langfuse-sync cannot publish stale scores.
+# PERMANENT default — do NOT flip this constant. The gate is opened per-run by
+# the --allow-population CLI flag (run.py), which ALSO requires keys present.
+# Keeping the safe state as the committed default means there is no constant to
+# forget to revert (mirrors the CRITIC_FORCE_VERDICT footgun discipline); the
+# wired-in path stays a hard no-op unless --allow-population is passed.
 POPULATION_GATED = True
 
 # Dataset name in Langfuse. Stable so re-pushes upsert the same dataset/items
 # rather than forking a new copy each run.
 GOLDEN_DATASET_NAME = "rra-golden-eval"
+
+# Fallback dataset-run name when the caller doesn't pass one. run.py always
+# supplies an explicit name (cheap-validate-<ts>, or --run-name for the two
+# critic-delta arms); this benign default only matters for a bare library call.
+DEFAULT_RUN_NAME = "adhoc-eval"
 
 DATASET_DESCRIPTION = (
     "RRA golden eval set (evals/golden.jsonl). Inputs: query + product_context. "
@@ -74,19 +83,31 @@ DATASET_DESCRIPTION = (
 )
 
 
-def should_populate(client: Any, *, gated: bool = POPULATION_GATED) -> tuple[bool, str]:
+def should_populate(
+    client: Any,
+    *,
+    allow_population: bool = False,
+    gated: bool = POPULATION_GATED,
+) -> tuple[bool, str]:
     """Decide whether the wired-in path may write to Langfuse.
+
+    Population requires BOTH (a) Langfuse keys present (client is not None) AND
+    (b) the gate open. The gate opens only when the caller passes
+    allow_population=True — the per-run --allow-population flag. The flag NEVER
+    flips POPULATION_GATED; it opens the gate for one invocation, so the safe
+    state stays the committed default with no constant to forget to revert.
 
     Returns (allowed, reason). Both the disabled and gated outcomes are normal
     no-op paths, not errors — callers print the reason and carry on.
     """
+    effective_gate = gated and not allow_population
     if client is None:
         return False, "Langfuse disabled (no public/secret key in settings)"
-    if gated:
+    if effective_gate:
         return (
             False,
-            "population GATED until the critic-flip (POPULATION_GATED=True in "
-            "langfuse_eval.py) — pre-flip key-existence scores would go stale",
+            "population GATED (POPULATION_GATED=True) — pass --allow-population to "
+            "open the gate for this run (and ensure Langfuse keys are set)",
         )
     return True, "ok"
 
@@ -159,6 +180,13 @@ def _score_comment(result: ScoreResult) -> str:
 def emit_scores(client: Any, trace_id: str | None, scores: list[ScoreResult]) -> int:
     """Emit one Langfuse score per scorer, each linked to `trace_id`.
 
+    Idempotent: every score carries score_id=f"{trace_id}-{result.scorer}", so
+    re-running the same eval case UPDATES the score in place instead of appending
+    a duplicate to the Scores table (Langfuse "Preventing Duplicate Scores").
+    Each scorer name is unique per case, so the key never collides within a run.
+    A trace-linked score also appears in the global Scores section automatically —
+    there is no separate "write to Scores section" call.
+
     Returns the number of scores emitted. `passed` and the scorer name ride in
     metadata so a pass/fail view is reconstructable without re-deriving the
     threshold.
@@ -171,11 +199,42 @@ def emit_scores(client: Any, trace_id: str | None, scores: list[ScoreResult]) ->
             value=value,
             data_type=data_type,
             trace_id=trace_id,
+            score_id=f"{trace_id}-{result.scorer}",
             comment=_score_comment(result),
             metadata={"passed": result.passed, "scorer": result.scorer},
         )
         emitted += 1
     return emitted
+
+
+def link_run_item(
+    client: Any,
+    *,
+    run_name: str,
+    dataset_item_id: str,
+    trace_id: str,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    """Link an eval-case trace to a NAMED dataset run (Datasets→Runs view).
+
+    Uses the low-level dataset-run-items API — langfuse v4 removed the v2/v3
+    `dataset_item.run(run_name=...)` context manager; this is the supported
+    equivalent (the exact call run_experiment makes internally). The dataset is
+    resolved from `dataset_item_id` (our case.id, set as the item id in
+    push_golden_dataset), so no dataset_name is needed; `trace_id` alone links the
+    run item to the per-case trace whose scores then aggregate under the run.
+
+    Idempotency is by run_name UNIQUENESS: each eval run uses a fresh run_name
+    (the cheap-validate timestamp, or the distinct critic-delta arm names), so a
+    run item is created once per (run, case). There is no client-supplied run-item
+    id to dedupe on (unlike scores' score_id) — do NOT reuse a run_name across runs.
+    """
+    client.api.dataset_run_items.create(
+        run_name=run_name,
+        dataset_item_id=dataset_item_id,
+        trace_id=trace_id,
+        metadata=metadata,
+    )
 
 
 # ─── Orchestration ───────────────────────────────────────────────────────────
@@ -185,53 +244,51 @@ def sync_eval_to_langfuse(
     client: Any,
     runs: list[CaseRun],
     *,
+    run_name: str = DEFAULT_RUN_NAME,
     dataset_name: str = GOLDEN_DATASET_NAME,
 ) -> dict[str, Any]:
-    """Push the dataset, then open one eval-case span per run and attach scores.
+    """Push the dataset, attach each case's scores to the per-case trace that
+    run_agent opened at run time (`raw_trace_id`), and link that trace to the
+    named dataset run `run_name` (Datasets→Runs).
 
-    Assumes the gate has already been cleared by the caller (`maybe_sync_langfuse`
-    / `should_populate`). Flushes once at the end so the background sender drains
-    before the process exits. Returns a summary dict for the CLI to print.
+    Scores land on the SAME trace whose children are the agent spans — NOT on a
+    post-hoc orphan span — and the trace is linked to `run_name` so the run's
+    aggregated scores appear in Datasets→Runs. Assumes the gate has already been
+    cleared by the caller (`maybe_sync_langfuse` / `should_populate`) and that the
+    runs were produced with --allow-population (so run_agent captured
+    `raw_trace_id`). A case with no `raw_trace_id` (errored, or produced without
+    the flag) has no trace to attach to or link and is skipped. Flushes once at
+    the end. Returns a summary dict.
     """
     pushed = push_golden_dataset(client, [r.case for r in runs], dataset_name=dataset_name)
 
     emitted = 0
+    linked = 0
+    skipped = 0
     for run in runs:
-        with client.start_as_current_observation(
-            name="eval-case",
-            as_type="span",
-            input={
-                "query": run.case.query,
-                "product_context": run.case.product_context,
-            },
-            metadata={
-                "case_id": run.case.id,
-                "difficulty": run.case.difficulty,
-                "dataset": dataset_name,
-                # Cross-ref the graph's own trace if a future eval ever threads one.
-                "graph_trace_id": getattr(run.response, "raw_trace_id", None),
-            },
-        ) as span:
-            trace_id = client.get_current_trace_id()
-            if run.error:
-                span.update(output={"error": run.error})
-            else:
-                answer = run.response.answer_text if run.response is not None else ""
-                citation_count = len(run.response.citations) if run.response is not None else 0
-                span.update(
-                    output={
-                        "answer_preview": answer[:200],
-                        "citation_count": citation_count,
-                    }
-                )
-            emitted += emit_scores(client, trace_id, run.scores)
+        trace_id = getattr(run.response, "raw_trace_id", None)
+        if trace_id is None:
+            skipped += 1
+            continue
+        emitted += emit_scores(client, trace_id, run.scores)
+        link_run_item(
+            client,
+            run_name=run_name,
+            dataset_item_id=run.case.id,
+            trace_id=trace_id,
+            metadata={"difficulty": run.case.difficulty},
+        )
+        linked += 1
 
     client.flush()
     return {
         "dataset": dataset_name,
+        "run_name": run_name,
         "items": pushed,
         "cases": len(runs),
         "scores": emitted,
+        "run_items": linked,
+        "skipped_no_trace": skipped,
     }
 
 
@@ -239,10 +296,13 @@ def maybe_sync_langfuse(
     runs: list[CaseRun],
     *,
     enabled: bool,
+    allow_population: bool = False,
+    run_name: str = DEFAULT_RUN_NAME,
     gated: bool = POPULATION_GATED,
 ) -> dict[str, Any]:
     """Glue called from run.py: fetch the SHARED tracing client, apply the gate,
-    and sync only if both `enabled` (the --langfuse-sync flag) and the gate allow.
+    and sync only if a sync was requested (`enabled`), the gate is open
+    (`allow_population` — the --allow-population flag), and keys are present.
 
     NEVER raises. Langfuse is auxiliary observability — a tracing outage during
     --langfuse-sync must not turn a green eval red (and must not mask the gate
@@ -256,12 +316,14 @@ def maybe_sync_langfuse(
     from rra.tracing import get_langfuse  # SHARED singleton — never a 2nd client
 
     client = get_langfuse()
-    allowed, reason = should_populate(client, gated=gated)
+    allowed, reason = should_populate(
+        client, allow_population=allow_population, gated=gated
+    )
     if not allowed:
         return {"synced": False, "reason": reason}
 
     try:
-        summary = sync_eval_to_langfuse(client, runs)
+        summary = sync_eval_to_langfuse(client, runs, run_name=run_name)
     except Exception as exc:  # noqa: BLE001 — Langfuse must never fail the eval
         return {"synced": False, "reason": f"langfuse sync failed (non-fatal): {exc}"}
     return {"synced": True, **summary}

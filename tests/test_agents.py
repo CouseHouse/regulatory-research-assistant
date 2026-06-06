@@ -425,6 +425,176 @@ class TestCriticAgent:
         assert result["verdict"] == "approve"
 
 
+# ─── Critic flip: quote-faithfulness wiring (Day 8, ADR 0013) ──────────────────
+
+class TestCriticFlipFaithfulness:
+    """The critic-flip wires the analyst's <q> supporting quote into check_citation
+    and surfaces address-vs-quote outcomes in <citation_checks>. These tests pin the
+    deterministic pre-validation contract; the verdict itself is the LLM's job and is
+    mocked. check_citation is mocked too, so there is no Postgres dependency.
+    """
+
+    @staticmethod
+    def _run(
+        draft: str,
+        cc_return: Any = None,
+        cc_side_effect: Any = None,
+    ) -> tuple[dict[str, Any], str, MagicMock]:
+        """Run run_critic with check_citation + Anthropic mocked.
+
+        Returns (result, citation_checks_xml, check_citation_mock). The second
+        element is ONLY the <citation_checks>…</citation_checks> block, sliced out
+        of the user message — the standing instruction paragraph also names every
+        reason code (quote_unfaithful, address_not_found), so asserting against the
+        whole message would false-positive on the guidance text.
+        """
+        approve = _make_tool_message("submit_verdict", {"verdict": "approve", "notes": []})
+        anthropic_cls = _make_anthropic_mock(approve)
+
+        cc_mock = MagicMock()
+        if cc_side_effect is not None:
+            cc_mock.side_effect = cc_side_effect
+        else:
+            cc_mock.return_value = cc_return
+
+        with (
+            patch("rra.agents.critic.Anthropic", anthropic_cls),
+            patch("rra.agents.critic.check_citation", cc_mock),
+        ):
+            from rra.agents.critic import run_critic
+
+            result = run_critic({
+                "draft": draft,
+                "passages": [],
+                "query": "q",
+                "revision_count": 0,
+                "session_id": "t",
+            })
+
+        user_content = anthropic_cls.return_value.messages.create.call_args.kwargs[
+            "messages"
+        ][0]["content"]
+        start = user_content.index("<citation_checks>")
+        end = user_content.index("</citation_checks>") + len("</citation_checks>")
+        checks_xml = user_content[start:end]
+        return result, checks_xml, cc_mock
+
+    def test_faithful_quote_produces_clean_quote_check(self) -> None:
+        """A faithful <q> quote → check_citation receives the quote; the XML marks
+        it verified='true' check='quote' with no spurious quote_unfaithful signal."""
+        from rra.mcp_server.tools import CitationCheckResult
+
+        _, xml, cc = self._run(
+            draft="The device must show substantial equivalence. "
+            "[gd-100:5]<q>substantial equivalence</q>",
+            cc_return=CitationCheckResult(
+                verified=True,
+                source_text="...demonstrate substantial equivalence to a predicate...",
+                matched_doc_span=[10, 33],
+                similarity_score=None,
+            ),
+        )
+        # 3b: the parsed quote is passed through as quoted_text (not None).
+        assert cc.call_count == 1
+        assert cc.call_args.kwargs["quoted_text"] == "substantial equivalence"
+        assert cc.call_args.kwargs["guidance_id"] == "gd-100"
+        assert cc.call_args.kwargs["chunk_index"] == 5
+        # 3c: clean faithful quote check — no faithfulness-failure signal.
+        assert 'check="quote"' in xml
+        assert 'verified="true"' in xml
+        assert "quote_unfaithful" not in xml
+        assert "<quoted_text>substantial equivalence</quoted_text>" in xml
+
+    def test_unfaithful_quote_flagged_quote_unfaithful(self) -> None:
+        """An unfaithful quote (chunk exists, quote not present) → the XML carries
+        reason='quote_unfaithful' plus the similarity score, giving the critic the
+        signal to revise. Distinct from an address failure."""
+        from rra.mcp_server.tools import CitationCheckResult
+
+        _, xml, cc = self._run(
+            draft="Bogus claim. [gd-100:5]<q>this text is not in the chunk</q>",
+            cc_return=CitationCheckResult(
+                verified=False,
+                source_text="real chunk text about predicates",
+                matched_doc_span=None,
+                similarity_score=0.42,
+            ),
+        )
+        assert cc.call_args.kwargs["quoted_text"] == "this text is not in the chunk"
+        assert 'reason="quote_unfaithful"' in xml
+        assert 'check="quote"' in xml
+        assert 'verified="false"' in xml
+        assert "address_not_found" not in xml
+        assert "0.42" in xml  # similarity surfaced to the critic
+
+    def test_bare_citation_stays_key_existence(self) -> None:
+        """A bare citation (no <q>) → check_citation called with quoted_text=None;
+        the XML marks it verified='true' check='address' — NOT a faithfulness failure."""
+        from rra.mcp_server.tools import CitationCheckResult
+
+        _, xml, cc = self._run(
+            draft="A grounded claim. [gd-100:5]",
+            cc_return=CitationCheckResult(
+                verified=True,
+                source_text="real chunk text",
+                matched_doc_span=None,
+                similarity_score=None,
+            ),
+        )
+        assert cc.call_args.kwargs["quoted_text"] is None
+        assert 'check="address"' in xml
+        assert 'verified="true"' in xml
+        assert "quote_unfaithful" not in xml
+
+    def test_address_not_found_distinct_from_quote_failure(self) -> None:
+        """A quote on a missing chunk → address_not_found (source_text==''), never
+        mislabeled quote_unfaithful. This is the conflation the flip must avoid."""
+        from rra.mcp_server.tools import CitationCheckResult
+
+        _, xml, _cc = self._run(
+            draft="Claim. [gd-999:1]<q>whatever</q>",
+            cc_return=CitationCheckResult(
+                verified=False,
+                source_text="",
+                matched_doc_span=None,
+                similarity_score=None,
+            ),
+        )
+        assert 'reason="address_not_found"' in xml
+        assert "quote_unfaithful" not in xml
+
+    def test_same_address_different_quotes_both_checked(self) -> None:
+        """De-dedup: the same [guid:idx] with two different quotes must produce two
+        checks. The old (guid,idx)-only set collapsed them — the bug the flip fixes."""
+        from rra.mcp_server.tools import CitationCheckResult
+
+        ok = CitationCheckResult(
+            verified=True, source_text="chunk", matched_doc_span=None, similarity_score=None
+        )
+        _, xml, cc = self._run(
+            draft="First [gd-100:5]<q>quote one</q> and second [gd-100:5]<q>quote two</q>.",
+            cc_side_effect=[ok, ok],
+        )
+        quotes_checked = [call.kwargs["quoted_text"] for call in cc.call_args_list]
+        assert quotes_checked == ["quote one", "quote two"]
+        assert xml.count('check="quote"') == 2
+
+    def test_exact_duplicate_triples_collapse(self) -> None:
+        """The same (guid, idx, quote) repeated → one check (one DB read, one
+        <check>). Only DISTINCT quotes are preserved; exact dups still collapse."""
+        from rra.mcp_server.tools import CitationCheckResult
+
+        ok = CitationCheckResult(
+            verified=True, source_text="chunk", matched_doc_span=None, similarity_score=None
+        )
+        _, xml, cc = self._run(
+            draft="Here [gd-100:5]<q>same span</q> and again [gd-100:5]<q>same span</q>.",
+            cc_return=ok,
+        )
+        assert cc.call_count == 1
+        assert xml.count('check="quote"') == 1
+
+
 # ─── format_user_prompt (moved from api.py) ────────────────────────────────────
 
 class TestFormatUserPrompt:
