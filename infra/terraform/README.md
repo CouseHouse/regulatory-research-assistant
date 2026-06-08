@@ -36,7 +36,8 @@ Assistant (see [`docs/spec.md` §4.10](../../docs/spec.md) and
 | `secrets.tf` | Secrets Manager entries (API keys) + generated DB password |
 | `rds.tf` | DB subnet group, parameter group, RDS Postgres 16 instance |
 | `ecs.tf` | Log group, IAM roles, cluster, task definition, ALB, target group, listener, service |
-| `outputs.tf` | ALB URL, ECR URL, RDS endpoint, cluster/service names, etc. |
+| `bootstrap.tf` | One-off corpus-ingest task def + log group for seeding the private RDS (ADR 0017) |
+| `outputs.tf` | ALB URL, ECR URL, RDS endpoint, cluster/service names, bootstrap run-task command, etc. |
 | `terraform.tfvars.example` | Template for your (gitignored) `terraform.tfvars` |
 
 The app image is built from the repo-root [`Dockerfile`](../../Dockerfile); the
@@ -75,33 +76,63 @@ export TF_VAR_voyage_api_key=pa-...
 export TF_VAR_rra_api_key=...
 ```
 
-### Build + push the image (Day 10)
+### Build + push the images (Day 10)
+
+Two images share one ECR repo: the minimal **serving** image (`latest`) and the
+**bootstrap** image (`bootstrap`), built from the `bootstrap` target — it carries
+the source tree + `data/corpus/` so `rra.ingest` can run in-VPC (ADR 0017).
 
 ```bash
 ECR_URL=$(terraform output -raw ecr_repository_url)
 aws ecr get-login-password --region "$(terraform output -raw 2>/dev/null; echo us-east-1)" \
   | docker login --username AWS --password-stdin "${ECR_URL%/*}"
-docker build -t "$ECR_URL:latest" ../..        # build context = repo root
+
+# Serving image (default target):
+docker build -t "$ECR_URL:latest" ../..              # build context = repo root
 docker push "$ECR_URL:latest"
-# Then re-apply (or force a new deployment) so ECS pulls the pushed tag.
+
+# Bootstrap image (separate target, same repo):
+docker build --target bootstrap -t "$ECR_URL:bootstrap" ../..
+docker push "$ECR_URL:bootstrap"
+# Then re-apply (or force a new deployment) so ECS pulls the pushed tags.
 ```
 
-### Bootstrap the database
+### Bootstrap the database (ADR 0017)
 
-RDS Postgres ships without the schema. After `apply`, from a host that can reach
-the private RDS endpoint (bastion or the ECS task):
+RDS is private and ships without the `vector` extension, schema, or corpus. The
+laptop can't reach it — so seed it with the one-off Fargate task (defined in
+`bootstrap.tf`) that runs `rra.ingest` from inside the VPC. `rra.ingest` is
+schema-sufficient: it creates the extension + `corpus.chunks` + indexes, then
+embeds the corpus. Idempotent — safe to re-run.
 
 ```bash
-psql "host=$(terraform output -raw rds_address) user=rra dbname=rra" -f ../../init-db/01-init.sql
-# 01-init.sql runs `CREATE EXTENSION vector` — pgvector needs nothing else.
-DATABASE_URL=... uv run python -m rra.ingest --limit 50   # small corpus for the demo
+# Kick off the one-off ingest task (uses the private subnets + ecs_tasks SG;
+# the RDS SG already trusts that SG, NAT egress reaches FDA + Voyage):
+eval "$(terraform output -raw bootstrap_run_task_command)"
+
+# Tail it (find the task ARN from the run-task output, or via list-tasks):
+aws logs tail "/ecs/$(terraform output -raw ecs_cluster_name)-bootstrap" --follow
+# Done when you see `corpus.ingest.complete ingested=<n>`.
 ```
+
+To ingest the full corpus or reset first, override the args via
+`var.bootstrap_ingest_command` (e.g. `[]` for all docs, `["--truncate"]` to wipe
+`corpus.chunks` before re-ingesting) and re-apply before running the task.
+
+> `init-db/01-init.sql` additionally creates `app.query_audit` (offline analysis).
+> It is **not** created by this flow and **not** required to serve `/query` — the
+> app never writes it at runtime. Add it later if/when that table is wired up.
 
 ### Smoke test
 
 ```bash
 BASE=$(terraform output -raw alb_url)
-curl "$BASE/health"                                   # {"status":"ok"}
+curl "$BASE/health"                                   # {"status":"ok"}  (liveness; DB-free)
+curl "$BASE/readyz"                                   # {"status":"ready"} — confirms RDS is
+                                                      # reachable AND corpus.chunks exists,
+                                                      # BEFORE the first /query (W1). 503 =
+                                                      # DB connectivity problem (SG/subnet/creds)
+                                                      # OR the bootstrap ingest task hasn't run.
 curl -X POST "$BASE/query" -H "Content-Type: application/json" \
   -H "X-API-Key: <rra_api_key>" \
   -d '{"query":"...","product_context":"..."}'

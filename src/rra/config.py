@@ -59,7 +59,11 @@ class Settings(BaseSettings):
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_user: str = "rra"
-    postgres_password: SecretStr = SecretStr("rra_dev_password")
+    # Required — no default. Sourced from .env locally and Secrets Manager in
+    # cloud (ecs.tf / bootstrap.tf). A hardcoded fallback would silently let the
+    # app run on a known dev credential; fail fast instead. Ignored when
+    # database_url is set (it carries its own password).
+    postgres_password: SecretStr
     postgres_db: str = "rra"
 
     @computed_field  # type: ignore[prop-decorator]
@@ -95,7 +99,10 @@ class Settings(BaseSettings):
     langfuse_salt: SecretStr | None = None
 
     # ─── API auth (v1 — single key; OAuth 2.0 in production design) ─────────
-    rra_api_key: SecretStr = SecretStr("dev-key-change-me")
+    # Required — no default. From .env locally, Secrets Manager in cloud. A
+    # baked-in default key would be accepted by /query if the env var were
+    # missing; fail fast instead.
+    rra_api_key: SecretStr
 
     # ─── Model selection ────────────────────────────────────────────────────
     # Role-to-model mapping rationale lives in docs/spec.md §4.2.

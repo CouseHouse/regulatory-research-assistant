@@ -69,3 +69,4 @@ docs/dev-log-private-notes.md
 README_UPDATES.MD
 Scratch
 infra/terraform/tfplan*
+docs/architecture/*

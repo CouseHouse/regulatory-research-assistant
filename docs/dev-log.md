@@ -1,6 +1,133 @@
 # Dev log
 
 
+## 2026-06-08 — ALB 503 hunt: wrong Dockerfile stage shipped, then a pinned deployment hid the fix
+
+**Branch `feat/private-rds-bootstrap`** (PR #7). After the bootstrap work landed, the deployed app
+returned **503 from the ALB on both `/health` and `/readyz`** — no healthy target. Read-only AWS triage
+(target health → service events → stopped tasks → CloudWatch) found the ECS service **crash-looping**:
+`runningCount=0`, tasks living ~60 s (start → register → deregister/drain → restart), each exiting `1`.
+The damning log line: the `app` container wasn't running uvicorn at all — it was running **`rra.ingest`**
+(`corpus.download` → `failed=50 succeeded=0` → `corpus.ingest.no_files_downloaded` → exit 1, the ADR 0018
+FDA-IP block). uvicorn never started → nothing on `:8000` → no healthy target → 503.
+
+**Root cause #1 — wrong Dockerfile stage at `:latest`.** The serving task def (`rra-demo:1`, no `command`
+override) ran the image's own entrypoint, which was `python -m rra.ingest` — i.e. the `:latest` image was
+built from the Dockerfile's **last stage (`bootstrap`)**, not `runtime`. A bare `docker build .` defaults
+to the last stage; the serving image needs `--target runtime` (uvicorn `CMD`). ECR confirmed: no serving
+image had ever been pushed — only ingest builds and `:bootstrap`.
+
+**Root cause #2 — the running deployment pinned the old digest.** Rebuilt `--target runtime`, smoke-tested
+locally (`docker inspect` → `CMD=[uvicorn …]`; ran it → saw "Uvicorn running"), and pushed the correct
+uvicorn image to `:latest` (digest `08b9657…`). **Still 503.** `describe-tasks` showed the tasks' *resolved*
+`imageDigest` was `31c0596…` — the original 17:15 ingest image — even for tasks launched *after* the push.
+An **ECS service deployment resolves its image tag to a digest once, at deployment creation, and pins it**;
+new `:latest` pushes are invisible to a live deployment. Every "push didn't help" was this, not a bad image.
+
+**Fix:** `aws ecs update-service … --force-new-deployment` → new deployment re-resolved `:latest` →
+`08b9657…` (uvicorn) → target went **`healthy`**, `/readyz` → `{"status":"ready"}` (DB up + `corpus.chunks`
+present, so bootstrap had run), and `/query` returned a full multi-agent RAG answer with citations
+(80958, 109618, 153781). End to end working.
+
+**Aside (502 vs 503):** a `curl` mid-saga returned **502**, not 503. Same root cause, different moment in
+the loop: **0 registered targets → 503**; a doomed task briefly *registered* but with nothing listening on
+`:8000` → ALB gets a connection refusal → **502**. Not progress — just timing.
+
+**Security nit:** the live `RRA_API_KEY` in Secrets Manager is the placeholder `change-me-to-a-strong-key`.
+Rotate to a strong random value (`openssl rand -hex 32` → `put-secret-value` → `--force-new-deployment` so
+the task re-reads it).
+
+**LESSON:** two traps compounded. (1) A multi-stage Dockerfile whose **last stage isn't the default you
+want** silently ships the wrong image on a bare `build` — reorder so `runtime` is last, and gate pushes on
+`docker inspect … CMD`. (2) **`:latest` + a running ECS service hides your deploys** — the deployment pins a
+digest, so re-pushing the tag is a no-op until `--force-new-deployment`. Both vanish if you deploy
+**immutable tags** (`serve-<sha>` via `app_image_tag`): a push *is* a task-def change, digest pinning can't
+mislead, and the running image is unambiguous.
+
+
+## 2026-06-08 — First cloud deploy: FDA blocks the Fargate IP → ADR 0018 (bake the corpus)
+
+**Branch `feat/private-rds-bootstrap`** (PR #7). `terraform apply` succeeded (44 resources); pushed
+both images; ran the bootstrap task. **It failed: 50/50 FDA downloads 4xx-failed instantly** (~25 ms
+each, non-retryable — so a 4xx, not a NAT/timeout). Diagnosis: the same URL returns `200` from a
+residential IP but is blocked from the Fargate datacenter IP (Akamai blocks datacenter ranges). The
+in-VPC re-download path from ADR 0017 had **never been exercised** — local ingest short-circuited on
+`dest.exists()` because `data/corpus/` was pre-populated, so the live fetch was untested until cloud.
+
+**Fix — ADR 0018 (supersedes 0017):** bake the cached PDFs into the bootstrap image instead of
+re-downloading. ingest then serves from the on-disk cache. Verified the cache covers all 50 ingested
+docs (and all 72 manifest entries); rebuilt `--target bootstrap` and confirmed 72 PDFs in the image.
+Changes: `.dockerignore` no longer excludes `data/corpus/*.pdf`; Dockerfile + `.dockerignore` comments
+updated; ADR 0017 → Superseded, ADR 0018 → Active. Serving image untouched (COPYs no `data/`), so only
+`:bootstrap` needs a rebuild/re-push. NAT egress is still required (Voyage embeddings).
+
+**LESSON:** a cache short-circuit (`dest.exists()`) can hide an un-exercised network path straight
+through to production. The local "success" proved nothing about the live download — the cloud was the
+first real test. Bake immutable inputs; don't re-fetch a public CDN from a datacenter IP at deploy time.
+
+**Note on `--limit 50`:** that's `var.bootstrap_ingest_command`'s demo default, NOT the manifest size
+(72). Set it to `[]` for the full corpus (+ re-apply to update the task def); the image already carries
+all 72 PDFs regardless.
+
+
+## 2026-06-08 — Pre-deploy static analysis + private-RDS bootstrap (ADR 0017)
+
+**Branch `eval-maturation`** (analysis cut at `bda1576`; infra files identical on `main`). Read-only
+pre-deploy pass over Dockerfile / Terraform / app config to predict first-deploy connectivity. The
+serving stack checked out clean — SG chain (ALB→ECS→RDS), NAT egress, DATABASE_URL assembled from
+`POSTGRES_HOST`=RDS address (no localhost fallback), secrets from Secrets Manager, uvicorn `0.0.0.0`,
+Langfuse a clean no-op when disabled, `CRITIC_FORCE_VERDICT` absent from cloud env — all correct.
+
+**One blocker (B1):** RDS is private and nothing in the IaC creates the `vector` extension /
+`corpus.chunks` / corpus, and the laptop can't reach the endpoint. `/health` is DB-free, so the task
+goes healthy and the **first `/query` 500s** on `relation "corpus.chunks" does not exist`. The serving
+image can't self-bootstrap (`.dockerignore` drops `data/`; `PROJECT_ROOT` mis-resolves in the wheel
+layout). Two related warnings logged for later: lazy DB hides connectivity until first query (suggest
+a `/readyz` with `SELECT 1`), and `lf.flush()` is synchronous in the request path (only bites if
+Langfuse is enabled pointing at an unreachable host).
+
+**Decision — ADR 0017 (Active): bootstrap via a one-off in-VPC ingest task.** A second `bootstrap`
+Dockerfile target ships source + `data/corpus/manifest.json` and installs the project EDITABLE
+(`PROJECT_ROOT`→`/app`); `rra.ingest` is schema-sufficient (its `_ensure_schema()` creates the
+extension + schema + indexes, then embeds). Run once via `aws ecs run-task` (`bootstrap.tf`) into the
+private subnets on the existing `ecs_tasks` SG — RDS already trusts it, NAT reaches FDA + Voyage, no
+new network rule/repo/standing resource. Rejected: bastion, public-flip, ECS-Exec, startup migration.
+
+**Implemented + verified:** `Dockerfile` (`bootstrap` target), `infra/terraform/bootstrap.tf` (task def
++ log group), `outputs.tf` (`bootstrap_run_task_command`), `variables.tf` (4 bootstrap vars),
+`.dockerignore` (exclude only `data/corpus/*.pdf`, keep the 37 KB manifest), README runbook + ADR 0017
++ index. `terraform validate` passes. Built `--target bootstrap` and ran it: manifest present, PDFs
+absent (re-downloaded in-VPC at runtime), `PROJECT_ROOT=/app`, `ingest --help` works.
+
+**Two bugs caught only by building the image (not by review):**
+1. Inline `# comment` on a `COPY` line is parsed as COPY args (Dockerfile, unlike RUN, has no inline
+   comments) → build failed. Moved comments above the instruction.
+2. `config.Settings()` is instantiated at import (`config.py:150`) and `ANTHROPIC_API_KEY` is a
+   *required* field with no default — so even though ingest never calls Anthropic, `import rra.config`
+   fails fast without it. Added `ANTHROPIC_API_KEY` to the bootstrap task secrets (Voyage + Anthropic
+   are the only required keys; `RRA_API_KEY`/`POSTGRES_PASSWORD` have defaults).
+
+**LESSON:** "config fails fast at import" means a job that uses *none* of a required secret still needs
+it present. Trim the secret set to what the *code path* uses and you trip the *import-time* validator.
+
+### Open follow-ups
+
+1. ~~`/readyz` so RDS connectivity surfaces at boot, not on first query (W1).~~ **DONE** — added
+   `GET /readyz` (`api.py`): borrows the request-path pool and runs
+   `SELECT to_regclass('corpus.chunks')` — one round-trip that is both the connectivity check (raises
+   → 503 "database unreachable") and the "did the bootstrap run?" check (NULL → 503 "corpus not
+   initialized"). 200 `{"status":"ready"}` otherwise. Deliberately NOT the ALB liveness probe (that
+   stays DB-free `/health`); it's a smoke-test / on-demand probe. Skips `register_vector` (SQL-only),
+   and does NOT count rows (empty corpus serves 200s — degraded, not broken). This closes the gotcha
+   the connectivity-only first cut missed: bootstrap skipped → `/readyz` green → `/query` 500s.
+   Tests: reachable+present→200, unreachable→503, corpus-absent→503, plus a guard that `/health`
+   never touches the pool.
+2. `app.query_audit` is not created by the bootstrap flow and not written at runtime — wire it up or
+   leave it. Not on the `/query` path either way.
+3. Bootstrap reuses the app ECR repo with a `:bootstrap` tag (vs. a second repo) — revisit if it gets
+   confusing.
+
+
 ## 2026-06-05 — eval-maturation: trace the LLM judges + pricing audit (close the $2.26 cost gap)
 
 **Branch `eval-maturation`**, HEAD `bda1576`. Follow-up on the previous entry's LESSON ("Langfuse
