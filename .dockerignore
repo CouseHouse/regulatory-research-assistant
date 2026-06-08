@@ -24,7 +24,11 @@ htmlcov
 # Infra / docs / data / dev tooling — not part of the runtime image
 infra
 docs
-data
+# Corpus PDFs are a re-downloadable cache (gitignored) — keep the 45 MB out of the
+# build context. data/corpus/manifest.json (37 KB) STAYS in context: the Dockerfile
+# `bootstrap` target needs it, and ingest re-downloads the PDFs in-VPC at runtime.
+# The minimal serving image COPYs no data/ at all, so its image is unaffected.
+data/corpus/*.pdf
 evals
 tests
 scripts

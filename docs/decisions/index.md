@@ -19,6 +19,7 @@ A flat list of all ADRs with status and one-line summary. Keep current — updat
 | 0013  | [Quote-faithfulness: analyst-emitted supporting quotes](0013-quote-faithfulness-activation.md) | Active | 2026-06-02 | Day 7; amends 0006 |
 | 0014  | [Corpus cleaning + structural chunking](0014-corpus-cleaning-structural-chunking.md) | Active | 2026-06-02 | Day 7; resolves ADR 0006 orphan-row Q; **D4a:** cutover ran via `--truncate` not swap — see 0014 validation banner |
 | 0015  | [Session tracking: persist and surface session_id](0015-session-tracking.md) | Active | 2026-06-02 | Day 10 (new); amends 0008; opens ADR 0016 |
+| 0017  | [Private-RDS bootstrap via a one-off in-VPC ingest task](0017-private-rds-bootstrap.md) | Active | 2026-06-08 | Closes pre-deploy finding B1; 0016 reserved for user identity |
 
 
 ## Conventions for this file

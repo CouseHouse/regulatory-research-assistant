@@ -53,3 +53,53 @@ EXPOSE 8000
 
 # ALB health-checks GET /health (unauthenticated). /query requires X-API-Key.
 CMD ["uvicorn", "rra.api:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# ── Bootstrap: one-off corpus ingest into a fresh (private) RDS ───────────────
+# Separate image from the serving one (ADR 0017). `rra.ingest` needs
+# data/corpus/manifest.json AND a layout where config.PROJECT_ROOT resolves to
+# the repo root. So this stage ships the source tree + the manifest and installs
+# the project EDITABLE (no --no-editable): config.py then lives at /app/src/rra/,
+# so PROJECT_ROOT = parents[2] = /app and DATA_DIR = /app/data/corpus exists.
+# The corpus PDFs are NOT baked in (.dockerignore drops them) — ingest
+# re-downloads them from FDA in-VPC via NAT at runtime.
+#
+# Run as a one-off ECS run-task in the private subnets on the ecs_tasks SG
+# (infra/terraform/bootstrap.tf). It creates the vector extension + schema and
+# embeds the corpus; RDS never becomes publicly accessible. Idempotent: re-run
+# safe (CREATE ... IF NOT EXISTS + upsert ON CONFLICT).
+FROM python:3.11-slim-bookworm AS bootstrap
+
+COPY --from=ghcr.io/astral-sh/uv:0.11.17 /uv /uvx /bin/
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=0
+
+WORKDIR /app
+
+RUN groupadd --system app && useradd --system --gid app --home-dir /app app
+
+# Dependencies first (cache layer), then the project + corpus data.
+COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project --no-dev
+
+COPY README.md ./
+COPY src ./src
+# Brings data/corpus/manifest.json (the 45 MB of PDFs are excluded by .dockerignore).
+COPY data ./data
+# editable install (no --no-editable) → config.PROJECT_ROOT resolves to /app
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
+
+# DATA_DIR.mkdir() writes downloaded PDFs under /app/data/corpus at runtime.
+RUN chown -R app:app /app
+
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1
+
+USER app
+
+# Args overridable by the ECS task `command` (e.g. ["--limit","50"] or ["--truncate"]).
+ENTRYPOINT ["python", "-m", "rra.ingest"]
+CMD ["--limit", "50"]

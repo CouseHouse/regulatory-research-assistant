@@ -1,6 +1,55 @@
 # Dev log
 
 
+## 2026-06-08 — Pre-deploy static analysis + private-RDS bootstrap (ADR 0017)
+
+**Branch `eval-maturation`** (analysis cut at `bda1576`; infra files identical on `main`). Read-only
+pre-deploy pass over Dockerfile / Terraform / app config to predict first-deploy connectivity. The
+serving stack checked out clean — SG chain (ALB→ECS→RDS), NAT egress, DATABASE_URL assembled from
+`POSTGRES_HOST`=RDS address (no localhost fallback), secrets from Secrets Manager, uvicorn `0.0.0.0`,
+Langfuse a clean no-op when disabled, `CRITIC_FORCE_VERDICT` absent from cloud env — all correct.
+
+**One blocker (B1):** RDS is private and nothing in the IaC creates the `vector` extension /
+`corpus.chunks` / corpus, and the laptop can't reach the endpoint. `/health` is DB-free, so the task
+goes healthy and the **first `/query` 500s** on `relation "corpus.chunks" does not exist`. The serving
+image can't self-bootstrap (`.dockerignore` drops `data/`; `PROJECT_ROOT` mis-resolves in the wheel
+layout). Two related warnings logged for later: lazy DB hides connectivity until first query (suggest
+a `/readyz` with `SELECT 1`), and `lf.flush()` is synchronous in the request path (only bites if
+Langfuse is enabled pointing at an unreachable host).
+
+**Decision — ADR 0017 (Active): bootstrap via a one-off in-VPC ingest task.** A second `bootstrap`
+Dockerfile target ships source + `data/corpus/manifest.json` and installs the project EDITABLE
+(`PROJECT_ROOT`→`/app`); `rra.ingest` is schema-sufficient (its `_ensure_schema()` creates the
+extension + schema + indexes, then embeds). Run once via `aws ecs run-task` (`bootstrap.tf`) into the
+private subnets on the existing `ecs_tasks` SG — RDS already trusts it, NAT reaches FDA + Voyage, no
+new network rule/repo/standing resource. Rejected: bastion, public-flip, ECS-Exec, startup migration.
+
+**Implemented + verified:** `Dockerfile` (`bootstrap` target), `infra/terraform/bootstrap.tf` (task def
++ log group), `outputs.tf` (`bootstrap_run_task_command`), `variables.tf` (4 bootstrap vars),
+`.dockerignore` (exclude only `data/corpus/*.pdf`, keep the 37 KB manifest), README runbook + ADR 0017
++ index. `terraform validate` passes. Built `--target bootstrap` and ran it: manifest present, PDFs
+absent (re-downloaded in-VPC at runtime), `PROJECT_ROOT=/app`, `ingest --help` works.
+
+**Two bugs caught only by building the image (not by review):**
+1. Inline `# comment` on a `COPY` line is parsed as COPY args (Dockerfile, unlike RUN, has no inline
+   comments) → build failed. Moved comments above the instruction.
+2. `config.Settings()` is instantiated at import (`config.py:150`) and `ANTHROPIC_API_KEY` is a
+   *required* field with no default — so even though ingest never calls Anthropic, `import rra.config`
+   fails fast without it. Added `ANTHROPIC_API_KEY` to the bootstrap task secrets (Voyage + Anthropic
+   are the only required keys; `RRA_API_KEY`/`POSTGRES_PASSWORD` have defaults).
+
+**LESSON:** "config fails fast at import" means a job that uses *none* of a required secret still needs
+it present. Trim the secret set to what the *code path* uses and you trip the *import-time* validator.
+
+### Open follow-ups
+
+1. `/readyz` (or a startup `SELECT 1`) so RDS connectivity surfaces at boot, not on first query (W1).
+2. `app.query_audit` is not created by the bootstrap flow and not written at runtime — wire it up or
+   leave it. Not on the `/query` path either way.
+3. Bootstrap reuses the app ECR repo with a `:bootstrap` tag (vs. a second repo) — revisit if it gets
+   confusing.
+
+
 ## 2026-06-05 — eval-maturation: trace the LLM judges + pricing audit (close the $2.26 cost gap)
 
 **Branch `eval-maturation`**, HEAD `bda1576`. Follow-up on the previous entry's LESSON ("Langfuse

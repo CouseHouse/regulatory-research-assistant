@@ -88,6 +88,32 @@ variable "desired_count" {
   default     = 1
 }
 
+# ─── Bootstrap task (one-off corpus ingest into private RDS — ADR 0017) ────────
+
+variable "bootstrap_image_tag" {
+  description = "Tag of the bootstrap image in the (shared) app ECR repo — built from the Dockerfile `bootstrap` target."
+  type        = string
+  default     = "bootstrap"
+}
+
+variable "bootstrap_cpu" {
+  description = "Fargate CPU units for the one-off bootstrap/ingest task."
+  type        = number
+  default     = 512
+}
+
+variable "bootstrap_memory" {
+  description = "Fargate memory (MiB) for the bootstrap task. pypdf parsing can be memory-hungry; bump if a large PDF OOMs."
+  type        = number
+  default     = 1024
+}
+
+variable "bootstrap_ingest_command" {
+  description = "Args passed to `python -m rra.ingest` in the bootstrap task (overrides the image CMD). E.g. [\"--limit\",\"50\"] for the demo, [] for the full corpus, [\"--truncate\"] to reset first."
+  type        = list(string)
+  default     = ["--limit", "50"]
+}
+
 variable "log_retention_days" {
   description = "CloudWatch Logs retention for the app log group."
   type        = number
