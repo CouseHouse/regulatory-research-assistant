@@ -43,7 +43,11 @@ it present. Trim the secret set to what the *code path* uses and you trip the *i
 
 ### Open follow-ups
 
-1. `/readyz` (or a startup `SELECT 1`) so RDS connectivity surfaces at boot, not on first query (W1).
+1. ~~`/readyz` so RDS connectivity surfaces at boot, not on first query (W1).~~ **DONE** — added
+   `GET /readyz` (`api.py`): borrows the request-path pool, runs `SELECT 1`, 200 `{"status":"ready"}`
+   or 503. Deliberately NOT the ALB liveness probe (that stays DB-free `/health`); it's a smoke-test /
+   on-demand probe. Skips `register_vector` so it stays green pre-ingest (connectivity, not pgvector).
+   Tests: reachable→200, unreachable→503, plus a guard that `/health` never touches the pool.
 2. `app.query_audit` is not created by the bootstrap flow and not written at runtime — wire it up or
    leave it. Not on the `/query` path either way.
 3. Bootstrap reuses the app ECR repo with a `:bootstrap` tag (vs. a second repo) — revisit if it gets

@@ -15,6 +15,7 @@ from fastapi import FastAPI, Header, HTTPException, status
 
 from rra.citations import parse_answer
 from rra.config import settings
+from rra.db import get_pool
 from rra.graph import run_graph
 from rra.schemas import Citation, QueryRequest, QueryResponse, RetrievedPassage
 from rra.tracing import get_langfuse
@@ -33,6 +34,32 @@ def health() -> dict[str, str]:
     that does NOT touch Postgres — a DB blip should not pull tasks out of service.
     """
     return {"status": "ok"}
+
+
+@app.get("/readyz")
+def readyz() -> dict[str, str]:
+    """Readiness probe: confirms Postgres is reachable (SELECT 1).
+
+    Deliberately SEPARATE from /health (W1, ADR 0017 dev-log). The DB connection
+    is lazy — it first opens on /query (the graph checkpointer + the retrieval
+    pool), so a HEALTHY task can still 500 every real query if RDS is unreachable
+    (wrong SG rule, subnet, or creds). This endpoint surfaces that on demand —
+    curl it in the deploy smoke test BEFORE the first /query. It must NOT back the
+    ALB liveness check: a DB blip should not pull tasks out of service.
+
+    Borrows from the request-path pool but skips register_vector — this is a pure
+    connectivity check, not a pgvector check, so it stays green pre-ingest too.
+    """
+    try:
+        with get_pool().connection() as conn:
+            conn.execute("SELECT 1")
+    except Exception as exc:  # noqa: BLE001 — any failure means "not ready"
+        log.warning("readyz.db_unreachable", error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="database unreachable",
+        ) from exc
+    return {"status": "ready"}
 
 
 def _verify_api_key(x_api_key: str | None) -> None:
