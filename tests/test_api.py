@@ -130,9 +130,13 @@ def test_health_does_not_touch_the_db(client: TestClient) -> None:
 
 # ─── Readiness check (W1 — surfaces lazy-DB connectivity) ────────────────────────
 
-def test_readyz_returns_200_when_db_reachable(client: TestClient) -> None:
-    """GET /readyz runs SELECT 1 against the pool and reports ready."""
+def test_readyz_returns_200_when_db_reachable_and_corpus_present(
+    client: TestClient,
+) -> None:
+    """Reachable DB + corpus.chunks present (to_regclass non-null) → ready."""
     mock_conn = MagicMock()
+    # to_regclass('corpus.chunks') resolves the table → non-null.
+    mock_conn.execute.return_value.fetchone.return_value = ("corpus.chunks",)
     mock_pool = MagicMock()
     mock_pool.connection.return_value.__enter__.return_value = mock_conn
 
@@ -141,13 +145,29 @@ def test_readyz_returns_200_when_db_reachable(client: TestClient) -> None:
 
     assert resp.status_code == 200
     assert resp.json() == {"status": "ready"}
-    mock_conn.execute.assert_called_once_with("SELECT 1")
 
 
 def test_readyz_returns_503_when_db_unreachable(client: TestClient) -> None:
     """A connection failure (e.g. RDS SG misconfig) surfaces as 503, not a hang/500."""
     mock_pool = MagicMock()
     mock_pool.connection.side_effect = RuntimeError("connection refused")
+
+    with patch("rra.api.get_pool", return_value=mock_pool):
+        resp = client.get("/readyz")
+
+    assert resp.status_code == 503
+
+
+def test_readyz_returns_503_when_corpus_not_bootstrapped(client: TestClient) -> None:
+    """DB reachable but corpus.chunks absent (to_regclass NULL) → 503.
+
+    Guards the gotcha that a connectivity-only probe would miss: bootstrap skipped,
+    /readyz green, /query 500s on the missing table.
+    """
+    mock_conn = MagicMock()
+    mock_conn.execute.return_value.fetchone.return_value = (None,)  # table absent
+    mock_pool = MagicMock()
+    mock_pool.connection.return_value.__enter__.return_value = mock_conn
 
     with patch("rra.api.get_pool", return_value=mock_pool):
         resp = client.get("/readyz")

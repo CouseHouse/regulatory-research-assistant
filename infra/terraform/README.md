@@ -129,9 +129,10 @@ To ingest the full corpus or reset first, override the args via
 BASE=$(terraform output -raw alb_url)
 curl "$BASE/health"                                   # {"status":"ok"}  (liveness; DB-free)
 curl "$BASE/readyz"                                   # {"status":"ready"} — confirms RDS is
-                                                      # reachable BEFORE the first /query (W1).
-                                                      # 503 here = DB connectivity problem
-                                                      # (SG/subnet/creds), not an app bug.
+                                                      # reachable AND corpus.chunks exists,
+                                                      # BEFORE the first /query (W1). 503 =
+                                                      # DB connectivity problem (SG/subnet/creds)
+                                                      # OR the bootstrap ingest task hasn't run.
 curl -X POST "$BASE/query" -H "Content-Type: application/json" \
   -H "X-API-Key: <rra_api_key>" \
   -d '{"query":"...","product_context":"..."}'

@@ -38,27 +38,39 @@ def health() -> dict[str, str]:
 
 @app.get("/readyz")
 def readyz() -> dict[str, str]:
-    """Readiness probe: confirms Postgres is reachable (SELECT 1).
+    """Readiness probe: confirms Postgres is reachable AND the corpus is bootstrapped.
 
     Deliberately SEPARATE from /health (W1, ADR 0017 dev-log). The DB connection
     is lazy — it first opens on /query (the graph checkpointer + the retrieval
     pool), so a HEALTHY task can still 500 every real query if RDS is unreachable
-    (wrong SG rule, subnet, or creds). This endpoint surfaces that on demand —
-    curl it in the deploy smoke test BEFORE the first /query. It must NOT back the
-    ALB liveness check: a DB blip should not pull tasks out of service.
+    (wrong SG rule, subnet, or creds) OR if the bootstrap ingest task never ran
+    (corpus.chunks absent). This surfaces both on demand — curl it in the deploy
+    smoke test BEFORE the first /query. It must NOT back the ALB liveness check:
+    a DB blip should not pull tasks out of service.
 
-    Borrows from the request-path pool but skips register_vector — this is a pure
-    connectivity check, not a pgvector check, so it stays green pre-ingest too.
+    `to_regclass` is one round-trip that doubles as the connectivity check (a
+    failure raises) and the "did the bootstrap run?" check (NULL → table absent).
+    register_vector is skipped — this is SQL-only. It deliberately does NOT count
+    rows: an empty corpus serves 200s (degraded, not broken), so "ready" means the
+    schema is present, not that the corpus is non-empty.
     """
     try:
         with get_pool().connection() as conn:
-            conn.execute("SELECT 1")
+            row = conn.execute("SELECT to_regclass('corpus.chunks')").fetchone()
     except Exception as exc:  # noqa: BLE001 — any failure means "not ready"
         log.warning("readyz.db_unreachable", error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="database unreachable",
         ) from exc
+
+    if row is None or row[0] is None:
+        log.warning("readyz.corpus_uninitialized")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="corpus not initialized — run the bootstrap ingest task (ADR 0017)",
+        )
+
     return {"status": "ready"}
 
 
