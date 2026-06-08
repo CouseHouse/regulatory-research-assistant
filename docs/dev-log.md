@@ -1,6 +1,31 @@
 # Dev log
 
 
+## 2026-06-08 — First cloud deploy: FDA blocks the Fargate IP → ADR 0018 (bake the corpus)
+
+**Branch `feat/private-rds-bootstrap`** (PR #7). `terraform apply` succeeded (44 resources); pushed
+both images; ran the bootstrap task. **It failed: 50/50 FDA downloads 4xx-failed instantly** (~25 ms
+each, non-retryable — so a 4xx, not a NAT/timeout). Diagnosis: the same URL returns `200` from a
+residential IP but is blocked from the Fargate datacenter IP (Akamai blocks datacenter ranges). The
+in-VPC re-download path from ADR 0017 had **never been exercised** — local ingest short-circuited on
+`dest.exists()` because `data/corpus/` was pre-populated, so the live fetch was untested until cloud.
+
+**Fix — ADR 0018 (supersedes 0017):** bake the cached PDFs into the bootstrap image instead of
+re-downloading. ingest then serves from the on-disk cache. Verified the cache covers all 50 ingested
+docs (and all 72 manifest entries); rebuilt `--target bootstrap` and confirmed 72 PDFs in the image.
+Changes: `.dockerignore` no longer excludes `data/corpus/*.pdf`; Dockerfile + `.dockerignore` comments
+updated; ADR 0017 → Superseded, ADR 0018 → Active. Serving image untouched (COPYs no `data/`), so only
+`:bootstrap` needs a rebuild/re-push. NAT egress is still required (Voyage embeddings).
+
+**LESSON:** a cache short-circuit (`dest.exists()`) can hide an un-exercised network path straight
+through to production. The local "success" proved nothing about the live download — the cloud was the
+first real test. Bake immutable inputs; don't re-fetch a public CDN from a datacenter IP at deploy time.
+
+**Note on `--limit 50`:** that's `var.bootstrap_ingest_command`'s demo default, NOT the manifest size
+(72). Set it to `[]` for the full corpus (+ re-apply to update the task def); the image already carries
+all 72 PDFs regardless.
+
+
 ## 2026-06-08 — Pre-deploy static analysis + private-RDS bootstrap (ADR 0017)
 
 **Branch `eval-maturation`** (analysis cut at `bda1576`; infra files identical on `main`). Read-only

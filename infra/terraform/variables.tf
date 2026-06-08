@@ -109,9 +109,9 @@ variable "bootstrap_memory" {
 }
 
 variable "bootstrap_ingest_command" {
-  description = "Args passed to `python -m rra.ingest` in the bootstrap task (overrides the image CMD). E.g. [\"--limit\",\"50\"] for the demo, [] for the full corpus, [\"--truncate\"] to reset first."
+  description = "Args passed to `python -m rra.ingest` in the bootstrap task (overrides the image CMD). [] = full corpus (all manifest entries), [\"--limit\",\"50\"] = demo subset, [\"--truncate\"] to reset first."
   type        = list(string)
-  default     = ["--limit", "50"]
+  default     = []
 }
 
 variable "log_retention_days" {

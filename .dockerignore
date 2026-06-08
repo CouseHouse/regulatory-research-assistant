@@ -24,11 +24,13 @@ htmlcov
 # Infra / docs / data / dev tooling — not part of the runtime image
 infra
 docs
-# Corpus PDFs are a re-downloadable cache (gitignored) — keep the 45 MB out of the
-# build context. data/corpus/manifest.json (37 KB) STAYS in context: the Dockerfile
-# `bootstrap` target needs it, and ingest re-downloads the PDFs in-VPC at runtime.
-# The minimal serving image COPYs no data/ at all, so its image is unaffected.
-data/corpus/*.pdf
+# data/ is intentionally NOT excluded (ADR 0018, superseding 0017): the Dockerfile
+# `bootstrap` target bakes data/corpus/ (manifest.json + the cached PDFs, ~45 MB) into
+# the one-off ingest image. FDA/Akamai blocks the Fargate datacenter IP, so
+# re-downloading at runtime 4xx-fails (50/50 failed in the first cloud run). With the
+# PDFs baked in, ingest hits the cache (dest.exists()) and skips the fetch. The minimal
+# serving image COPYs no data/, so its image is unaffected — only the serving build
+# *context* grows by ~45 MB, which is acceptable.
 evals
 tests
 scripts

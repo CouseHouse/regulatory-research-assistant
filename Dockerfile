@@ -60,8 +60,9 @@ CMD ["uvicorn", "rra.api:app", "--host", "0.0.0.0", "--port", "8000"]
 # the repo root. So this stage ships the source tree + the manifest and installs
 # the project EDITABLE (no --no-editable): config.py then lives at /app/src/rra/,
 # so PROJECT_ROOT = parents[2] = /app and DATA_DIR = /app/data/corpus exists.
-# The corpus PDFs are NOT baked in (.dockerignore drops them) — ingest
-# re-downloads them from FDA in-VPC via NAT at runtime.
+# The cached corpus PDFs ARE baked in (ADR 0018, superseding 0017): FDA/Akamai blocks
+# the Fargate datacenter IP, so re-downloading at runtime 4xx-fails. ingest hits the
+# cache (dest.exists()) and skips the fetch.
 #
 # Run as a one-off ECS run-task in the private subnets on the ecs_tasks SG
 # (infra/terraform/bootstrap.tf). It creates the vector extension + schema and
@@ -100,6 +101,9 @@ ENV PATH="/app/.venv/bin:$PATH" \
 
 USER app
 
-# Args overridable by the ECS task `command` (e.g. ["--limit","50"] or ["--truncate"]).
+# Default = FULL corpus (no --limit → ingest.main ingests every manifest entry).
+# Override via the ECS task `command` (e.g. ["--limit","50"] for a demo subset, or
+# ["--truncate"]). Image default is full so an empty task `command=[]` resolves to
+# the full corpus under either ECS empty-override interpretation (var default is []).
 ENTRYPOINT ["python", "-m", "rra.ingest"]
-CMD ["--limit", "50"]
+CMD []
