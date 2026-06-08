@@ -10,9 +10,20 @@ Ensures the test suite is a no-op with respect to external services:
 
 from __future__ import annotations
 
+import os
 from collections.abc import Generator
 
 import pytest
+
+# These must be set BEFORE any test module imports rra.config, which builds the
+# Settings() singleton at import. pytest imports this conftest before collecting
+# test modules, so these module-level setdefaults win the race. They mirror the
+# per-file setdefaults and add the two secrets that no longer have code defaults
+# (POSTGRES_PASSWORD, RRA_API_KEY — see config.py).
+os.environ.setdefault("ANTHROPIC_API_KEY", "sk-ant-test")
+os.environ.setdefault("VOYAGE_API_KEY", "pa-test")
+os.environ.setdefault("POSTGRES_PASSWORD", "test-postgres-password")
+os.environ.setdefault("RRA_API_KEY", "dev-key-change-me")
 
 
 @pytest.fixture(autouse=True, scope="session")

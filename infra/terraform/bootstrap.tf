@@ -60,11 +60,11 @@ resource "aws_ecs_task_definition" "bootstrap" {
       ]
 
       # Ingest itself only calls Voyage (embeddings) + Postgres. But config.py
-      # instantiates the Settings() singleton at import time (config.py:150) and
-      # ANTHROPIC_API_KEY is a REQUIRED field with no default — so it must be
-      # present or `import rra.config` fails fast before ingest runs. VOYAGE is
-      # likewise required. RRA_API_KEY and POSTGRES_PASSWORD have defaults, so
-      # only the two LLM keys + the real DB password are injected here.
+      # instantiates the Settings() singleton at import (config.py:150), and
+      # ANTHROPIC_API_KEY, VOYAGE_API_KEY, RRA_API_KEY, and POSTGRES_PASSWORD are
+      # ALL required fields with no defaults — so every one must be present or
+      # `import rra.config` fails fast before ingest runs, even though ingest
+      # never reads the Anthropic or RRA keys.
       secrets = [
         {
           name      = "ANTHROPIC_API_KEY"
@@ -73,6 +73,10 @@ resource "aws_ecs_task_definition" "bootstrap" {
         {
           name      = "VOYAGE_API_KEY"
           valueFrom = aws_secretsmanager_secret.app["VOYAGE_API_KEY"].arn
+        },
+        {
+          name      = "RRA_API_KEY"
+          valueFrom = aws_secretsmanager_secret.app["RRA_API_KEY"].arn
         },
         {
           name      = "POSTGRES_PASSWORD"
