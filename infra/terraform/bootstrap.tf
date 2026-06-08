@@ -14,7 +14,8 @@
 #   - the ecs_tasks SG — RDS already trusts it on 5432 (security.tf), and NAT
 #     egress reaches FDA (PDF download) + Voyage (embeddings);
 #   - the execution role — pulls the image, writes logs, reads the runtime secrets;
-#   - Secrets Manager — VOYAGE_API_KEY + the generated DB password.
+#   - Secrets Manager — ANTHROPIC_API_KEY + VOYAGE_API_KEY (both required by the
+#     config singleton at import) + the generated DB password.
 # No new network rule, repo, or standing resource. The task runs ~1–2 min and
 # exits; nothing keeps charging. Idempotent: safe to re-run (CREATE ... IF NOT
 # EXISTS + upsert ON CONFLICT in rra.ingest).
