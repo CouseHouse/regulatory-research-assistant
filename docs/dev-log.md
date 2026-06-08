@@ -1,6 +1,50 @@
 # Dev log
 
 
+## 2026-06-08 — ALB 503 hunt: wrong Dockerfile stage shipped, then a pinned deployment hid the fix
+
+**Branch `feat/private-rds-bootstrap`** (PR #7). After the bootstrap work landed, the deployed app
+returned **503 from the ALB on both `/health` and `/readyz`** — no healthy target. Read-only AWS triage
+(target health → service events → stopped tasks → CloudWatch) found the ECS service **crash-looping**:
+`runningCount=0`, tasks living ~60 s (start → register → deregister/drain → restart), each exiting `1`.
+The damning log line: the `app` container wasn't running uvicorn at all — it was running **`rra.ingest`**
+(`corpus.download` → `failed=50 succeeded=0` → `corpus.ingest.no_files_downloaded` → exit 1, the ADR 0018
+FDA-IP block). uvicorn never started → nothing on `:8000` → no healthy target → 503.
+
+**Root cause #1 — wrong Dockerfile stage at `:latest`.** The serving task def (`rra-demo:1`, no `command`
+override) ran the image's own entrypoint, which was `python -m rra.ingest` — i.e. the `:latest` image was
+built from the Dockerfile's **last stage (`bootstrap`)**, not `runtime`. A bare `docker build .` defaults
+to the last stage; the serving image needs `--target runtime` (uvicorn `CMD`). ECR confirmed: no serving
+image had ever been pushed — only ingest builds and `:bootstrap`.
+
+**Root cause #2 — the running deployment pinned the old digest.** Rebuilt `--target runtime`, smoke-tested
+locally (`docker inspect` → `CMD=[uvicorn …]`; ran it → saw "Uvicorn running"), and pushed the correct
+uvicorn image to `:latest` (digest `08b9657…`). **Still 503.** `describe-tasks` showed the tasks' *resolved*
+`imageDigest` was `31c0596…` — the original 17:15 ingest image — even for tasks launched *after* the push.
+An **ECS service deployment resolves its image tag to a digest once, at deployment creation, and pins it**;
+new `:latest` pushes are invisible to a live deployment. Every "push didn't help" was this, not a bad image.
+
+**Fix:** `aws ecs update-service … --force-new-deployment` → new deployment re-resolved `:latest` →
+`08b9657…` (uvicorn) → target went **`healthy`**, `/readyz` → `{"status":"ready"}` (DB up + `corpus.chunks`
+present, so bootstrap had run), and `/query` returned a full multi-agent RAG answer with citations
+(80958, 109618, 153781). End to end working.
+
+**Aside (502 vs 503):** a `curl` mid-saga returned **502**, not 503. Same root cause, different moment in
+the loop: **0 registered targets → 503**; a doomed task briefly *registered* but with nothing listening on
+`:8000` → ALB gets a connection refusal → **502**. Not progress — just timing.
+
+**Security nit:** the live `RRA_API_KEY` in Secrets Manager is the placeholder `change-me-to-a-strong-key`.
+Rotate to a strong random value (`openssl rand -hex 32` → `put-secret-value` → `--force-new-deployment` so
+the task re-reads it).
+
+**LESSON:** two traps compounded. (1) A multi-stage Dockerfile whose **last stage isn't the default you
+want** silently ships the wrong image on a bare `build` — reorder so `runtime` is last, and gate pushes on
+`docker inspect … CMD`. (2) **`:latest` + a running ECS service hides your deploys** — the deployment pins a
+digest, so re-pushing the tag is a no-op until `--force-new-deployment`. Both vanish if you deploy
+**immutable tags** (`serve-<sha>` via `app_image_tag`): a push *is* a task-def change, digest pinning can't
+mislead, and the running image is unambiguous.
+
+
 ## 2026-06-08 — First cloud deploy: FDA blocks the Fargate IP → ADR 0018 (bake the corpus)
 
 **Branch `feat/private-rds-bootstrap`** (PR #7). `terraform apply` succeeded (44 resources); pushed
