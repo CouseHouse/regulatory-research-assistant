@@ -4,15 +4,13 @@ A multi-agent RAG system that helps compliance analysts draft first-pass positio
 
 Built as a portfolio project to demonstrate production-grade patterns for agentic AI systems: LangGraph orchestration, a custom MCP server with citation verification, evaluation as a first-class deliverable, and infrastructure as code for a real cloud deployment.
 
-> **Status:** Active development. See [`docs/dev-log.md`](docs/dev-log.md) for the running journal and [`docs/spec.md`](docs/spec.md) for the full design.
+> **Status:** Live demo deployed on ECS Fargate; active development. See [`docs/dev-log.md`](docs/dev-log.md) for the running journal and [`docs/spec.md`](docs/spec.md) for the full design.
 
 ---
 
 ## Demo
 
-[![Loom thumbnail placeholder](docs/loom-thumb.png)](https://loom.com/share/PLACEHOLDER)
-
-*7-minute walkthrough: problem framing → architecture → live query → evaluation results → cloud deployment → what broke and how I fixed it.*
+*Walkthrough video coming soon — it will cover problem framing → architecture → live query → evaluation results → cloud deployment → what broke and how I fixed it.*
 
 ---
 
@@ -85,8 +83,8 @@ The eval harness runs 30 golden questions across three difficulty bands on every
 | Metric | Score | Gate |
 |---|---|---|
 | Citation validity (deterministic) | 0.97 | ≥0.95 required |
-| Key fact coverage (LLM-as-judge) | 0.84 | ≥0.80 warn |
-| Position quality (LLM-as-judge w/ source context) | 4.2 / 5.0 | ≥4.0 warn |
+| Key fact coverage (LLM-as-judge) | 0.81 | ≥0.80 warn |
+| Position quality (LLM-as-judge w/ source context) | 4.8 / 5.0 | ≥4.0 warn |
 
 Per-difficulty-band breakdown and the full golden set in [`evals/`](evals/).
 
@@ -96,11 +94,11 @@ The evaluation strategy — including why every LLM-as-judge scorer sees the sou
 
 Detailed writeups in [`docs/postmortems/`](docs/postmortems/). Short version:
 
-1. **Critic loop divergence on hard questions.** The critic kept rejecting drafts the analyst couldn't improve, blowing the token budget. Fixed by capping revisions at 2 and adding an explicit "low confidence" return path. ([writeup](docs/postmortems/01-critic-loop-divergence.md))
+1. **503 from the load balancer — and a fix that looked like it failed.** The deployed app returned 503 with no healthy target: the ECS task was running the ingest image, not the uvicorn one, because a bare `docker build` had shipped the wrong Dockerfile stage. Rebuilding and re-pushing `:latest` didn't help — a running ECS deployment pins its image digest, so the new image was invisible until `--force-new-deployment`. ([writeup](docs/postmortems/01-alb-503-image-pinning.md))
 
-2. **Recall cliff on terminology mismatches.** Queries using clinical language ("post-market modification") retrieved poorly against guidances using regulatory language ("Special 510(k)"). Fixed by having the researcher generate 2–3 query rephrasings before retrieval, lifting recall@10 from 0.71 to 0.88. ([writeup](docs/postmortems/02-recall-cliff.md))
+2. **A third of citation quotes failed verification — and the corpus wasn't the cause.** Quote-faithfulness checking failed ~30% of quotes (309/446 at τ=0.85). I assumed the corpus needed re-chunking; a $0 smoke across a dirty arm and a cleaned arm returned identical results (delta zero), pointing at the matcher instead. Normalizing smart quotes and stripping PDF line numbers took it to 386/446; recall@10 held at 1.00. ([writeup](docs/postmortems/02-quote-faithfulness-matcher.md))
 
-3. **LLM-as-judge agreed with anything confident.** Initial judge scored a confidently-hallucinated answer higher than an accurate hedged one. Fixed by giving the judge the retrieved passages in context, with explicit instructions to penalize claims absent from the source. ([writeup](docs/postmortems/03-judge-bias.md))
+3. **An LLM-as-judge that silently scored nothing.** The key-fact-coverage judge returned N/A on all 30 cases — it looked unwired, but Haiku was wrapping its JSON verdict in prose and strict parsing rejected it. An assistant-turn JSON prefill fixed it; the scorer went from zero signal to a 0.908 mean and now fails a third of cases on partial coverage, as intended. ([writeup](docs/postmortems/03-judge-blind-spot.md))
 
 ---
 
@@ -110,7 +108,7 @@ Detailed writeups in [`docs/postmortems/`](docs/postmortems/). Short version:
 
 ```bash
 # Clone and bootstrap
-git clone https://github.com/YOU/regulatory-research-assistant
+git clone https://github.com/CouseHouse/regulatory-research-assistant
 cd regulatory-research-assistant
 cp .env.example .env  # add your API keys
 
@@ -154,7 +152,7 @@ terraform apply  # ~6 min; ~$0.10/hr while running
 terraform destroy
 ```
 
-Provisions: VPC, ECS Fargate cluster, RDS Postgres (with pgvector), Secrets Manager, ALB. See [`infra/README.md`](infra/README.md) for the full topology and a cost breakdown.
+Provisions: VPC, ECS Fargate cluster, RDS Postgres (with pgvector), Secrets Manager, ALB. See [`infra/terraform/README.md`](infra/terraform/README.md) for the full topology and a cost breakdown.
 
 ## Repo layout
 
@@ -210,7 +208,7 @@ Anthropic's [Building Effective Agents](https://www.anthropic.com/research/build
 
 ---
 
-*Built by [Your name] — [LinkedIn](https://linkedin.com/in/you) — [you@example.com](mailto:you@example.com)*
+*Built by Kyle Couse — [LinkedIn](https://www.linkedin.com/in/kyle-couse-9b17b659/) — [kcouse1@gmail.com](mailto:kcouse1@gmail.com)*
 
 
 
