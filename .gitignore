@@ -54,6 +54,9 @@ infra/terraform/*.tfstate
 infra/terraform/*.tfstate.*
 infra/terraform/*.tfvars
 !infra/terraform/*.tfvars.example
+# Stray root-level state (e.g. from running terraform outside infra/terraform/)
+/terraform.tfstate
+/terraform.tfstate.*
 
 # Windows NTFS metadata from files downloaded via browser
 *:Zone.Identifier
