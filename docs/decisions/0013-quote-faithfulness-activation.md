@@ -7,6 +7,14 @@
 substring of the stored chunk text" clause. The `guidance_id:chunk_index`
 addressing decision in ADR 0006 remains Active and unchanged.
 
+> **ℹ️ Superseded-in-action by the Day-8 critic-flip (2026-06-05).** The Decision's
+> clause "the critic stays in key-existence mode until τ is calibrated" no longer
+> holds: the critic now passes the analyst's `<q>` supporting quote into
+> `check_citation` (`src/rra/agents/critic.py:298-303`), activating in-loop
+> quote-faithfulness. The **CI gate remains key-existence** (ADR 0012 D2 —
+> unchanged). A ratifying ADR is pending; see
+> `docs/decisions/PENDING-DECISIONS.md` Decision 1.
+
 ## Context
 
 `Citation.quoted_text` was populated by slicing the retrieved chunk itself

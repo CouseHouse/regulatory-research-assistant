@@ -160,6 +160,7 @@ Provisions: VPC, ECS Fargate cluster, RDS Postgres (with pgvector), Secrets Mana
 .
 ├── docs/
 │   ├── spec.md                  # Full design doc with rejected alternatives
+│   ├── decisions/               # Architecture Decision Records (ADRs 0001–0018)
 │   ├── identity-design.md       # OAuth 2.0 production design (not implemented in v1)
 │   ├── cost-model.md            # Token + infra cost breakdown
 │   ├── future-work.md           # Out-of-scope items with treatments
@@ -168,14 +169,19 @@ Provisions: VPC, ECS Fargate cluster, RDS Postgres (with pgvector), Secrets Mana
 ├── src/rra/
 │   ├── api.py                   # FastAPI gateway
 │   ├── graph.py                 # LangGraph state machine
+│   ├── config.py                # Pydantic Settings — all config flows through here
 │   ├── agents/                  # Planner, researcher, analyst, critic
-│   ├── mcp_server/              # Custom MCP server + tools
+│   ├── mcp_server/              # Custom MCP server + tools (check_citation)
+│   ├── retrieval.py             # pgvector similarity search + Voyage rerank
 │   ├── ingest.py                # Corpus loader
 │   └── evals/                   # Golden set + scorers + runner
 ├── evals/
 │   ├── golden.jsonl             # 30 annotated questions
+│   ├── fixtures/                # CI citation-gate fixtures
 │   └── results/                 # Run outputs (gitignored except latest)
-├── infra/terraform/             # ECS Fargate + RDS + Langfuse stack
+├── infra/terraform/             # ECS Fargate + RDS + ALB + VPC (Terraform)
+├── tests/                       # Unit + integration tests
+├── Dockerfile                   # Multi-stage: runtime (API) + bootstrap (corpus init)
 ├── docker-compose.yml           # Local dev: Postgres + Langfuse + MCP
 └── .github/workflows/           # CI: tests + evals on every PR
 ```

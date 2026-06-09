@@ -33,10 +33,6 @@ present, so bootstrap had run), and `/query` returned a full multi-agent RAG ans
 the loop: **0 registered targets → 503**; a doomed task briefly *registered* but with nothing listening on
 `:8000` → ALB gets a connection refusal → **502**. Not progress — just timing.
 
-**Security nit:** the live `RRA_API_KEY` in Secrets Manager is the placeholder `change-me-to-a-strong-key`.
-Rotate to a strong random value (`openssl rand -hex 32` → `put-secret-value` → `--force-new-deployment` so
-the task re-reads it).
-
 **LESSON:** two traps compounded. (1) A multi-stage Dockerfile whose **last stage isn't the default you
 want** silently ships the wrong image on a bare `build` — reorder so `runtime` is last, and gate pushes on
 `docker inspect … CMD`. (2) **`:latest` + a running ECS service hides your deploys** — the deployment pins a
