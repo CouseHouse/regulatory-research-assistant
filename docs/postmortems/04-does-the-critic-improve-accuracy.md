@@ -10,9 +10,10 @@ like" is how you end up paying for theater. The real question was narrow and fal
 **does the critic make the answer measurably more accurate, or is it ceremony?**
 
 ADR 0009 had already written its own kill-switch into the "reopen" triggers: if the critic
-adds **less than 2%** to `citation_validity` over the single-agent baseline, "the entire
-revision loop may be theater — consider removing the critic." So this wasn't a vibe check.
-There was a pre-registered number the critic had to clear to justify its existence.
+raises `citation_validity` by **less than 2 percentage points** over the single-agent
+baseline, "the entire revision loop may be theater — consider removing the critic." So this
+wasn't a vibe check. There was a pre-registered number the critic had to clear to justify
+its existence.
 
 ## Why it wasn't obvious either way
 
@@ -43,22 +44,29 @@ and prompts byte-identical between arms, so any delta is the revision loop and n
 The critic doesn't just move the accuracy metric — it's the difference between an answer set
 that ships and one that doesn't.
 
-| Scorer | Arm 1 — critic OFF | Arm 2 — critic ON | Δ |
+All scores are on a 0–100% scale except `position_quality`, which is rated out of 5.
+"Change" is in **percentage points** — the raw gap between the two columns, not a relative
+percentage.
+
+| Scorer | Critic OFF | Critic ON | Change |
 |---|---|---|---|
-| **citation_validity** (HARD gate 0.95) | 0.842 — **6.7% pass** | **0.972 — 73.3% pass** | **+0.130** |
-| key_fact_coverage (warn 0.80) | 0.783 | 0.808 | +0.025 |
-| position_quality (warn 4.0/5) | 0.913 (≈4.56/5) | 0.960 (≈4.80/5) | +0.047 |
-| Quote-faithfulness (τ = 0.85) | 385/455 verified (84.6%) | 449/461 verified (97.4%) | +12.8 pts |
+| **citation_validity** (must hit 95% to ship) | **84.2%** (6.7% of cases pass) | **97.2%** (73.3% pass) | **+13.0 pts** (≈15% higher, relative) |
+| key_fact_coverage (target 80%) | 78.3% | 80.8% | +2.5 pts |
+| position_quality (target 4.0 / 5) | 4.56 / 5 | 4.80 / 5 | +0.24 |
+| quote-faithfulness (τ = 0.85) | 385 / 455 quotes verified (84.6%) | 449 / 461 verified (97.4%) | +12.8 pts |
 
-The headline is `citation_validity`: **+0.130**, more than 6× the 2% bar ADR 0009 set for
-"not theater." And the release gate sits at 0.95 — so the single-agent baseline (0.842) is
-**below the line and would not ship**, while the critic arm (0.972) clears it. The critic
-isn't polishing an already-good answer; it's what takes citation accuracy from failing to
-passing. Quote-faithfulness tells the same story from the source-text side: roughly one in
-six quotes that the bare analyst got wrong, the critic caught and fixed.
+The headline is `citation_validity`: it climbed **13 percentage points — from 84.2% to
+97.2%** (about 15% higher than the baseline in relative terms). That's more than 6× the
+2-point bar ADR 0009 set for "not theater." And the release gate sits at **95%** — so the
+single-agent baseline (84.2%) is **below the line and would not ship**, while the critic arm
+(97.2%) clears it. The critic isn't polishing an already-good answer; it's what takes
+citation accuracy from failing to passing. Quote-faithfulness tells the same story from the
+source-text side: the bare analyst got about **1 quote in 6 wrong** (84.6% verified); the
+critic cut that to roughly **1 in 40** (97.4%).
 
-The two judge-scored metrics moved far less (`key_fact_coverage` +0.025, `position_quality`
-+0.047), which is exactly what you'd expect: the critic's job is citation correctness, not
+The two judge-scored metrics moved far less (`key_fact_coverage` +2.5 points,
+`position_quality` +0.24 on the 5-point scale), which is exactly what you'd expect: the
+critic's job is citation correctness, not
 coverage or ordering. It improved the thing it was built to improve and left the rest roughly
 where it found them. That specificity is itself evidence the lift is real and not noise — a
 spurious effect wouldn't land precisely on the targeted metric.
@@ -68,7 +76,7 @@ spurious effect wouldn't land precisely on the targeted metric.
 The critic earns its place, but the same run flags that it's straining against its budget.
 **14 of 30 cases (47%) hit `cap_hit=True`** — the critic was still demanding revisions when
 the 2-revision cap forced an exit (39 `revise` vs 46 `approve` verdicts across all passes).
-So 0.972 is the accuracy the critic reaches *with the cap cutting it off early on half the
+So 97.2% is the accuracy the critic reaches *with the cap cutting it off early on half the
 cases*, not the ceiling of what it could reach if allowed to keep going.
 
 This trips ADR 0009's *other* reopen trigger — cap-hit rate over 10% says "2 revisions may be
@@ -79,9 +87,9 @@ a cheap targeted follow-up, not a guess to make here.
 
 ## Verdict and what I'd do differently
 
-**Verdict: keep the critic.** On the one metric it exists to move it delivers a +0.130 lift
-that clears the project's own theater threshold by 6× and is the sole reason the answer set
-passes its hard accuracy gate. It costs roughly 4× the analyst-only graph spend per run, but
+**Verdict: keep the critic.** On the one metric it exists to move it delivers a 13-point lift
+(84.2% → 97.2%) — more than 6× the 2-point theater threshold the project set for itself — and
+is the sole reason the answer set passes its 95% accuracy gate. It costs roughly 4× the analyst-only graph spend per run, but
 the question was never cost — it was whether the accuracy is real, and it is.
 
 Two things I'd change. First, I'd **run this delta earlier and cheaper.** The forced-approve
