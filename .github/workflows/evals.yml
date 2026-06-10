@@ -34,6 +34,11 @@ jobs:
       # Pydantic Settings will fail without them; provide empty stubs.
       ANTHROPIC_API_KEY: stub-not-used-in-ci
       VOYAGE_API_KEY: stub-not-used-in-ci
+      # Required-with-no-default since 7cadd24 (config sources all secrets from env).
+      # Settings() fails to construct without these even though DATABASE_URL carries
+      # its own password and the gate never authenticates a /query request.
+      POSTGRES_PASSWORD: rra_dev_password
+      RRA_API_KEY: stub-not-used-in-ci
 
     steps:
       - uses: actions/checkout@v4

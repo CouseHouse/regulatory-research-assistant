@@ -6,8 +6,9 @@
 # Networking is a 2-AZ VPC with public subnets (ALB) and private subnets
 # (ECS tasks + RDS), egress via a single NAT gateway.
 #
-# This config is authored for `terraform validate`/`plan` only in this session —
-# it is NOT applied here (no AWS credentials, by design). See README.md.
+# Applied to AWS on 2026-06-08 (see terraform.tfstate, and the live-deploy ALB
+# 503 post-mortem in docs/dev-log.md). Provisions the VPC / ECS Fargate / RDS
+# Postgres / ALB / Secrets Manager stack per docs/spec.md §4.10.
 # ─────────────────────────────────────────────────────────────────────────────
 
 terraform {
