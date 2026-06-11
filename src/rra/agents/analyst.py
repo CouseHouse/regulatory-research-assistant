@@ -18,11 +18,11 @@ import contextlib
 from typing import Any
 
 import structlog
-from anthropic import Anthropic
 from anthropic.types import CacheControlEphemeralParam, TextBlockParam
 
 from rra.agents.types import CriticNote
 from rra.config import settings
+from rra.ports.llm import get_llm
 from rra.schemas import QueryRequest, RetrievedPassage
 from rra.tracing import get_langfuse
 
@@ -170,7 +170,7 @@ def run_analyst(state: dict[str, Any]) -> dict[str, Any]:
     critic_notes: list[CriticNote] = state.get("critic_notes", [])
     revision_count: int = state.get("revision_count", 0)
 
-    client = Anthropic(api_key=settings.anthropic_api_key.get_secret_value())
+    llm = get_llm()
 
     if revision_count == 0:
         # First pass: full synthesis.
@@ -207,7 +207,7 @@ def run_analyst(state: dict[str, Any]) -> dict[str, Any]:
             else contextlib.nullcontext(None)
         )
         with gen_cm as gen:
-            message = client.messages.create(
+            message = llm.complete(
                 model=settings.analyst_model,
                 max_tokens=1500,
                 system=[

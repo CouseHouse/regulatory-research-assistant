@@ -36,7 +36,6 @@ import json
 from typing import Any
 
 import structlog
-from anthropic import Anthropic
 from anthropic.types import (
     CacheControlEphemeralParam,
     TextBlockParam,
@@ -47,6 +46,7 @@ from anthropic.types import (
 from rra.agents.types import CriticNote, CriticOutput
 from rra.citations import parse_answer
 from rra.config import settings
+from rra.ports.llm import get_llm
 from rra.mcp_server.tools import CitationCheckResult, ToolError, check_citation
 from rra.schemas import RetrievedPassage
 from rra.tracing import get_langfuse
@@ -399,7 +399,7 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
             "Return your verdict via the submit_verdict tool."
         )
 
-        client = Anthropic(api_key=settings.anthropic_api_key.get_secret_value())
+        llm = get_llm()
 
         gen_cm = (
             span.start_as_current_observation(
@@ -411,7 +411,7 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
             else contextlib.nullcontext(None)
         )
         with gen_cm as gen:
-            message = client.messages.create(
+            message = llm.complete(
                 model=settings.critic_model,
                 max_tokens=512,
                 system=[

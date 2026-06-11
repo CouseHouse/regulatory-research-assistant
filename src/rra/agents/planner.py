@@ -11,7 +11,6 @@ import json
 from typing import Any
 
 import structlog
-from anthropic import Anthropic
 from anthropic.types import (
     CacheControlEphemeralParam,
     TextBlockParam,
@@ -21,6 +20,7 @@ from anthropic.types import (
 from pydantic import BaseModel, Field
 
 from rra.config import settings
+from rra.ports.llm import get_llm
 from rra.tracing import get_langfuse
 
 log = structlog.get_logger(__name__)
@@ -137,7 +137,7 @@ def run_planner(state: dict[str, Any]) -> dict[str, Any]:
     if product_context:
         user_content += f"\nProduct context: {product_context}"
 
-    client = Anthropic(api_key=settings.anthropic_api_key.get_secret_value())
+    llm = get_llm()
 
     lf = get_langfuse()
     span_cm = (
@@ -160,7 +160,7 @@ def run_planner(state: dict[str, Any]) -> dict[str, Any]:
             else contextlib.nullcontext(None)
         )
         with gen_cm as gen:
-            message = client.messages.create(
+            message = llm.complete(
                 model=settings.planner_model,
                 max_tokens=512,
                 system=[

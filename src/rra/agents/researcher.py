@@ -17,9 +17,9 @@ import contextlib
 from typing import Any
 
 import structlog
-from anthropic import Anthropic
 
 from rra.config import settings
+from rra.ports.llm import get_llm
 from rra.mcp_server.tools import search_corpus as _tool_search_corpus
 from rra.schemas import RetrievedPassage
 from rra.tracing import get_langfuse
@@ -54,7 +54,7 @@ def run_researcher(state: dict[str, Any]) -> dict[str, Any]:
         log.warning("researcher.no_sub_questions", session_id=state.get("session_id"))
         return {"passages": [], "token_usage": {}}
 
-    client = Anthropic(api_key=settings.anthropic_api_key.get_secret_value())
+    llm = get_llm()
 
     total_input_tokens = 0
     total_output_tokens = 0
@@ -86,7 +86,7 @@ def run_researcher(state: dict[str, Any]) -> dict[str, Any]:
                 else contextlib.nullcontext(None)
             )
             with gen_cm as gen:
-                message = client.messages.create(
+                message = llm.complete(
                     model=settings.researcher_model,
                     max_tokens=128,
                     system=_SYSTEM_PROMPT,
