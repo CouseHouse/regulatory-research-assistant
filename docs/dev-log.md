@@ -1,5 +1,50 @@
 # Dev log
 
+## 2026-06-11 — Phase 1: RRA_PROFILE config/profile system
+
+**Branch:** `refactor/phase1-profile-system` (based on `refactor/ports-adapters-security`)
+
+### What landed
+
+- **`RRA_PROFILE` field** added to `Settings` (`Literal["local","aws","azure","gcp"]`, default `"local"`).
+- **`PROFILE_DEFAULTS` registry** + `@model_validator(mode="before")` in `config.py`: per-profile
+  config defaults injected only for fields absent from env + .env. Strict precedence: explicit env >
+  .env > profile default > field default. The `local` profile reproduces today's field-level defaults
+  exactly — behaviour is byte-identical when `RRA_PROFILE` is unset or `"local"`.
+  `aws`/`azure`/`gcp` entries are empty dicts; adapter phases (Phase 2+) fill them.
+- **Conftest `.env`-seed fix**: `tests/conftest.py` now seeds `os.environ` from the project `.env`
+  (via `dotenv_values`) before applying stub defaults. Stubs apply only when a key is absent from
+  both shell and `.env` — the CI case. Fixes the pre-existing footgun where stub values shadowed real
+  keys (env beats .env in pydantic-settings), causing live-DB integration tests to fail without
+  manual key export.
+- **`tests/test_no_secret_leak.py`** (14 tests): pins that `repr`/`str`/`model_dump`/`model_dump_json`
+  never expose raw `SecretStr` sentinel values; `pg_dsn` is the documented exception (it is a plain-str
+  computed field that must contain the password); structlog capture confirms no sentinel leaks into
+  log events; profile-system invariants (default profile, precedence, valid profiles, no secrets in
+  `PROFILE_DEFAULTS`) are all tested.
+- **ADR 0019** (`docs/decisions/0019-rra-profile-config-system.md`): documents context, decision,
+  alternatives, consequences, and a Security implications section. ADR index updated.
+
+### Test results
+
+`uv run pytest tests/ -q --no-cov` → **246 passed** (232 original + 14 new), no failures.
+
+### Conftest fix rationale
+
+pydantic-settings source priority: env vars > .env file > defaults.
+`os.environ.setdefault(key, stub)` writes to the env-var source — it wins over the .env file.
+Result: real developer credentials in `.env` were shadowed by stubs, so any test that hit a live
+service saw stub values and failed (Voyage `pa-test`, Postgres `test-postgres-password`).
+Fix: read the `.env` into `os.environ` via `dotenv_values` BEFORE calling `setdefault`, so real
+credentials win when present. CI has no `.env`, so stubs still apply there. `dotenv_values` is a
+direct dep of python-dotenv (already in the lock file as a dep of pydantic-settings).
+
+### Deviations from brief
+
+- `retrieval.py` line ~151 already used `settings.rerank_model` (not a literal `"rerank-2"`).
+  The Phase 0 dev-log entry documented a pre-existing issue, but it had already been fixed.
+  No change needed. Verified with `grep -rn '"rerank-2"' src/` — the only occurrences are the
+  field default in `config.py`.
 
 ## 2026-06-11 — Refactor kickoff (Phase 0): orient + baseline on `refactor/ports-adapters-security`
 

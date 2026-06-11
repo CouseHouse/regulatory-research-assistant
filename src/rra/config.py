@@ -22,19 +22,76 @@ Note on coexistence with Docker Compose:
   application. They're declared as fields below (with sensible defaults so
   Pydantic doesn't complain when they're absent in test environments) but
   the application never reads them.
+
+RRA_PROFILE selects the execution environment.  The ``local`` profile is the
+default; adapter phases (Phase 2+) add per-profile adapter selection.  Config
+precedence is strict: explicit env vars beat .env beat profile defaults beat
+field defaults.  PROFILE_DEFAULTS only fills fields that are absent from both
+env and .env — it can NEVER override a value the operator supplied.
 """
 
 from __future__ import annotations
 
 from functools import cached_property
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import Field, SecretStr, computed_field
+from pydantic import Field, SecretStr, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Project root = three levels up from this file (src/rra/config.py → root)
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+# ---------------------------------------------------------------------------
+# Per-profile default registry
+# ---------------------------------------------------------------------------
+# Rules:
+#  1. Defaults here are applied ONLY if the field was not supplied via env or
+#     .env.  Explicit env always wins (see model_validator below).
+#  2. NEVER put secret values in this registry.  Secrets must come from the
+#     operator (env var, .env, or a secrets manager).
+#  3. The ``local`` entry MUST reproduce today's field-level defaults exactly
+#     so behaviour is byte-identical under RRA_PROFILE=local and when unset.
+#  4. aws / azure / gcp entries are intentionally sparse — adapter phases
+#     (Phase 2+) will populate them as each adapter is implemented.
+# ---------------------------------------------------------------------------
+
+PROFILE_DEFAULTS: dict[str, dict[str, Any]] = {
+    "local": {
+        # All local defaults mirror the field-level defaults; see below.
+        # They are written out explicitly here so a future reader can see the
+        # full local profile at a glance rather than hunting through field defs.
+        "planner_model": "claude-sonnet-4-6",
+        "analyst_model": "claude-sonnet-4-6",
+        "critic_model": "claude-sonnet-4-6",
+        "researcher_model": "claude-haiku-4-5",
+        "key_fact_judge_model": "claude-haiku-4-5",
+        "position_judge_model": "claude-sonnet-4-6",
+        "embedding_model": "voyage-3",
+        "embedding_dim": 1024,
+        "rerank_model": "rerank-2",
+        "retrieve_top_k": 25,
+        "rerank_top_k": 5,
+        "max_critic_revisions": 2,
+        "citation_match_threshold": 0.85,
+        "chunk_size_tokens": 512,
+        "chunk_overlap_tokens": 50,
+        "download_rate_per_second": 5.0,
+        "download_burst": 10,
+        "max_tokens_per_query": 200_000,
+        "max_tool_calls_per_query": 20,
+        "langfuse_host": "http://localhost:3000",
+        "postgres_host": "localhost",
+        "postgres_port": 5432,
+        "postgres_user": "rra",
+        "postgres_db": "rra",
+    },
+    # aws / azure / gcp: sparse until adapter phases fill them in.
+    # No secret values here — ever.
+    "aws": {},
+    "azure": {},
+    "gcp": {},
+}
 
 
 class Settings(BaseSettings):
@@ -47,6 +104,12 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",  # tolerate extra env vars (CI, system, etc.)
     )
+
+    # ─── Profile selection ──────────────────────────────────────────────────
+    # Selects the adapter set for this deployment environment.
+    # Adapter phases (Phase 2+) wire adapters behind this field; this phase
+    # only registers the field and applies per-profile config defaults.
+    rra_profile: Literal["local", "aws", "azure", "gcp"] = "local"
 
     # ─── LLM provider credentials ───────────────────────────────────────────
     # SecretStr prevents accidental logging — repr() shows '**********'
@@ -150,6 +213,33 @@ class Settings(BaseSettings):
     # critic_force_verdict: skip the LLM call and emit this verdict instead.
     # Enables deterministic loop testing without live queries. None = production.
     critic_force_verdict: Literal["approve", "revise", "escalate"] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _apply_profile_defaults(cls, data: Any) -> Any:
+        """Inject per-profile defaults for fields not explicitly provided.
+
+        Precedence (highest → lowest):
+          1. Explicit env var (already in *data* by the time this runs)
+          2. .env file value (also already in *data*)
+          3. Profile default (applied here, only when the key is absent)
+          4. Field-level default (pydantic applies these after validation)
+
+        This validator runs in "before" mode so *data* is a raw dict of
+        whatever pydantic-settings collected from env + .env sources.  We
+        never overwrite a key that is already present.
+        """
+        if not isinstance(data, dict):
+            return data
+
+        profile = str(data.get("rra_profile", "local")).lower()
+        defaults = PROFILE_DEFAULTS.get(profile, {})
+
+        for key, value in defaults.items():
+            if key not in data:
+                data[key] = value
+
+        return data
 
 
 # Module-level singleton. Importing `settings` from anywhere gives the same
