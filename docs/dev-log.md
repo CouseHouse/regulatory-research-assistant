@@ -1,6 +1,58 @@
 # Dev log
 
 
+## 2026-06-11 — Refactor kickoff (Phase 0): orient + baseline on `refactor/ports-adapters-security`
+
+Autonomous run start for the ports/adapters/profiles + security refactor (see CLAUDE.md north-star
+section, committed as the first commit on the integration branch).
+
+### Branch decision (unilateral, logged per working-style rule)
+
+Integration branch **`refactor/ports-adapters-security`** is based on **`docs/postmortems`**, not
+`main`. Rationale: `docs/postmortems` is a strict superset of main (6 commits, doc-only plus
+`7696564` which adds the POSTGRES_PASSWORD/RRA_API_KEY stubs the eval-gate CI workflow needs to
+pass). Basing on main would have made every phase PR fail CI until that fix merged. No code
+diverges; when `docs/postmortems` merges to main this collapses to a normal main-based branch.
+
+### Preconditions verified
+
+- `CRITIC_FORCE_VERDICT`: **unset** in shell (`printenv`) and **absent** from `.env` (checked key
+  names only; values never read into the session).
+- Local stack: `docker compose up -d` → all 7 services healthy; corpus present
+  (`corpus.chunks` = 2,745 rows).
+
+### Green baseline (commands + results)
+
+- **Unit + integration tests:** `uv run pytest tests/ -q` → **232 passed** (with `.env` exported).
+  Note: a bare `pytest` run fails `test_search_corpus_returns_results_from_live_db` because
+  `tests/conftest.py:23-24` stubs `ANTHROPIC_API_KEY`/`VOYAGE_API_KEY` via `os.environ.setdefault`,
+  and an env var (even a stub) beats the `.env` file in pydantic-settings. Pre-existing footgun,
+  not a regression; candidate fix in the config/profile phase.
+- **Eval harness, CI mode (free, no LLM calls):**
+  `uv run python -m rra.evals.run --fixture ci-valid --no-llm-judges --tag refactor-baseline-ci`
+  → citation_validity **1.000 PASS** (`evals/results/20260611T034138Z-refactor-baseline-ci.md`).
+- **Eval harness, full golden:** `uv run python -m rra.evals.run --tag refactor-baseline`
+  → **PARTIAL**: 24/30 scored, citation_validity **0.930**, 6 cases errored with Anthropic
+  **"credit balance is too low"** mid-run (`evals/results/20260611T040923Z-refactor-baseline.md`).
+  The errors are account-credit exhaustion, not system behavior. Last clean full-run anchor stays
+  **0.972** (critic ON, 2026-06-05, eval-maturation work).
+
+### Eval policy for the rest of this run (human directive)
+
+Owner directed: **no further eval runs** this session (API credits exhausted). Per-phase gates are
+therefore: unit tests locally + the free CI-mode citation gate in GitHub Actions on each PR. The
+full golden eval re-run to prove no regression vs baseline is **deferred until credits are
+restored** — it stays on the final-phase checklist, explicitly owed.
+
+### Current-state inventory
+
+Captured (boundaries, config-vs-hardcoded, secrets/PII flow, Fargate path, identity state); lands
+in `docs/refactor/00-implementation-report.md` with Phase 1. Headlines: config is already fully
+centralized (no `os.getenv` outside `src/rra/config.py`); MCP tools are in-process (ADR 0011) with
+**no scoping**; identity is a single `X-API-Key` compared non-constant-time (`src/rra/api.py:77`);
+`rerank-2` model string hardcoded at `src/rra/retrieval.py:151`; Terraform state is empty (nothing
+live, deploy-and-destroy honored).
+
 ## 2026-06-08 — ALB 503 hunt: wrong Dockerfile stage shipped, then a pinned deployment hid the fix
 
 **Branch `feat/private-rds-bootstrap`** (PR #7). After the bootstrap work landed, the deployed app
