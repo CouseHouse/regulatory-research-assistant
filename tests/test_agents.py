@@ -488,9 +488,18 @@ class TestCriticFlipFaithfulness:
         else:
             cc_mock.return_value = cc_return
 
+        # The critic now reaches check_citation through the tool-transport
+        # chokepoint (ADR 0021). The transport mock unpacks the MCP-shaped
+        # arguments dict into kwargs so the existing cc_mock assertions
+        # (call_count, call_args.kwargs) keep their full strength.
+        transport_mock = MagicMock()
+        transport_mock.call_tool.side_effect = (
+            lambda tool, arguments, principal: cc_mock(**arguments)
+        )
+
         with (
             patch("rra.agents.critic.get_llm", return_value=llm_mock),
-            patch("rra.agents.critic.check_citation", cc_mock),
+            patch("rra.agents.critic.get_tool_transport", return_value=transport_mock),
         ):
             from rra.agents.critic import run_critic
 
