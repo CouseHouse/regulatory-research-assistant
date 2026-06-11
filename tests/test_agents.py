@@ -144,9 +144,12 @@ def _make_transport_mock(call_tool_fn: Any) -> MagicMock:
     """Return a mock ToolTransportPort whose .call_tool() uses call_tool_fn.
 
     After the ports refactor, researcher.py calls get_tool_transport().call_tool(...)
-    rather than _tool_search_corpus directly.  Tests patch rra.ports.tools.get_tool_transport
+    rather than _tool_search_corpus directly.  Tests patch rra.agents.researcher.get_tool_transport
     to return this mock so the call-path is:
       run_researcher()  →  get_tool_transport()  →  transport_mock.call_tool(...)
+
+    Note: call_tool now has signature (tool, arguments, principal).  Test
+    helpers that use side_effect must accept 3 positional arguments.
     """
     transport_mock = MagicMock()
     transport_mock.call_tool.side_effect = call_tool_fn
@@ -161,13 +164,15 @@ class TestResearcherAgent:
         text_msg = _make_text_message("substantial equivalence 510(k) premarket notification")
         sc_result = SearchCorpusResult(passages=[sample_passage])
 
-        def mock_call_tool(tool: str, arguments: dict) -> Any:
+        def mock_call_tool(tool: str, arguments: dict, principal: Any) -> Any:
             assert tool == "search_corpus"
             return sc_result
 
         with (
             patch("rra.agents.researcher.get_llm", return_value=_make_llm_mock(text_msg)),
             patch("rra.agents.researcher.get_tool_transport", return_value=_make_transport_mock(mock_call_tool)),
+            patch("rra.agents.researcher.get_identity"),
+            patch("rra.agents.researcher.get_guardrails"),
         ):
             from rra.agents.researcher import run_researcher
 
@@ -193,7 +198,7 @@ class TestResearcherAgent:
 
         call_count = [0]
 
-        def mock_call_tool(tool: str, arguments: dict) -> Any:
+        def mock_call_tool(tool: str, arguments: dict, principal: Any) -> Any:
             n = call_count[0]
             call_count[0] += 1
             passages = [high_score] if n == 0 else [low_score]
@@ -204,6 +209,8 @@ class TestResearcherAgent:
         with (
             patch("rra.agents.researcher.get_llm", return_value=_make_llm_mock(text_msg)),
             patch("rra.agents.researcher.get_tool_transport", return_value=_make_transport_mock(mock_call_tool)),
+            patch("rra.agents.researcher.get_identity"),
+            patch("rra.agents.researcher.get_guardrails"),
         ):
             from rra.agents.researcher import run_researcher
 
@@ -231,7 +238,7 @@ class TestResearcherAgent:
 
         call_count = [0]
 
-        def mock_call_tool(tool: str, arguments: dict) -> Any:
+        def mock_call_tool(tool: str, arguments: dict, principal: Any) -> Any:
             n = call_count[0]
             call_count[0] += 1
             passages = [p_low] if n == 0 else [p_high]
@@ -242,6 +249,8 @@ class TestResearcherAgent:
         with (
             patch("rra.agents.researcher.get_llm", return_value=_make_llm_mock(text_msg)),
             patch("rra.agents.researcher.get_tool_transport", return_value=_make_transport_mock(mock_call_tool)),
+            patch("rra.agents.researcher.get_identity"),
+            patch("rra.agents.researcher.get_guardrails"),
         ):
             from rra.agents.researcher import run_researcher
 
@@ -479,9 +488,18 @@ class TestCriticFlipFaithfulness:
         else:
             cc_mock.return_value = cc_return
 
+        # The critic now reaches check_citation through the tool-transport
+        # chokepoint (ADR 0021). The transport mock unpacks the MCP-shaped
+        # arguments dict into kwargs so the existing cc_mock assertions
+        # (call_count, call_args.kwargs) keep their full strength.
+        transport_mock = MagicMock()
+        transport_mock.call_tool.side_effect = (
+            lambda tool, arguments, principal: cc_mock(**arguments)
+        )
+
         with (
             patch("rra.agents.critic.get_llm", return_value=llm_mock),
-            patch("rra.agents.critic.check_citation", cc_mock),
+            patch("rra.agents.critic.get_tool_transport", return_value=transport_mock),
         ):
             from rra.agents.critic import run_critic
 

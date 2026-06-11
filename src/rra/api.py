@@ -16,6 +16,8 @@ from rra.citations import parse_answer
 from rra.config import settings
 from rra.db import get_pool
 from rra.graph import run_graph
+from rra.ports.guardrails import get_guardrails
+from rra.ports.identity import get_identity
 from rra.ports.observability import get_observability
 from rra.schemas import Citation, QueryRequest, QueryResponse, RetrievedPassage
 
@@ -74,7 +76,18 @@ def readyz() -> dict[str, str]:
 
 
 def _verify_api_key(x_api_key: str | None) -> None:
-    if x_api_key != settings.rra_api_key.get_secret_value():
+    """Verify the caller's API key via the identity port.
+
+    Delegates to get_identity().verify_api_caller() which uses
+    secrets.compare_digest for constant-time comparison (fixes the
+    timing-attack-prone != compare; ADR 0021).
+
+    Returns normally on success.  Raises HTTP 401 on any mismatch.
+    The response body is identical whether the key was absent, wrong, or
+    close — no hint about the mismatch is surfaced.
+    """
+    principal = get_identity().verify_api_caller(x_api_key or "")
+    if principal is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing API key",
@@ -102,6 +115,40 @@ def query(
     x_api_key: Annotated[str | None, Header()] = None,
 ) -> QueryResponse:
     _verify_api_key(x_api_key)
+
+    # ── Guardrails: user-input boundary ───────────────────────────────────────
+    # Check the query and product_context BEFORE the graph runs.
+    # With AllowAllGuardrails (phase-2 wiring) this is a no-op; the real
+    # detector is swapped in during the security-harness phase.
+    # On block: HTTP 400 with a generic message — NO echoing of the query text.
+    # Logging: ONLY boundary + categories logged on block; never the text.
+    guardrails = get_guardrails()
+    query_verdict = guardrails.check(request.query, boundary="user_input")
+    if not query_verdict.allowed:
+        log.warning(
+            "guardrails.blocked",
+            boundary=query_verdict.boundary,
+            categories=query_verdict.categories,
+            # Intentionally omit: request.query, score, reason (might echo content).
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="request blocked by content policy",
+        )
+    if request.product_context:
+        ctx_verdict = guardrails.check(
+            request.product_context, boundary="user_input"
+        )
+        if not ctx_verdict.allowed:
+            log.warning(
+                "guardrails.blocked",
+                boundary=ctx_verdict.boundary,
+                categories=ctx_verdict.categories,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="request blocked by content policy",
+            )
 
     session_id = str(uuid.uuid4())
     log.info("query.start", session_id=session_id, query=request.query[:120])

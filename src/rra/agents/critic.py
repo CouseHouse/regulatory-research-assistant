@@ -47,7 +47,9 @@ from rra.citations import parse_answer
 from rra.config import settings
 from rra.ports.llm import get_llm
 from rra.ports.observability import get_observability
-from rra.mcp_server.tools import CitationCheckResult, ToolError, check_citation
+from rra.mcp_server.tools import CitationCheckResult, ToolError
+from rra.ports.identity import get_identity
+from rra.ports.tools import get_tool_transport
 from rra.schemas import RetrievedPassage
 
 log = structlog.get_logger(__name__)
@@ -283,12 +285,18 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
                 input={"citation_key": ckey, "has_quote": quote is not None},
             ) as cc_span:
                 try:
-                    cc_result = check_citation(
-                        claim=query,
-                        guidance_id=guidance_id,
-                        chunk_index=chunk_index,
-                        quoted_text=quote,
+                    cc_raw = get_tool_transport().call_tool(
+                        "check_citation",
+                        {
+                            "claim": query,
+                            "guidance_id": guidance_id,
+                            "chunk_index": chunk_index,
+                            "quoted_text": quote,
+                        },
+                        principal=get_identity().agent_principal("critic"),
                     )
+                    assert isinstance(cc_raw, CitationCheckResult)
+                    cc_result = cc_raw
                     checks.append((ckey, quote, cc_result))
                     cc_span.update(
                         output={

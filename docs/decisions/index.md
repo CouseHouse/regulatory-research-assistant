@@ -23,6 +23,8 @@ A flat list of all ADRs with status and one-line summary. Keep current — updat
 | 0018  | [Bootstrap image bakes the cached corpus (FDA blocks the Fargate IP)](0018-bootstrap-bakes-cached-corpus.md) | Active | 2026-06-08 | Supersedes 0017; FDA/Akamai 4xx-blocks the datacenter IP |
 | 0019  | [RRA_PROFILE config/profile system](0019-rra-profile-config-system.md) | Active | 2026-06-11 | Phase 1 of ports/adapters refactor; per-profile defaults + SecretStr leak tests |
 | 0020  | [Ports and adapters at every external boundary](0020-ports-and-adapters-boundary.md) | Active | 2026-06-11 | Phase 2; wire-type decisions; security ports → 0021/0022 |
+| 0021  | [Identity/NHI port: deny-by-default tool scoping](0021-identity-nhi-port.md) | Active | 2026-06-11 | Phase 2b; advisory-locally/enforced-in-cloud trust model; constant-time key fix |
+| 0022  | [Guardrails/policy port at user-input + retrieval boundaries](0022-guardrails-policy-port.md) | Active | 2026-06-11 | Phase 2b; AllowAll wiring adapter; detector lands with security harness |
 
 
 ## Conventions for this file

@@ -8,18 +8,26 @@ Design note (ADR 0011):
   This port abstracts the CALL SHAPE, not the function implementations.  Two
   motivations encoded here:
 
-  (a) MCP-native call shape: ``call_tool(tool, arguments)`` is the exact
-      signature the MCP protocol uses for tool invocation over HTTP or stdio.
-      A remote-MCP adapter implements the same Protocol without changing agent
-      code — agent logic calls ``get_tool_transport().call_tool("search_corpus",
-      {"query": ..., "k": ...})`` regardless of whether the tool runs in-process
-      or over an HTTP transport.
+  (a) MCP-native call shape: ``call_tool(tool, arguments, principal)`` is the
+      MCP-native call shape extended with the caller's Principal so that every
+      tool invocation carries its authorization context.  A remote-MCP adapter
+      implements the same Protocol without changing agent code — agent logic
+      calls ``get_tool_transport().call_tool("search_corpus", {...}, principal)``
+      regardless of whether the tool runs in-process or over an HTTP transport.
 
   (b) Single dispatch point for identity/NHI enforcement: every tool invocation
-      MUST flow through ``call_tool``.  The identity/NHI port (next sub-phase)
-      will install a deny-by-default tool-scope check here.  Scattering direct
-      function calls across agents would require instrumenting each call site
-      individually; the single chokepoint makes the enforcement trivially cheap.
+      MUST flow through ``call_tool``.  The identity port's deny-by-default scope
+      check is installed here.  Scattering direct function calls across agents
+      would require instrumenting each call site individually; the single
+      chokepoint makes the enforcement trivially cheap.
+
+  Ordering guarantee (security-critical):
+    Authorization (scope check via get_identity().authorize_tool) is performed
+    BEFORE the tool registry is consulted.  This means an unknown tool name
+    raises ToolAccessDenied (not an "unknown tool" error) when the calling
+    principal lacks the relevant scope.  Only once authorization passes does
+    the unknown-tool check run.  This prevents tool-name probing without a
+    valid scope.
 
   Return types: ``call_tool`` returns the tool's NATIVE result object
   (``SearchCorpusResult``, ``CitationCheckResult``, ``FetchGuidanceResult``,
@@ -34,31 +42,50 @@ Factory:
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from rra.config import settings
 
+if TYPE_CHECKING:
+    from rra.ports.identity import Principal
+
 
 class ToolTransportPort(Protocol):
-    """Protocol for MCP tool dispatch.
+    """Protocol for MCP tool dispatch with identity/NHI authorization.
 
-    The single method ``call_tool`` is the MCP-native call shape: a tool name
-    and a ``dict`` of arguments.  Every agent tool invocation MUST flow through
-    this chokepoint — it is where identity/NHI deny-by-default scope enforcement
-    will be installed in the next sub-phase.
+    The single method ``call_tool`` is the MCP-native call shape: a tool name,
+    a ``dict`` of arguments, and the calling Principal.  Every agent tool
+    invocation MUST flow through this chokepoint.
+
+    Authorization ordering:
+      1. scope check (authorize_tool) — deny raises ToolAccessDenied BEFORE
+         the registry is consulted (prevents tool-name probing without scope).
+      2. registry lookup — ToolError("UNKNOWN") only reached after authz passes.
+      3. dispatch to the tool function.
     """
 
-    def call_tool(self, tool: str, arguments: dict[str, Any]) -> Any:
-        """Invoke *tool* with *arguments* and return the native result object.
+    def call_tool(
+        self,
+        tool: str,
+        arguments: dict[str, Any],
+        principal: "Principal",
+    ) -> Any:
+        """Invoke *tool* with *arguments* on behalf of *principal*.
 
-        The return type is the tool's native result (SearchCorpusResult,
-        CitationCheckResult, etc.) typed as ``Any`` so the port does not import
-        mcp_server.tools at definition time.  Callers narrow as needed.
+        Args:
+            tool:       The MCP tool name (e.g. "search_corpus").
+            arguments:  Keyword arguments forwarded to the tool function.
+            principal:  The authenticated NHI or service Principal making the
+                        call.  Used for scope authorization.
+
+        Returns:
+            The tool's native result object (SearchCorpusResult, etc.).
 
         Raises:
+            ToolAccessDenied: if *principal* does not have *tool* in its scopes
+                (raised BEFORE the registry is consulted — see ordering note).
             ToolError: when the underlying tool function raises (propagated
                 unchanged so the caller's existing ToolError handling works).
-            KeyError / similar: if *tool* is not a known tool name.
         """
         ...  # pragma: no cover
 
