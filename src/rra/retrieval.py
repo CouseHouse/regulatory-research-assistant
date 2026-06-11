@@ -10,11 +10,10 @@ import contextlib
 from typing import Any
 
 import structlog
-from psycopg.rows import dict_row
 
 from rra.config import settings
-from rra.db import get_conn
 from rra.ports.embeddings import get_embeddings
+from rra.ports.vectorstore import get_vector_store
 from rra.schemas import RetrievedPassage
 
 log = structlog.get_logger(__name__)
@@ -115,10 +114,7 @@ def _search_corpus_inner(
     if guidance_ids:
         params["guidance_ids"] = guidance_ids
 
-    with get_conn() as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(sql, params)
-            rows: list[dict[str, Any]] = cur.fetchall()
+    rows: list[dict[str, Any]] = get_vector_store().similarity_search(sql, params)
 
     if not rows:
         if span is not None:

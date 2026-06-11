@@ -20,7 +20,6 @@ import psycopg
 import pypdf
 import structlog
 import tiktoken
-from pgvector.psycopg import register_vector
 from psycopg.types.json import Jsonb
 from tenacity import (
     retry,
@@ -31,6 +30,7 @@ from tenacity import (
 
 from rra.config import PROJECT_ROOT, settings
 from rra.ports.embeddings import get_embeddings
+from rra.ports.vectorstore import get_vector_store
 from rra.rate_limit import RateLimiter
 
 log = structlog.get_logger(__name__)
@@ -516,25 +516,8 @@ def write_to_scratch(chunks: list[Chunk]) -> None:
     )
 
 
-_UPSERT_SQL: Final[str] = """
-INSERT INTO corpus.chunks
-    (guidance_id, guidance_title, chunk_index, text, char_start, char_end, token_count, embedding, metadata)
-VALUES
-    (%(guidance_id)s, %(guidance_title)s, %(chunk_index)s, %(text)s,
-     %(char_start)s, %(char_end)s, %(token_count)s, %(embedding)s, %(metadata)s)
-ON CONFLICT (guidance_id, chunk_index) DO UPDATE SET
-    guidance_title = EXCLUDED.guidance_title,
-    text           = EXCLUDED.text,
-    char_start     = EXCLUDED.char_start,
-    char_end       = EXCLUDED.char_end,
-    token_count    = EXCLUDED.token_count,
-    embedding      = EXCLUDED.embedding,
-    metadata       = EXCLUDED.metadata
-"""
-
-
 def write_to_postgres(chunks: list[EmbeddedChunk]) -> None:
-    """Write (or upsert) *chunks* into corpus.chunks.
+    """Write (or upsert) *chunks* into corpus.chunks via the vector store port.
 
     All rows for the batch are written in a single transaction.
     The schema is created idempotently at the start of each call so the
@@ -543,67 +526,27 @@ def write_to_postgres(chunks: list[EmbeddedChunk]) -> None:
     if not chunks:
         return
 
-    with psycopg.connect(settings.pg_dsn) as conn:
-        _ensure_schema(conn)
-        register_vector(conn)
-
-        rows: list[dict[str, Any]] = [
-            {
-                "guidance_id": ec.chunk.guidance_id,
-                "guidance_title": ec.chunk.guidance_title,
-                "chunk_index": ec.chunk.chunk_index,
-                "text": ec.chunk.text,
-                "char_start": ec.chunk.char_start,
-                "char_end": ec.chunk.char_end,
-                "token_count": ec.chunk.token_count,
-                "embedding": ec.embedding,
-                "metadata": Jsonb({"cluster": ec.chunk.cluster}),
-            }
-            for ec in chunks
-        ]
-        with conn.cursor() as cur:
-            cur.executemany(_UPSERT_SQL, rows)
-        # psycopg Connection context manager commits on clean exit
+    rows: list[dict[str, Any]] = [
+        {
+            "guidance_id": ec.chunk.guidance_id,
+            "guidance_title": ec.chunk.guidance_title,
+            "chunk_index": ec.chunk.chunk_index,
+            "text": ec.chunk.text,
+            "char_start": ec.chunk.char_start,
+            "char_end": ec.chunk.char_end,
+            "token_count": ec.chunk.token_count,
+            "embedding": ec.embedding,
+            "metadata": Jsonb({"cluster": ec.chunk.cluster}),
+        }
+        for ec in chunks
+    ]
+    get_vector_store().upsert_chunks(rows)
 
     log.info(
         "corpus.write.done",
         guidance_id=chunks[0].chunk.guidance_id,
         n_chunks=len(chunks),
     )
-
-
-def _ensure_schema(conn: psycopg.Connection[Any]) -> None:
-    """Create the corpus schema and chunks table if they don't exist.
-
-    DDL mirrors init-db/01-init.sql exactly — update both together.
-    """
-    dim = settings.embedding_dim
-    ddl = f"""
-    CREATE EXTENSION IF NOT EXISTS vector;
-    CREATE SCHEMA IF NOT EXISTS corpus;
-    CREATE SCHEMA IF NOT EXISTS app;
-    CREATE TABLE IF NOT EXISTS corpus.chunks (
-        id              bigserial    PRIMARY KEY,
-        guidance_id     text         NOT NULL,
-        guidance_title  text         NOT NULL,
-        section         text,
-        chunk_index     int          NOT NULL,
-        text            text         NOT NULL,
-        char_start      int          NOT NULL,
-        char_end        int          NOT NULL,
-        token_count     int          NOT NULL,
-        embedding       vector({dim}) NOT NULL,
-        metadata        jsonb        DEFAULT '{{}}'::jsonb,
-        created_at      timestamptz  NOT NULL DEFAULT now(),
-        UNIQUE (guidance_id, chunk_index)
-    );
-    CREATE INDEX IF NOT EXISTS chunks_guidance_id_idx
-        ON corpus.chunks (guidance_id);
-    CREATE INDEX IF NOT EXISTS chunks_embedding_hnsw_idx
-        ON corpus.chunks USING hnsw (embedding vector_cosine_ops);
-    """
-    with conn.cursor() as cur:
-        cur.execute(ddl)
 
 
 # ─── Entry point ───────────────────────────────────────────────────────────────
@@ -693,12 +636,12 @@ def main() -> int:
     # Bootstrap schema — and optionally truncate — before any download or
     # embedding work. This surfaces schema problems immediately rather than
     # after expensive Voyage API calls have already been made.
-    with psycopg.connect(settings.pg_dsn) as conn:
-        _ensure_schema(conn)
-        if args.truncate:
+    get_vector_store().ensure_schema()
+    if args.truncate:
+        with psycopg.connect(settings.pg_dsn) as conn:
             with conn.cursor() as cur:
                 cur.execute("TRUNCATE TABLE corpus.chunks RESTART IDENTITY")
-            log.info("corpus.truncated")
+        log.info("corpus.truncated")
 
     limiter = RateLimiter(
         rate_per_second=settings.download_rate_per_second,

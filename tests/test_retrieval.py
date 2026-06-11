@@ -52,20 +52,11 @@ def _mock_embeddings_port(
     return mock_port
 
 
-def _mock_get_conn(db_rows: list[dict[str, Any]]) -> MagicMock:
-    """Return a mock get_conn context manager preconfigured for the given rows."""
-    mock_cur = MagicMock()
-    mock_cur.__enter__ = MagicMock(return_value=mock_cur)
-    mock_cur.__exit__ = MagicMock(return_value=False)
-    mock_cur.fetchall.return_value = db_rows
-
-    mock_conn = MagicMock()
-    mock_conn.cursor.return_value = mock_cur
-
-    mock_get_conn = MagicMock()
-    mock_get_conn.return_value.__enter__.return_value = mock_conn
-    mock_get_conn.return_value.__exit__.return_value = False
-    return mock_get_conn
+def _mock_vector_store(db_rows: list[dict[str, Any]]) -> MagicMock:
+    """Return a mock VectorStorePort whose similarity_search returns db_rows."""
+    mock_store = MagicMock()
+    mock_store.similarity_search.return_value = db_rows
+    return mock_store
 
 
 # ─── Unit tests ────────────────────────────────────────────────────────────────
@@ -81,11 +72,11 @@ def test_embed_uses_query_input_type() -> None:
 
     rows = _db_rows(1)
     mock_port = _mock_embeddings_port([0], [0.9])
-    mgc = _mock_get_conn(rows)
+    mock_store = _mock_vector_store(rows)
 
     with (
         patch("rra.retrieval.get_embeddings", return_value=mock_port),
-        patch("rra.retrieval.get_conn", mgc),
+        patch("rra.retrieval.get_vector_store", return_value=mock_store),
     ):
         search_corpus("what are the SaMD requirements?")
 
@@ -99,11 +90,11 @@ def test_embed_not_document_input_type() -> None:
 
     rows = _db_rows(1)
     mock_port = _mock_embeddings_port([0], [0.9])
-    mgc = _mock_get_conn(rows)
+    mock_store = _mock_vector_store(rows)
 
     with (
         patch("rra.retrieval.get_embeddings", return_value=mock_port),
-        patch("rra.retrieval.get_conn", mgc),
+        patch("rra.retrieval.get_vector_store", return_value=mock_store),
     ):
         search_corpus("test")
 
@@ -117,11 +108,11 @@ def test_reranker_called_with_query_and_texts() -> None:
 
     rows = _db_rows(2)
     mock_port = _mock_embeddings_port([1, 0], [0.95, 0.80])
-    mgc = _mock_get_conn(rows)
+    mock_store = _mock_vector_store(rows)
 
     with (
         patch("rra.retrieval.get_embeddings", return_value=mock_port),
-        patch("rra.retrieval.get_conn", mgc),
+        patch("rra.retrieval.get_vector_store", return_value=mock_store),
     ):
         search_corpus("software validation requirements")
 
@@ -137,11 +128,11 @@ def test_returns_in_rerank_order() -> None:
     rows = _db_rows(3)
     # Reranker says best=index 2, second=index 0 (drops index 1)
     mock_port = _mock_embeddings_port([2, 0], [0.99, 0.75])
-    mgc = _mock_get_conn(rows)
+    mock_store = _mock_vector_store(rows)
 
     with (
         patch("rra.retrieval.get_embeddings", return_value=mock_port),
-        patch("rra.retrieval.get_conn", mgc),
+        patch("rra.retrieval.get_vector_store", return_value=mock_store),
     ):
         results = search_corpus("test query", k=2)
 
@@ -157,11 +148,11 @@ def test_empty_corpus_returns_empty_without_rerank() -> None:
     from rra.retrieval import search_corpus
 
     mock_port = _mock_embeddings_port([], [])
-    mgc = _mock_get_conn([])
+    mock_store = _mock_vector_store([])
 
     with (
         patch("rra.retrieval.get_embeddings", return_value=mock_port),
-        patch("rra.retrieval.get_conn", mgc),
+        patch("rra.retrieval.get_vector_store", return_value=mock_store),
     ):
         results = search_corpus("test query")
 
@@ -170,44 +161,39 @@ def test_empty_corpus_returns_empty_without_rerank() -> None:
 
 
 def test_guidance_ids_filter_adds_any_clause() -> None:
-    """When guidance_ids filter is set, the SQL contains an ANY clause."""
+    """When guidance_ids filter is set, the SQL forwarded to the store contains an ANY clause."""
     from rra.retrieval import search_corpus
 
     rows = _db_rows(1)
     mock_port = _mock_embeddings_port([0], [0.9])
-    mgc = _mock_get_conn(rows)
-
-    mock_conn = mgc.return_value.__enter__.return_value
-    mock_cur = mock_conn.cursor.return_value.__enter__.return_value
+    mock_store = _mock_vector_store(rows)
 
     with (
         patch("rra.retrieval.get_embeddings", return_value=mock_port),
-        patch("rra.retrieval.get_conn", mgc),
+        patch("rra.retrieval.get_vector_store", return_value=mock_store),
     ):
         search_corpus("test", filters={"guidance_ids": ["doc1", "doc2"]})
 
-    sql_executed: str = mock_cur.execute.call_args.args[0]
+    # similarity_search is called with (sql, params); check the sql arg.
+    sql_executed: str = mock_store.similarity_search.call_args.args[0]
     assert "ANY" in sql_executed
 
 
 def test_empty_guidance_ids_filter_ignored() -> None:
-    """An empty guidance_ids list should behave as no filter (no ANY clause)."""
+    """An empty guidance_ids list should behave as no filter (no ANY clause in SQL)."""
     from rra.retrieval import search_corpus
 
     rows = _db_rows(1)
     mock_port = _mock_embeddings_port([0], [0.9])
-    mgc = _mock_get_conn(rows)
-
-    mock_conn = mgc.return_value.__enter__.return_value
-    mock_cur = mock_conn.cursor.return_value.__enter__.return_value
+    mock_store = _mock_vector_store(rows)
 
     with (
         patch("rra.retrieval.get_embeddings", return_value=mock_port),
-        patch("rra.retrieval.get_conn", mgc),
+        patch("rra.retrieval.get_vector_store", return_value=mock_store),
     ):
         search_corpus("test", filters={"guidance_ids": []})
 
-    sql_executed: str = mock_cur.execute.call_args.args[0]
+    sql_executed: str = mock_store.similarity_search.call_args.args[0]
     assert "ANY" not in sql_executed
 
 
@@ -217,11 +203,11 @@ def test_returned_passages_have_correct_schema() -> None:
 
     rows = _db_rows(2)
     mock_port = _mock_embeddings_port([0, 1], [0.9, 0.8])
-    mgc = _mock_get_conn(rows)
+    mock_store = _mock_vector_store(rows)
 
     with (
         patch("rra.retrieval.get_embeddings", return_value=mock_port),
-        patch("rra.retrieval.get_conn", mgc),
+        patch("rra.retrieval.get_vector_store", return_value=mock_store),
     ):
         results = search_corpus("test")
 
