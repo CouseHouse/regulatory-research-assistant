@@ -7,7 +7,6 @@ The function signature is part of the frozen API contract (docs/plan/day03.md).
 from __future__ import annotations
 
 import contextlib
-from functools import lru_cache
 from typing import Any
 
 import structlog
@@ -15,17 +14,10 @@ from psycopg.rows import dict_row
 
 from rra.config import settings
 from rra.db import get_conn
+from rra.ports.embeddings import get_embeddings
 from rra.schemas import RetrievedPassage
 
 log = structlog.get_logger(__name__)
-
-
-@lru_cache(maxsize=1)
-def _voyage_client() -> Any:
-    """Process-lifetime Voyage client (ADR 0005: singleton, not per-call)."""
-    import voyageai  # local import keeps voyageai out of the module-level namespace
-
-    return voyageai.Client(api_key=settings.voyage_api_key.get_secret_value())  # type: ignore[attr-defined]
 
 
 _BASE_SQL = """
@@ -90,12 +82,11 @@ def _search_corpus_inner(
     filters: dict[str, Any] | None,
     span: Any | None,
 ) -> list[RetrievedPassage]:
-    client = _voyage_client()
+    emb = get_embeddings()
 
     # ADR 0005: query must use input_type="query"; corpus was indexed with "document".
     # These are NOT interchangeable — using the wrong type silently degrades recall.
-    resp = client.embed([query], model=settings.embedding_model, input_type="query")
-    raw_emb: list[float] = [float(v) for v in resp.embeddings[0]]
+    raw_emb: list[float] = emb.embed_query(query)
 
     # Format as pgvector text literal '[v1,v2,...]' and cast with ::vector in SQL.
     # This sidesteps psycopg3 adapter registration entirely — the adapter (register_vector)
@@ -148,13 +139,13 @@ def _search_corpus_inner(
     ]
 
     texts = [p.text for p in candidates]
-    rerank_resp = client.rerank(query, texts, model=settings.rerank_model, top_k=k)
+    rerank_results = emb.rerank(query, texts, top_k=k)
 
     results = [
         RetrievedPassage(
             **{**candidates[r.index].model_dump(), "score": float(r.relevance_score)}
         )
-        for r in rerank_resp.results
+        for r in rerank_results
     ]
 
     if span is not None:

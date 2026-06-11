@@ -20,8 +20,6 @@ import psycopg
 import pypdf
 import structlog
 import tiktoken
-import voyageai
-import voyageai.error as _voyageai_error
 from pgvector.psycopg import register_vector
 from psycopg.types.json import Jsonb
 from tenacity import (
@@ -32,13 +30,16 @@ from tenacity import (
 )
 
 from rra.config import PROJECT_ROOT, settings
+from rra.ports.embeddings import get_embeddings
 from rra.rate_limit import RateLimiter
 
 log = structlog.get_logger(__name__)
 
 # ─── Constants ─────────────────────────────────────────────────────────────────
 
-VOYAGE_MAX_BATCH: Final[int] = 128
+# Note: VOYAGE_MAX_BATCH has moved to rra.adapters.voyage_embeddings — it is a
+# provider limit and belongs with the adapter.  Ingest now delegates batching
+# to the embeddings port, which handles batching internally.
 PDF_MIN_TEXT_LEN: Final[int] = 500  # texts shorter than this are likely scanned images
 
 DATA_DIR: Final[Path] = PROJECT_ROOT / "data" / "corpus"
@@ -419,55 +420,27 @@ def chunk_text(
 # ─── Embed ─────────────────────────────────────────────────────────────────────
 
 def embed_chunks(chunks: list[Chunk]) -> list[EmbeddedChunk]:
-    """Embed *chunks* with Voyage in batches of at most VOYAGE_MAX_BATCH."""
-    result: list[EmbeddedChunk] = []
+    """Embed *chunks* via the embeddings port.
 
-    for batch_start in range(0, len(chunks), VOYAGE_MAX_BATCH):
-        batch = chunks[batch_start : batch_start + VOYAGE_MAX_BATCH]
-        texts = [c.text for c in batch]
-        embeddings = _embed_batch(texts)
-        if len(embeddings) != len(batch):
-            raise RuntimeError(
-                f"Voyage returned {len(embeddings)} embeddings for {len(batch)} inputs"
-            )
-        for chunk, emb in zip(batch, embeddings):
-            result.append(EmbeddedChunk(chunk=chunk, embedding=emb))
+    Batching, retry logic, and the VOYAGE_MAX_BATCH limit have moved into the
+    VoyageEmbeddingsAdapter (rra.adapters.voyage_embeddings).  The public
+    signature of embed_chunks is UNCHANGED so callers and tests are unaffected.
+    """
+    if not chunks:
+        return []
 
-    return result
+    texts = [c.text for c in chunks]
+    embeddings = get_embeddings().embed_documents(texts)
 
+    if len(embeddings) != len(chunks):
+        raise RuntimeError(
+            f"Embeddings adapter returned {len(embeddings)} embeddings for {len(chunks)} inputs"
+        )
 
-def _is_embed_retryable(exc: BaseException) -> bool:
-    # Retry on transient Voyage errors: rate limits, server errors, timeouts,
-    # connection issues. AuthenticationError and InvalidRequestError are
-    # permanent — retrying wastes up to 4 minutes and still fails.
-    return isinstance(
-        exc,
-        (
-            _voyageai_error.RateLimitError,
-            _voyageai_error.ServerError,
-            _voyageai_error.ServiceUnavailableError,
-            _voyageai_error.APIConnectionError,
-            _voyageai_error.TryAgain,
-            _voyageai_error.Timeout,
-        ),
-    )
-
-
-@retry(
-    retry=retry_if_exception(_is_embed_retryable),
-    wait=wait_exponential(multiplier=1, min=2, max=60),
-    stop=stop_after_attempt(4),
-    reraise=True,
-)
-def _embed_batch(texts: list[str]) -> list[list[float]]:
-    """Call the Voyage embed endpoint for a single batch (≤ VOYAGE_MAX_BATCH items)."""
-    client = voyageai.Client(  # type: ignore[attr-defined]
-        api_key=settings.voyage_api_key.get_secret_value()
-    )
-    response = client.embed(texts, model=settings.embedding_model, input_type="document")
-    # voyageai stubs type .embeddings as list[list[float]] | list[list[int]];
-    # explicit float conversion ensures the return type is always list[list[float]].
-    return [[float(v) for v in emb] for emb in response.embeddings]
+    return [
+        EmbeddedChunk(chunk=chunk, embedding=emb)
+        for chunk, emb in zip(chunks, embeddings)
+    ]
 
 
 # ─── Write ─────────────────────────────────────────────────────────────────────
