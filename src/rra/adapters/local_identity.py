@@ -33,19 +33,19 @@ log = structlog.get_logger(__name__)
 # ─── Static agent registry ────────────────────────────────────────────────────
 #
 # Scopes are verified against the actual call sites in the agent modules:
-#   researcher.py  calls search_corpus via get_tool_transport().call_tool(...)
-#   critic.py      calls check_citation directly (NOT via transport; see below)
-#
-# NOTE: critic.py calls check_citation() directly (not through the transport
-# port) for its pre-validation loop.  The critic's transport scope therefore
-# reflects the check_citation tool it routes through the transport port if that
-# path is ever wired.  Current wiring: critic.py imports check_citation from
-# mcp_server.tools directly for the pre-validation step (trusted-harness path,
-# per the lead's ADR note).  The transport-facing scope is correct: critic is
-# granted check_citation in case a future refactor routes it through the
-# transport; this does not grant it search_corpus.
+#   researcher.py  calls search_corpus    via get_tool_transport().call_tool(...)
+#   critic.py      calls check_citation   via get_tool_transport().call_tool(...)
+#                  (routed through the chokepoint in commit 0ad76b4 — its scope
+#                  is load-bearing, not speculative)
 #
 # planner and analyst call no tools → empty frozenset (deny-by-default).
+#
+# Trust model (ADR 0021): in the local adapter these principals are ADVISORY
+# intra-process scoping — authorize_tool trusts the caller-supplied Principal,
+# and any in-process code could request another role's principal. The enforced
+# boundary in the local profile is the HTTP API key; non-forgeable per-agent
+# identity arrives with the cloud adapters (managed identities / workload
+# identity), behind this same port.
 
 _AGENT_REGISTRY: dict[str, Principal] = {
     "planner": Principal("planner", "agent", frozenset()),

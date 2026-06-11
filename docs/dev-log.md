@@ -1,5 +1,35 @@
 # Dev log
 
+## 2026-06-11 — Phase 2b: security spine — identity/NHI + guardrails ports (ADR 0021, 0022)
+
+**Branch:** `refactor/phase2b-security-ports` (off phase2-ports). Implemented by subagent
+B4 to a fixed lead spec; adversarially reviewed by a Security Critic agent before landing.
+
+- **Identity/NHI port** (`ports/identity.py`, `adapters/local_identity.py`): frozen
+  `Principal` with frozenset scopes; `verify_api_caller` via `secrets.compare_digest`
+  (fixes the timing-attack-prone `!=` in api.py); deny-by-default `authorize_tool`
+  enforced at the tool-transport chokepoint, authz **before** tool-existence lookup
+  (probing tool names requires a scope). Scopes = observed usage: researcher
+  {search_corpus}, critic {check_citation}, planner/analyst {}.
+- **Lead catch:** the critic — the agent that consumes untrusted retrieved content —
+  still called check_citation directly, bypassing the chokepoint. Routed through
+  `call_tool` with the critic principal (`0ad76b4`); every agent tool call is now governed.
+- **Guardrails port** (`ports/guardrails.py`, `adapters/allowall_guardrails.py`):
+  `check(text, boundary)` wired at `user_input` (api.py, before any side effect; generic
+  400, echoes nothing) and `retrieved_content` (researcher drops blocked passages;
+  logs guidance_id+chunk_index only). Phase-2 adapter is AllowAll — wiring without
+  detection, behavior-identical (pinned by tests) — so the harness phase swaps in LLM
+  Guard as a pure adapter change.
+- **Security Critic verdict: PASS, no blockers** (16 findings: 12 OK-by-design, 3 notes,
+  1 stale-comment fix applied). Key honest finding now recorded in ADR 0021: the local
+  NHI layer is *advisory intra-process scoping* — `authorize_tool` trusts the
+  caller-supplied Principal; the enforced local boundary is the API key; non-forgeable
+  per-agent identity arrives with cloud managed-identity adapters behind this port.
+  Threat-model note: `call_tool`'s tool argument must stay a caller-side literal.
+
+**Gates:** 359 passed (310→359; 49 new security tests incl. structlog-capture
+no-content-in-logs assertions), mypy clean. Eval runs still deferred (credits).
+
 ## 2026-06-11 — Phase 2a: six functional ports + local adapters (ADR 0020)
 
 **Branch:** `refactor/phase2-ports` (off the integration branch). Three implementation
