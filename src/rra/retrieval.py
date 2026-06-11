@@ -6,42 +6,17 @@ The function signature is part of the frozen API contract (docs/plan/day03.md).
 """
 from __future__ import annotations
 
-import contextlib
-from functools import lru_cache
 from typing import Any
 
 import structlog
-from psycopg.rows import dict_row
 
 from rra.config import settings
-from rra.db import get_conn
+from rra.ports.embeddings import get_embeddings
+from rra.ports.observability import get_observability
+from rra.ports.vectorstore import get_vector_store
 from rra.schemas import RetrievedPassage
 
 log = structlog.get_logger(__name__)
-
-
-@lru_cache(maxsize=1)
-def _voyage_client() -> Any:
-    """Process-lifetime Voyage client (ADR 0005: singleton, not per-call)."""
-    import voyageai  # local import keeps voyageai out of the module-level namespace
-
-    return voyageai.Client(api_key=settings.voyage_api_key.get_secret_value())  # type: ignore[attr-defined]
-
-
-_BASE_SQL = """
-SELECT
-    guidance_id,
-    guidance_title,
-    chunk_index,
-    text,
-    char_start,
-    char_end,
-    1 - (embedding <=> %(query_embedding)s::vector) AS score
-FROM corpus.chunks
-{where_clause}
-ORDER BY embedding <=> %(query_embedding)s::vector
-LIMIT %(limit)s
-"""
 
 
 def search_corpus(
@@ -64,23 +39,20 @@ def search_corpus(
                  Defaults to settings.rerank_top_k (5).
         filters: Optional filter dict. Recognised key:
                    "guidance_ids": list[str] — restrict to these guidance_ids.
-        lf:      Langfuse client for nested instrumentation.
-                 Pass None (default) to skip instrumentation entirely.
+        lf:      DEPRECATED — kept for signature compatibility (frozen contract).
+                 Previously accepted a raw Langfuse client; now ignored.
+                 Instrumentation is handled via get_observability() internally.
+                 Pass None (default). Passing a non-None value has no effect.
     """
     if k is None:
         k = settings.rerank_top_k
 
-    obs_cm = (
-        lf.start_as_current_observation(
-            name="search_corpus",
-            as_type="retriever",
-            input={"query": query, "k": k},
-        )
-        if lf is not None
-        else contextlib.nullcontext(None)
-    )
-
-    with obs_cm as span:
+    obs = get_observability()
+    with obs.start_span(
+        "search_corpus",
+        as_type="retriever",
+        input={"query": query, "k": k},
+    ) as span:
         return _search_corpus_inner(query, k, filters, span)
 
 
@@ -88,50 +60,30 @@ def _search_corpus_inner(
     query: str,
     k: int,
     filters: dict[str, Any] | None,
-    span: Any | None,
+    span: Any,
 ) -> list[RetrievedPassage]:
-    client = _voyage_client()
+    emb = get_embeddings()
 
     # ADR 0005: query must use input_type="query"; corpus was indexed with "document".
     # These are NOT interchangeable — using the wrong type silently degrades recall.
-    resp = client.embed([query], model=settings.embedding_model, input_type="query")
-    raw_emb: list[float] = [float(v) for v in resp.embeddings[0]]
+    raw_emb: list[float] = emb.embed_query(query)
 
-    # Format as pgvector text literal '[v1,v2,...]' and cast with ::vector in SQL.
-    # This sidesteps psycopg3 adapter registration entirely — the adapter (register_vector)
-    # does not propagate reliably on pooled connections under asyncio's threadpool.
-    # Postgres's own text→vector cast is unambiguous and always works.
-    query_embedding: str = "[" + ",".join(map(str, raw_emb)) + "]"
-
-    # Build SQL — dynamic WHERE only when guidance_ids filter is present.
+    # Retrieval policy (how many, filtered to what) lives here; everything
+    # provider-specific (SQL, vector literals) lives in the adapter.
     guidance_ids: list[str] = []
     if filters:
         raw = filters.get("guidance_ids")
         if isinstance(raw, list) and raw:
             guidance_ids = [str(g) for g in raw]
 
-    if guidance_ids:
-        where_clause = "WHERE guidance_id = ANY(%(guidance_ids)s)"
-    else:
-        where_clause = ""
-
-    sql = _BASE_SQL.format(where_clause=where_clause)
-
-    params: dict[str, Any] = {
-        "query_embedding": query_embedding,
-        "limit": settings.retrieve_top_k,
-    }
-    if guidance_ids:
-        params["guidance_ids"] = guidance_ids
-
-    with get_conn() as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute(sql, params)
-            rows: list[dict[str, Any]] = cur.fetchall()
+    rows: list[dict[str, Any]] = get_vector_store().similarity_search(
+        embedding=raw_emb,
+        top_k=settings.retrieve_top_k,
+        guidance_ids=guidance_ids or None,
+    )
 
     if not rows:
-        if span is not None:
-            span.update(output={"passage_count": 0, "passages": []})
+        span.update(output={"passage_count": 0, "passages": []})
         return []
 
     candidates = [
@@ -148,29 +100,28 @@ def _search_corpus_inner(
     ]
 
     texts = [p.text for p in candidates]
-    rerank_resp = client.rerank(query, texts, model=settings.rerank_model, top_k=k)
+    rerank_results = emb.rerank(query, texts, top_k=k)
 
     results = [
         RetrievedPassage(
             **{**candidates[r.index].model_dump(), "score": float(r.relevance_score)}
         )
-        for r in rerank_resp.results
+        for r in rerank_results
     ]
 
-    if span is not None:
-        span.update(
-            output={
-                "passage_count": len(results),
-                "passages": [
-                    {
-                        "guidance_id": p.guidance_id,
-                        "chunk_index": p.chunk_index,
-                        "title": p.guidance_title,
-                        "score": p.score,
-                    }
-                    for p in results
-                ],
-            }
-        )
+    span.update(
+        output={
+            "passage_count": len(results),
+            "passages": [
+                {
+                    "guidance_id": p.guidance_id,
+                    "chunk_index": p.chunk_index,
+                    "title": p.guidance_title,
+                    "score": p.score,
+                }
+                for p in results
+            ],
+        }
+    )
 
     return results

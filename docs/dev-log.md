@@ -1,5 +1,38 @@
 # Dev log
 
+## 2026-06-11 — Phase 2a: six functional ports + local adapters (ADR 0020)
+
+**Branch:** `refactor/phase2-ports` (off the integration branch). Three implementation
+subagents (B1/B2/B3) sequenced by the lead, full test gate between each.
+
+Ports landed in `src/rra/ports/`, local adapters in `src/rra/adapters/`, all as
+Protocol + profile-resolved `lru_cache` factory (non-local profiles raise until the
+cloud-adapter phase):
+
+- **LLM** → `AnthropicLLMAdapter`. Client construction is the seam; `anthropic.types`
+  stay the wire types (ADR 0020 §wire-types — the SDK's own Bedrock/Vertex clients are
+  the cross-cloud story). Call sites rewired: 4 agents + evals/judge. Only behavior
+  delta: one process-lifetime client instead of per-call construction.
+- **Embeddings/rerank** → `VoyageEmbeddingsAdapter` (owns VOYAGE_MAX_BATCH, preserves
+  the retry asymmetry: batch-embed retries, query-embed doesn't).
+- **Vector store** → `PgVectorStoreAdapter`. All corpus SQL moved verbatim from
+  retrieval/tools/ingest. **Review catch:** the first cut passed caller-built SQL
+  through the port (a connection factory, not a boundary); reworked so the port takes
+  `(embedding, top_k, guidance_ids)` and the adapter owns SQL + vector literals
+  (commit `0dc7e7e`). `/readyz`'s pool probe in api.py stays outside the port (health,
+  not corpus).
+- **Memory/state** → `PostgresStateAdapter` (graph checkpointer moved verbatim).
+- **Tool transport** → `InProcessToolTransport`, single `call_tool(name, args)`
+  chokepoint (MCP-native shape; the identity port enforces scoping here in phase 2b).
+- **Observability** → `LangfuseObservabilityAdapter` + `NoopObservabilityAdapter`
+  (replaces the `if lf is not None`/nullcontext dances; langfuse imports now confined
+  to the adapter + the exempted eval harness). `search_corpus(lf=...)` param kept but
+  deprecated (frozen contract).
+
+**Gates:** 310 passed (262→310 with port tests), mypy clean on touched files, grep
+gates verify SDK-construction confinement. Eval runs still deferred (credits); the free
+CI citation gate runs on the PR.
+
 ## 2026-06-11 — Phase 1: RRA_PROFILE config/profile system
 
 **Branch:** `refactor/phase1-profile-system` (based on `refactor/ports-adapters-security`)

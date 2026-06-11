@@ -1,15 +1,19 @@
 """Langfuse instrumentation singleton.
 
 Returns the live Langfuse client when settings.langfuse_enabled is True,
-or None otherwise. All callers must guard against None — that is the
-disabled/no-op path, not an error condition.
+or None otherwise.
 
-Usage:
-    from rra.tracing import get_langfuse
+USAGE RESTRICTION (ports/adapters refactor):
+  After Port 6 (observability) landed, get_langfuse() is the INTERNAL source
+  used ONLY by:
+    - rra.adapters.langfuse_observability  — the observability adapter
+    - rra.evals.run                        — dataset features are Langfuse-specific
+    - rra.evals.langfuse_eval              — same exemption
+    - rra.evals.judge                      — same exemption
 
-    lf = get_langfuse()
-    if lf is not None:
-        trace = lf.trace(name="query", input={"q": q})
+  All other modules MUST import get_observability() from rra.ports.observability
+  instead.  Direct get_langfuse() calls outside the four exempted modules are
+  a violation of the port boundary.
 """
 from __future__ import annotations
 

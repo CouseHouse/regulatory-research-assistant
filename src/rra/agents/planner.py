@@ -6,12 +6,10 @@ exceed the 1024-token Sonnet caching threshold).
 """
 from __future__ import annotations
 
-import contextlib
 import json
 from typing import Any
 
 import structlog
-from anthropic import Anthropic
 from anthropic.types import (
     CacheControlEphemeralParam,
     TextBlockParam,
@@ -21,7 +19,8 @@ from anthropic.types import (
 from pydantic import BaseModel, Field
 
 from rra.config import settings
-from rra.tracing import get_langfuse
+from rra.ports.llm import get_llm
+from rra.ports.observability import get_observability
 
 log = structlog.get_logger(__name__)
 
@@ -137,30 +136,20 @@ def run_planner(state: dict[str, Any]) -> dict[str, Any]:
     if product_context:
         user_content += f"\nProduct context: {product_context}"
 
-    client = Anthropic(api_key=settings.anthropic_api_key.get_secret_value())
+    llm = get_llm()
 
-    lf = get_langfuse()
-    span_cm = (
-        lf.start_as_current_observation(
-            name="planner",
-            as_type="span",
-            input={"query": query, "product_context": product_context},
-        )
-        if lf is not None
-        else contextlib.nullcontext(None)
-    )
-    with span_cm as span:
-        gen_cm = (
-            span.start_as_current_observation(
-                name="anthropic:planner",
-                as_type="generation",
-                model=settings.planner_model,
-            )
-            if span is not None
-            else contextlib.nullcontext(None)
-        )
-        with gen_cm as gen:
-            message = client.messages.create(
+    obs = get_observability()
+    with obs.start_span(
+        "planner",
+        as_type="span",
+        input={"query": query, "product_context": product_context},
+    ) as span:
+        with span.start_as_current_observation(
+            name="anthropic:planner",
+            as_type="generation",
+            model=settings.planner_model,
+        ) as gen:
+            message = llm.complete(
                 model=settings.planner_model,
                 max_tokens=512,
                 system=[
@@ -174,13 +163,12 @@ def run_planner(state: dict[str, Any]) -> dict[str, Any]:
                 tools=_PLAN_TOOL,
                 tool_choice=ToolChoiceToolParam(type="tool", name="plan_query"),
             )
-            if gen is not None:
-                gen.update(
-                    usage_details={
-                        "input": message.usage.input_tokens,
-                        "output": message.usage.output_tokens,
-                    },
-                )
+            gen.update(
+                usage_details={
+                    "input": message.usage.input_tokens,
+                    "output": message.usage.output_tokens,
+                },
+            )
 
         # Extract tool-use block
         tool_input: dict[str, Any] = {}
@@ -214,10 +202,9 @@ def run_planner(state: dict[str, Any]) -> dict[str, Any]:
             output_tokens=message.usage.output_tokens,
         )
 
-        if span is not None:
-            span.update(
-                output={"sub_questions": output.sub_questions, "outline": output.outline},
-            )
+        span.update(
+            output={"sub_questions": output.sub_questions, "outline": output.outline},
+        )
 
         return {
             "sub_questions": output.sub_questions,

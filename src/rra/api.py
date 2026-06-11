@@ -6,7 +6,6 @@ Day 4: replaces the Anthropic call block with the LangGraph orchestrator.
 """
 from __future__ import annotations
 
-import contextlib
 import uuid
 from typing import Annotated, Any
 
@@ -17,8 +16,8 @@ from rra.citations import parse_answer
 from rra.config import settings
 from rra.db import get_pool
 from rra.graph import run_graph
+from rra.ports.observability import get_observability
 from rra.schemas import Citation, QueryRequest, QueryResponse, RetrievedPassage
-from rra.tracing import get_langfuse
 
 log = structlog.get_logger(__name__)
 
@@ -107,34 +106,19 @@ def query(
     session_id = str(uuid.uuid4())
     log.info("query.start", session_id=session_id, query=request.query[:120])
 
-    lf = get_langfuse()
+    obs = get_observability()
     # Propagate session_id onto the parent span AND the child spans the graph
     # opens, so Langfuse's Sessions view groups this request's whole trace —
     # metadata={"session_id": ...} alone does NOT populate Sessions (v4). The
     # "query" span must START INSIDE this context to inherit it, so session_cm is
-    # the OUTER with-context. Imported lazily to keep langfuse off the cold-path
-    # when tracing is disabled (mirrors tracing.get_langfuse).
-    session_cm: Any
-    if lf is not None:
-        from langfuse import propagate_attributes
-
-        session_cm = propagate_attributes(session_id=session_id)
-    else:
-        session_cm = contextlib.nullcontext()
-
-    trace_cm = (
-        lf.start_as_current_observation(
-            name="query",
-            as_type="span",
-            input={"query": request.query, "product_context": request.product_context},
-            metadata={"session_id": session_id},
-        )
-        if lf is not None
-        else contextlib.nullcontext(None)
-    )
-
-    with session_cm, trace_cm as trace_span:
-        trace_id = lf.get_current_trace_id() if lf is not None else None
+    # the OUTER with-context.
+    with obs.propagate_session(session_id), obs.start_span(
+        "query",
+        as_type="span",
+        input={"query": request.query, "product_context": request.product_context},
+        metadata={"session_id": session_id},
+    ) as trace_span:
+        trace_id = obs.current_trace_id()
 
         final_state = run_graph(
             {
@@ -166,16 +150,14 @@ def query(
             total_tokens=sum(final_state.get("token_usage", {}).values()),
         )
 
-        if trace_span is not None:
-            trace_span.update(
-                output={
-                    "answer": clean_prose[:200],
-                    "citation_count": len(citations),
-                    "no_quote_citations": no_quote_count,
-                }
-            )
-        if lf is not None:
-            lf.flush()
+        trace_span.update(
+            output={
+                "answer": clean_prose[:200],
+                "citation_count": len(citations),
+                "no_quote_citations": no_quote_count,
+            }
+        )
+        obs.flush()
 
         return QueryResponse(
             answer=clean_prose,

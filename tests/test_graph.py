@@ -132,7 +132,7 @@ def test_happy_path_approve_first_pass(sample_passage: RetrievedPassage) -> None
         patch("rra.graph.run_researcher", return_value=_researcher_output([sample_passage])),
         patch("rra.graph.run_analyst", return_value=_analyst_output(draft)),
         patch("rra.graph.run_critic", return_value=_critic_approve()),
-        patch("rra.graph._get_checkpointer", return_value=MemorySaver()),
+        patch("rra.graph.get_state", return_value=MagicMock(checkpointer=MagicMock(return_value=MemorySaver()))),
     ):
         from rra.graph import run_graph
 
@@ -176,7 +176,7 @@ def test_revision_path_revise_once_then_approve(sample_passage: RetrievedPassage
         patch("rra.graph.run_researcher", return_value=_researcher_output([sample_passage])),
         patch("rra.graph.run_analyst", side_effect=mock_analyst),
         patch("rra.graph.run_critic", side_effect=mock_critic),
-        patch("rra.graph._get_checkpointer", return_value=MemorySaver()),
+        patch("rra.graph.get_state", return_value=MagicMock(checkpointer=MagicMock(return_value=MemorySaver()))),
     ):
         from rra.graph import run_graph
 
@@ -218,7 +218,7 @@ def test_cap_out_path_always_revise(sample_passage: RetrievedPassage) -> None:
         patch("rra.graph.run_researcher", return_value=_researcher_output([sample_passage])),
         patch("rra.graph.run_analyst", side_effect=mock_analyst),
         patch("rra.graph.run_critic", side_effect=mock_critic),
-        patch("rra.graph._get_checkpointer", return_value=MemorySaver()),
+        patch("rra.graph.get_state", return_value=MagicMock(checkpointer=MagicMock(return_value=MemorySaver()))),
     ):
         from rra.graph import run_graph
 
@@ -253,7 +253,7 @@ def test_escalate_path_exits_immediately(sample_passage: RetrievedPassage) -> No
         patch("rra.graph.run_researcher", return_value=_researcher_output([sample_passage])),
         patch("rra.graph.run_analyst", side_effect=mock_analyst),
         patch("rra.graph.run_critic", side_effect=mock_critic),
-        patch("rra.graph._get_checkpointer", return_value=MemorySaver()),
+        patch("rra.graph.get_state", return_value=MagicMock(checkpointer=MagicMock(return_value=MemorySaver()))),
     ):
         from rra.graph import run_graph
 
@@ -312,7 +312,7 @@ def test_force_verdict_revise_hits_cap(
         patch("rra.graph.run_planner", return_value=_planner_output()),
         patch("rra.graph.run_researcher", return_value=_researcher_output([sample_passage])),
         patch("rra.graph.run_analyst", side_effect=mock_analyst),
-        patch("rra.graph._get_checkpointer", return_value=MemorySaver()),
+        patch("rra.graph.get_state", return_value=MagicMock(checkpointer=MagicMock(return_value=MemorySaver()))),
     ):
         from rra.graph import run_graph
 
@@ -344,7 +344,7 @@ def test_force_verdict_escalate_exits_immediately(
         patch("rra.graph.run_planner", return_value=_planner_output()),
         patch("rra.graph.run_researcher", return_value=_researcher_output([sample_passage])),
         patch("rra.graph.run_analyst", side_effect=mock_analyst),
-        patch("rra.graph._get_checkpointer", return_value=MemorySaver()),
+        patch("rra.graph.get_state", return_value=MagicMock(checkpointer=MagicMock(return_value=MemorySaver()))),
     ):
         from rra.graph import run_graph
 

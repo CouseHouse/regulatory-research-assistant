@@ -18,15 +18,14 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
+from rra.adapters.voyage_embeddings import VOYAGE_MAX_BATCH
 from rra.ingest import (
-    VOYAGE_MAX_BATCH,
     Chunk,
     DATA_DIR,
     DownloadedDoc,
     EmbeddedChunk,
     PDF_MIN_TEXT_LEN,
     _download_one,
-    _embed_batch,
     _entries_from_manifest,
     chunk_text,
     download_guidances,
@@ -224,28 +223,32 @@ def _make_chunks(n: int) -> list[Chunk]:
 
 def test_embed_chunks_returns_one_per_input(sample_chunk: Chunk) -> None:
     fake_emb = [0.0] * 1024
-    with patch("rra.ingest._embed_batch", return_value=[fake_emb]) as mock_batch:
+    mock_port = MagicMock()
+    mock_port.embed_documents.return_value = [fake_emb]
+    with patch("rra.ingest.get_embeddings", return_value=mock_port):
         result = embed_chunks([sample_chunk])
 
     assert len(result) == 1
     assert result[0].chunk is sample_chunk
     assert result[0].embedding == fake_emb
-    mock_batch.assert_called_once_with([sample_chunk.text])
+    mock_port.embed_documents.assert_called_once_with([sample_chunk.text])
 
 
 def test_embed_chunks_batches_at_voyage_max() -> None:
-    """embed_chunks must never send more than VOYAGE_MAX_BATCH items per call."""
+    """embed_chunks delegates batching to the adapter; VOYAGE_MAX_BATCH limit is
+    enforced inside VoyageEmbeddingsAdapter.embed_documents. This test verifies
+    embed_chunks calls embed_documents with all texts and assembles results."""
     n = VOYAGE_MAX_BATCH + 10
     chunks = _make_chunks(n)
+    fake_embs = [[0.0] * 1024 for _ in range(n)]
 
-    def fake_batch(texts: list[str]) -> list[list[float]]:
-        assert len(texts) <= VOYAGE_MAX_BATCH
-        return [[0.0] * 1024 for _ in texts]
-
-    with patch("rra.ingest._embed_batch", side_effect=fake_batch):
+    mock_port = MagicMock()
+    mock_port.embed_documents.return_value = fake_embs
+    with patch("rra.ingest.get_embeddings", return_value=mock_port):
         result = embed_chunks(chunks)
 
     assert len(result) == n
+    mock_port.embed_documents.assert_called_once()
 
 
 def test_embed_chunks_order_preserved() -> None:
@@ -253,7 +256,9 @@ def test_embed_chunks_order_preserved() -> None:
     chunks = _make_chunks(5)
     fake_embs = [[float(i)] * 1024 for i in range(5)]
 
-    with patch("rra.ingest._embed_batch", return_value=fake_embs):
+    mock_port = MagicMock()
+    mock_port.embed_documents.return_value = fake_embs
+    with patch("rra.ingest.get_embeddings", return_value=mock_port):
         result = embed_chunks(chunks)
 
     for i, ec in enumerate(result):
@@ -261,16 +266,20 @@ def test_embed_chunks_order_preserved() -> None:
         assert ec.embedding[0] == float(i)
 
 
-def test_embed_batch_calls_voyage(monkeypatch: pytest.MonkeyPatch) -> None:
-    """_embed_batch passes texts and model to the Voyage client."""
+def test_embed_documents_calls_voyage_with_document_input_type() -> None:
+    """VoyageEmbeddingsAdapter.embed_documents uses input_type='document'."""
     fake_response = MagicMock()
     fake_response.embeddings = [[0.5] * 1024, [0.6] * 1024]
 
     mock_client = MagicMock()
     mock_client.embed.return_value = fake_response
 
-    with patch("voyageai.Client", return_value=mock_client):
-        result = _embed_batch(["text a", "text b"])
+    from rra.adapters.voyage_embeddings import VoyageEmbeddingsAdapter
+
+    adapter = VoyageEmbeddingsAdapter.__new__(VoyageEmbeddingsAdapter)
+    adapter._client = mock_client
+
+    result = adapter._embed_batch_retried(["text a", "text b"])
 
     mock_client.embed.assert_called_once()
     call_kwargs: dict[str, Any] = mock_client.embed.call_args.kwargs
@@ -281,35 +290,25 @@ def test_embed_batch_calls_voyage(monkeypatch: pytest.MonkeyPatch) -> None:
 # ─── write_to_postgres ─────────────────────────────────────────────────────────
 
 def test_write_to_postgres_empty_is_noop() -> None:
-    """write_to_postgres with an empty list must not open a connection."""
-    with patch("psycopg.connect") as mock_connect:
+    """write_to_postgres with an empty list must not call upsert_chunks."""
+    mock_store = MagicMock()
+    with patch("rra.ingest.get_vector_store", return_value=mock_store):
         write_to_postgres([])
 
-    mock_connect.assert_not_called()
+    mock_store.upsert_chunks.assert_not_called()
 
 
-def test_write_to_postgres_calls_executemany(
+def test_write_to_postgres_calls_upsert_chunks(
     sample_embedded_chunk: EmbeddedChunk,
 ) -> None:
-    """write_to_postgres calls executemany with one row per EmbeddedChunk."""
-    mock_cursor = MagicMock()
-    mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-    mock_cursor.__exit__ = MagicMock(return_value=False)
+    """write_to_postgres calls upsert_chunks with one row per EmbeddedChunk."""
+    mock_store = MagicMock()
 
-    mock_conn = MagicMock()
-    mock_conn.__enter__ = MagicMock(return_value=mock_conn)
-    mock_conn.__exit__ = MagicMock(return_value=False)
-    mock_conn.cursor.return_value = mock_cursor
-
-    with (
-        patch("psycopg.connect", return_value=mock_conn),
-        patch("rra.ingest.register_vector"),
-        patch("rra.ingest._ensure_schema"),
-    ):
+    with patch("rra.ingest.get_vector_store", return_value=mock_store):
         write_to_postgres([sample_embedded_chunk])
 
-    mock_cursor.executemany.assert_called_once()
-    _sql, rows = mock_cursor.executemany.call_args.args
+    mock_store.upsert_chunks.assert_called_once()
+    rows = mock_store.upsert_chunks.call_args.args[0]
     assert len(rows) == 1
     row = rows[0]
     assert row["guidance_id"] == sample_embedded_chunk.chunk.guidance_id
@@ -320,7 +319,7 @@ def test_write_to_postgres_calls_executemany(
 def test_write_to_postgres_upsert_fields_present(
     sample_embedded_chunk: EmbeddedChunk,
 ) -> None:
-    """Each row must contain all required DB columns."""
+    """Each row passed to upsert_chunks must contain all required DB columns."""
     required_keys = {
         "guidance_id",
         "guidance_title",
@@ -333,28 +332,16 @@ def test_write_to_postgres_upsert_fields_present(
         "metadata",
     }
 
-    mock_cursor = MagicMock()
-    mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-    mock_cursor.__exit__ = MagicMock(return_value=False)
-
-    mock_conn = MagicMock()
-    mock_conn.__enter__ = MagicMock(return_value=mock_conn)
-    mock_conn.__exit__ = MagicMock(return_value=False)
-    mock_conn.cursor.return_value = mock_cursor
-
-    with (
-        patch("psycopg.connect", return_value=mock_conn),
-        patch("rra.ingest.register_vector"),
-        patch("rra.ingest._ensure_schema"),
-    ):
+    mock_store = MagicMock()
+    with patch("rra.ingest.get_vector_store", return_value=mock_store):
         write_to_postgres([sample_embedded_chunk])
 
-    _sql, rows = mock_cursor.executemany.call_args.args
+    rows = mock_store.upsert_chunks.call_args.args[0]
     assert required_keys == set(rows[0].keys())
 
 
 def test_write_to_postgres_cluster_in_metadata() -> None:
-    """Chunk.cluster lands as metadata->>'cluster' in the row dict passed to executemany."""
+    """Chunk.cluster lands as metadata->>'cluster' in the row dict passed to upsert_chunks."""
     from psycopg.types.json import Jsonb
 
     chunk = Chunk(
@@ -369,23 +356,11 @@ def test_write_to_postgres_cluster_in_metadata() -> None:
     )
     ec = EmbeddedChunk(chunk=chunk, embedding=[0.0] * 1024)
 
-    mock_cursor = MagicMock()
-    mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-    mock_cursor.__exit__ = MagicMock(return_value=False)
-
-    mock_conn = MagicMock()
-    mock_conn.__enter__ = MagicMock(return_value=mock_conn)
-    mock_conn.__exit__ = MagicMock(return_value=False)
-    mock_conn.cursor.return_value = mock_cursor
-
-    with (
-        patch("psycopg.connect", return_value=mock_conn),
-        patch("rra.ingest.register_vector"),
-        patch("rra.ingest._ensure_schema"),
-    ):
+    mock_store = MagicMock()
+    with patch("rra.ingest.get_vector_store", return_value=mock_store):
         write_to_postgres([ec])
 
-    _sql, rows = mock_cursor.executemany.call_args.args
+    rows = mock_store.upsert_chunks.call_args.args[0]
     meta = rows[0]["metadata"]
     assert isinstance(meta, Jsonb)
     assert meta.obj == {"cluster": "software-samd-ai"}
@@ -406,23 +381,11 @@ def test_write_to_postgres_no_cluster_metadata_null() -> None:
     )
     ec = EmbeddedChunk(chunk=chunk, embedding=[0.0] * 1024)
 
-    mock_cursor = MagicMock()
-    mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-    mock_cursor.__exit__ = MagicMock(return_value=False)
-
-    mock_conn = MagicMock()
-    mock_conn.__enter__ = MagicMock(return_value=mock_conn)
-    mock_conn.__exit__ = MagicMock(return_value=False)
-    mock_conn.cursor.return_value = mock_cursor
-
-    with (
-        patch("psycopg.connect", return_value=mock_conn),
-        patch("rra.ingest.register_vector"),
-        patch("rra.ingest._ensure_schema"),
-    ):
+    mock_store = MagicMock()
+    with patch("rra.ingest.get_vector_store", return_value=mock_store):
         write_to_postgres([ec])
 
-    _sql, rows = mock_cursor.executemany.call_args.args
+    rows = mock_store.upsert_chunks.call_args.args[0]
     meta = rows[0]["metadata"]
     assert isinstance(meta, Jsonb)
     assert meta.obj == {"cluster": None}
