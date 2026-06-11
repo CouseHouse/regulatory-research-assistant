@@ -49,11 +49,17 @@ def _make_tool_message(
     return msg
 
 
-def _make_anthropic_mock(msg: MagicMock) -> MagicMock:
-    client = MagicMock()
-    client.messages.create.return_value = msg
-    anthropic_cls = MagicMock(return_value=client)
-    return anthropic_cls
+def _make_llm_mock(msg: MagicMock) -> MagicMock:
+    """Return a mock LLMPort whose .complete() returns *msg*.
+
+    After the ports refactor agents call get_llm().complete(**kwargs) rather
+    than Anthropic(api_key=...).messages.create(**kwargs).  Tests patch
+    rra.ports.llm.get_llm to return this mock so the call-path is:
+      run_<agent>()  →  get_llm()  →  llm_mock.complete(**kwargs)  →  msg
+    """
+    llm_mock = MagicMock()
+    llm_mock.complete.return_value = msg
+    return llm_mock
 
 
 @pytest.fixture
@@ -83,16 +89,15 @@ class TestPlannerAgent:
                 "outline": "1. Trigger criteria\n2. Substantial equivalence",
             },
         )
-        with patch("rra.agents.planner.Anthropic", return_value=tool_resp.return_value if False else _make_anthropic_mock(tool_resp).return_value):
-            with patch("rra.agents.planner.Anthropic", _make_anthropic_mock(tool_resp)):
-                from rra.agents.planner import run_planner
+        with patch("rra.agents.planner.get_llm", return_value=_make_llm_mock(tool_resp)):
+            from rra.agents.planner import run_planner
 
-                state: dict[str, Any] = {
-                    "query": "When is a new 510(k) required?",
-                    "product_context": "",
-                    "session_id": "test",
-                }
-                result = run_planner(state)
+            state: dict[str, Any] = {
+                "query": "When is a new 510(k) required?",
+                "product_context": "",
+                "session_id": "test",
+            }
+            result = run_planner(state)
 
         assert len(result["sub_questions"]) == 2
         assert "510(k)" in result["sub_questions"][0]
@@ -103,7 +108,7 @@ class TestPlannerAgent:
     def test_falls_back_to_query_on_parse_error(self) -> None:
         """Malformed tool output → fallback to [query] as sole sub-question."""
         tool_resp = _make_tool_message("plan_query", {"bad_key": "garbage"})
-        with patch("rra.agents.planner.Anthropic", _make_anthropic_mock(tool_resp)):
+        with patch("rra.agents.planner.get_llm", return_value=_make_llm_mock(tool_resp)):
             from rra.agents.planner import run_planner
 
             original_query = "What is the De Novo pathway?"
@@ -125,7 +130,7 @@ class TestPlannerAgent:
                 "outline": "outline",
             },
         )
-        with patch("rra.agents.planner.Anthropic", _make_anthropic_mock(tool_resp)):
+        with patch("rra.agents.planner.get_llm", return_value=_make_llm_mock(tool_resp)):
             from rra.agents.planner import run_planner
 
             result = run_planner({"query": "q", "product_context": "", "session_id": "t"})
@@ -143,7 +148,7 @@ class TestResearcherAgent:
         text_msg = _make_text_message("substantial equivalence 510(k) premarket notification")
 
         with (
-            patch("rra.agents.researcher.Anthropic", _make_anthropic_mock(text_msg)),
+            patch("rra.agents.researcher.get_llm", return_value=_make_llm_mock(text_msg)),
             patch(
                 "rra.agents.researcher._tool_search_corpus",
                 return_value=SearchCorpusResult(passages=[sample_passage]),
@@ -181,7 +186,7 @@ class TestResearcherAgent:
         text_msg = _make_text_message("reformulated query")
 
         with (
-            patch("rra.agents.researcher.Anthropic", _make_anthropic_mock(text_msg)),
+            patch("rra.agents.researcher.get_llm", return_value=_make_llm_mock(text_msg)),
             patch("rra.agents.researcher._tool_search_corpus", side_effect=mock_search),
         ):
             from rra.agents.researcher import run_researcher
@@ -218,7 +223,7 @@ class TestResearcherAgent:
         text_msg = _make_text_message("reformulated")
 
         with (
-            patch("rra.agents.researcher.Anthropic", _make_anthropic_mock(text_msg)),
+            patch("rra.agents.researcher.get_llm", return_value=_make_llm_mock(text_msg)),
             patch("rra.agents.researcher._tool_search_corpus", side_effect=mock_search),
         ):
             from rra.agents.researcher import run_researcher
@@ -236,7 +241,7 @@ class TestAnalystAgent:
         draft = "The 510(k) requires substantial equivalence. [gd-100:5]"
         msg = _make_text_message(draft)
 
-        with patch("rra.agents.analyst.Anthropic", _make_anthropic_mock(msg)):
+        with patch("rra.agents.analyst.get_llm", return_value=_make_llm_mock(msg)):
             from rra.agents.analyst import run_analyst
 
             state: dict[str, Any] = {
@@ -261,7 +266,7 @@ class TestAnalystAgent:
         revised_draft = "The 510(k) requires substantial equivalence to a predicate. [gd-100:5]"
         msg = _make_text_message(revised_draft)
 
-        with patch("rra.agents.analyst.Anthropic", _make_anthropic_mock(msg)) as mock_cls:
+        with patch("rra.agents.analyst.get_llm", return_value=_make_llm_mock(msg)):
             from rra.agents.analyst import run_analyst
 
             note = CriticNote(
@@ -288,7 +293,7 @@ class TestAnalystAgent:
     def test_token_usage_contains_input_and_output(self, sample_passage: RetrievedPassage) -> None:
         msg = _make_text_message("draft text", input_tokens=300, output_tokens=120)
 
-        with patch("rra.agents.analyst.Anthropic", _make_anthropic_mock(msg)):
+        with patch("rra.agents.analyst.get_llm", return_value=_make_llm_mock(msg)):
             from rra.agents.analyst import run_analyst
 
             result = run_analyst({
@@ -312,7 +317,7 @@ class TestCriticAgent:
     def test_approve_verdict(self, sample_passage: RetrievedPassage) -> None:
         tool_resp = _make_tool_message("submit_verdict", {"verdict": "approve", "notes": []})
 
-        with patch("rra.agents.critic.Anthropic", _make_anthropic_mock(tool_resp)):
+        with patch("rra.agents.critic.get_llm", return_value=_make_llm_mock(tool_resp)):
             from rra.agents.critic import run_critic
 
             result = run_critic({
@@ -343,7 +348,7 @@ class TestCriticAgent:
             },
         )
 
-        with patch("rra.agents.critic.Anthropic", _make_anthropic_mock(tool_resp)):
+        with patch("rra.agents.critic.get_llm", return_value=_make_llm_mock(tool_resp)):
             from rra.agents.critic import run_critic
 
             result = run_critic({
@@ -373,7 +378,7 @@ class TestCriticAgent:
         # Start at max_critic_revisions - 1 so the next increment hits the cap.
         starting_count = settings.max_critic_revisions - 1
 
-        with patch("rra.agents.critic.Anthropic", _make_anthropic_mock(tool_resp)):
+        with patch("rra.agents.critic.get_llm", return_value=_make_llm_mock(tool_resp)):
             from rra.agents.critic import run_critic
 
             result = run_critic({
@@ -390,7 +395,7 @@ class TestCriticAgent:
     def test_escalate_verdict(self, sample_passage: RetrievedPassage) -> None:
         tool_resp = _make_tool_message("submit_verdict", {"verdict": "escalate", "notes": []})
 
-        with patch("rra.agents.critic.Anthropic", _make_anthropic_mock(tool_resp)):
+        with patch("rra.agents.critic.get_llm", return_value=_make_llm_mock(tool_resp)):
             from rra.agents.critic import run_critic
 
             result = run_critic({
@@ -411,7 +416,7 @@ class TestCriticAgent:
         """No tool-use block in response → fallback to approve to avoid infinite loop."""
         text_msg = _make_text_message("I could not parse this.")
 
-        with patch("rra.agents.critic.Anthropic", _make_anthropic_mock(text_msg)):
+        with patch("rra.agents.critic.get_llm", return_value=_make_llm_mock(text_msg)):
             from rra.agents.critic import run_critic
 
             result = run_critic({
@@ -440,7 +445,7 @@ class TestCriticFlipFaithfulness:
         cc_return: Any = None,
         cc_side_effect: Any = None,
     ) -> tuple[dict[str, Any], str, MagicMock]:
-        """Run run_critic with check_citation + Anthropic mocked.
+        """Run run_critic with check_citation + LLM port mocked.
 
         Returns (result, citation_checks_xml, check_citation_mock). The second
         element is ONLY the <citation_checks>…</citation_checks> block, sliced out
@@ -449,7 +454,7 @@ class TestCriticFlipFaithfulness:
         whole message would false-positive on the guidance text.
         """
         approve = _make_tool_message("submit_verdict", {"verdict": "approve", "notes": []})
-        anthropic_cls = _make_anthropic_mock(approve)
+        llm_mock = _make_llm_mock(approve)
 
         cc_mock = MagicMock()
         if cc_side_effect is not None:
@@ -458,7 +463,7 @@ class TestCriticFlipFaithfulness:
             cc_mock.return_value = cc_return
 
         with (
-            patch("rra.agents.critic.Anthropic", anthropic_cls),
+            patch("rra.agents.critic.get_llm", return_value=llm_mock),
             patch("rra.agents.critic.check_citation", cc_mock),
         ):
             from rra.agents.critic import run_critic
@@ -471,7 +476,7 @@ class TestCriticFlipFaithfulness:
                 "session_id": "t",
             })
 
-        user_content = anthropic_cls.return_value.messages.create.call_args.kwargs[
+        user_content = llm_mock.complete.call_args.kwargs[
             "messages"
         ][0]["content"]
         start = user_content.index("<citation_checks>")
