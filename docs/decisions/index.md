@@ -21,6 +21,7 @@ A flat list of all ADRs with status and one-line summary. Keep current — updat
 | 0015  | [Session tracking: persist and surface session_id](0015-session-tracking.md) | Active | 2026-06-02 | Day 10 (new); amends 0008; opens ADR 0016 |
 | 0017  | [Private-RDS bootstrap via a one-off in-VPC ingest task](0017-private-rds-bootstrap.md) | Superseded by 0018 | 2026-06-08 | Closes pre-deploy finding B1; → 0018 (corpus-sourcing) |
 | 0018  | [Bootstrap image bakes the cached corpus (FDA blocks the Fargate IP)](0018-bootstrap-bakes-cached-corpus.md) | Active | 2026-06-08 | Supersedes 0017; FDA/Akamai 4xx-blocks the datacenter IP |
+| 0019  | [RRA_PROFILE config/profile system](0019-rra-profile-config-system.md) | Active | 2026-06-11 | Phase 1 of ports/adapters refactor; per-profile defaults + SecretStr leak tests |
 
 
 ## Conventions for this file
