@@ -174,9 +174,9 @@ def test_guidance_ids_filter_adds_any_clause() -> None:
     ):
         search_corpus("test", filters={"guidance_ids": ["doc1", "doc2"]})
 
-    # similarity_search is called with (sql, params); check the sql arg.
-    sql_executed: str = mock_store.similarity_search.call_args.args[0]
-    assert "ANY" in sql_executed
+    # The filter reaches the port as the guidance_ids kwarg.
+    call_kwargs = mock_store.similarity_search.call_args.kwargs
+    assert call_kwargs["guidance_ids"] == ["doc1", "doc2"]
 
 
 def test_empty_guidance_ids_filter_ignored() -> None:
@@ -193,8 +193,9 @@ def test_empty_guidance_ids_filter_ignored() -> None:
     ):
         search_corpus("test", filters={"guidance_ids": []})
 
-    sql_executed: str = mock_store.similarity_search.call_args.args[0]
-    assert "ANY" not in sql_executed
+    # An empty list is normalised to None — no filter reaches the port.
+    call_kwargs = mock_store.similarity_search.call_args.kwargs
+    assert call_kwargs["guidance_ids"] is None
 
 
 def test_returned_passages_have_correct_schema() -> None:

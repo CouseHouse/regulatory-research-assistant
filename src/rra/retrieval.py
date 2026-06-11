@@ -19,22 +19,6 @@ from rra.schemas import RetrievedPassage
 log = structlog.get_logger(__name__)
 
 
-_BASE_SQL = """
-SELECT
-    guidance_id,
-    guidance_title,
-    chunk_index,
-    text,
-    char_start,
-    char_end,
-    1 - (embedding <=> %(query_embedding)s::vector) AS score
-FROM corpus.chunks
-{where_clause}
-ORDER BY embedding <=> %(query_embedding)s::vector
-LIMIT %(limit)s
-"""
-
-
 def search_corpus(
     query: str,
     k: int | None = None,
@@ -87,34 +71,19 @@ def _search_corpus_inner(
     # These are NOT interchangeable — using the wrong type silently degrades recall.
     raw_emb: list[float] = emb.embed_query(query)
 
-    # Format as pgvector text literal '[v1,v2,...]' and cast with ::vector in SQL.
-    # This sidesteps psycopg3 adapter registration entirely — the adapter (register_vector)
-    # does not propagate reliably on pooled connections under asyncio's threadpool.
-    # Postgres's own text→vector cast is unambiguous and always works.
-    query_embedding: str = "[" + ",".join(map(str, raw_emb)) + "]"
-
-    # Build SQL — dynamic WHERE only when guidance_ids filter is present.
+    # Retrieval policy (how many, filtered to what) lives here; everything
+    # provider-specific (SQL, vector literals) lives in the adapter.
     guidance_ids: list[str] = []
     if filters:
         raw = filters.get("guidance_ids")
         if isinstance(raw, list) and raw:
             guidance_ids = [str(g) for g in raw]
 
-    if guidance_ids:
-        where_clause = "WHERE guidance_id = ANY(%(guidance_ids)s)"
-    else:
-        where_clause = ""
-
-    sql = _BASE_SQL.format(where_clause=where_clause)
-
-    params: dict[str, Any] = {
-        "query_embedding": query_embedding,
-        "limit": settings.retrieve_top_k,
-    }
-    if guidance_ids:
-        params["guidance_ids"] = guidance_ids
-
-    rows: list[dict[str, Any]] = get_vector_store().similarity_search(sql, params)
+    rows: list[dict[str, Any]] = get_vector_store().similarity_search(
+        embedding=raw_emb,
+        top_k=settings.retrieve_top_k,
+        guidance_ids=guidance_ids or None,
+    )
 
     if not rows:
         if span is not None:

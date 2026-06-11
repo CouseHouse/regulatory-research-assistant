@@ -28,6 +28,21 @@ log = structlog.get_logger(__name__)
 
 # ─── SQL strings (verbatim from original callers) ─────────────────────────────
 
+_SIMILARITY_BASE_SQL: Final[str] = """
+SELECT
+    guidance_id,
+    guidance_title,
+    chunk_index,
+    text,
+    char_start,
+    char_end,
+    1 - (embedding <=> %(query_embedding)s::vector) AS score
+FROM corpus.chunks
+{where_clause}
+ORDER BY embedding <=> %(query_embedding)s::vector
+LIMIT %(limit)s
+"""
+
 _FETCH_CHUNK_SQL: Final[str] = """
     SELECT text, char_start, char_end
     FROM corpus.chunks
@@ -71,14 +86,32 @@ class PgVectorStoreAdapter:
 
     def similarity_search(
         self,
-        sql: str,
-        params: dict[str, Any],
+        embedding: list[float],
+        top_k: int,
+        guidance_ids: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Execute a caller-supplied similarity-search SQL and return all rows.
+        """Cosine-distance search over corpus.chunks, top_k rows.
 
-        The caller (retrieval.py) owns the SQL and params — this method just
-        provides the connection and returns the raw dicts from a dict_row cursor.
+        The embedding is formatted as a pgvector text literal '[v1,v2,...]'
+        and cast with ::vector in SQL.  This sidesteps psycopg3 adapter
+        registration entirely — the adapter (register_vector) does not
+        propagate reliably on pooled connections under asyncio's threadpool.
+        Postgres's own text→vector cast is unambiguous and always works.
         """
+        query_embedding: str = "[" + ",".join(map(str, embedding)) + "]"
+
+        where_clause = (
+            "WHERE guidance_id = ANY(%(guidance_ids)s)" if guidance_ids else ""
+        )
+        sql = _SIMILARITY_BASE_SQL.format(where_clause=where_clause)
+
+        params: dict[str, Any] = {
+            "query_embedding": query_embedding,
+            "limit": top_k,
+        }
+        if guidance_ids:
+            params["guidance_ids"] = guidance_ids
+
         with get_conn() as conn:
             with conn.cursor(row_factory=dict_row) as cur:
                 cur.execute(sql, params)

@@ -41,14 +41,17 @@ class VectorStorePort(Protocol):
 
     def similarity_search(
         self,
-        sql: str,
-        params: dict[str, Any],
+        embedding: list[float],
+        top_k: int,
+        guidance_ids: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Execute a similarity-search SQL statement and return all rows.
+        """Return the *top_k* chunks most similar to *embedding*.
 
-        The caller (retrieval.py) owns the SQL and param construction so that
-        the filter logic stays in one place.  The port provides the connection
-        and returns the raw row dicts.
+        Each row dict carries: guidance_id, guidance_title, chunk_index, text,
+        char_start, char_end, score (cosine similarity in [0, 1]).  When
+        *guidance_ids* is given, the search is restricted to those documents.
+        The query representation (SQL, index API, vector literal format) is
+        the adapter's concern — callers pass raw floats and policy only.
         """
         ...  # pragma: no cover
 

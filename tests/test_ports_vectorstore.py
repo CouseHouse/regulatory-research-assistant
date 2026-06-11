@@ -107,7 +107,7 @@ def test_get_vector_store_is_singleton() -> None:
 
 
 def test_similarity_search_returns_rows() -> None:
-    """similarity_search forwards sql+params to get_conn and returns all rows."""
+    """similarity_search builds the SQL internally and returns all rows."""
     from rra.adapters.pgvector_store import PgVectorStoreAdapter
 
     expected = [{"guidance_id": "g1", "score": 0.9}]
@@ -115,27 +115,33 @@ def test_similarity_search_returns_rows() -> None:
 
     adapter = PgVectorStoreAdapter()
     with patch("rra.adapters.pgvector_store.get_conn", mgc):
-        rows = adapter.similarity_search("SELECT 1", {"k": 5})
+        rows = adapter.similarity_search(embedding=[0.1, 0.2], top_k=5)
 
     assert rows == expected
     cur.execute.assert_called_once()
+    sql, params = cur.execute.call_args.args
+    assert "ORDER BY embedding <=>" in sql
+    assert "ANY" not in sql  # no filter requested
+    assert params["query_embedding"] == "[0.1,0.2]"
+    assert params["limit"] == 5
 
 
-def test_similarity_search_passes_params() -> None:
-    """similarity_search passes the params dict verbatim to cur.execute."""
+def test_similarity_search_guidance_ids_filter() -> None:
+    """A guidance_ids filter produces the ANY clause and param inside the adapter."""
     from rra.adapters.pgvector_store import PgVectorStoreAdapter
 
     mgc, cur = _make_get_conn([])
     adapter = PgVectorStoreAdapter()
-    sql = "SELECT * FROM corpus.chunks LIMIT %(limit)s"
-    params: dict[str, Any] = {"limit": 10, "query_embedding": "[0.1,0.2]"}
 
     with patch("rra.adapters.pgvector_store.get_conn", mgc):
-        adapter.similarity_search(sql, params)
+        adapter.similarity_search(
+            embedding=[0.1], top_k=10, guidance_ids=["doc1", "doc2"]
+        )
 
-    call_args = cur.execute.call_args
-    assert call_args.args[0] == sql
-    assert call_args.args[1] == params
+    sql, params = cur.execute.call_args.args
+    assert "WHERE guidance_id = ANY(%(guidance_ids)s)" in sql
+    assert params["guidance_ids"] == ["doc1", "doc2"]
+    assert params["limit"] == 10
 
 
 # ─── fetch_chunk ─────────────────────────────────────────────────────────────
