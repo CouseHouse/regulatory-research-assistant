@@ -18,6 +18,8 @@ from typing import Any
 import structlog
 
 from rra.config import settings
+from rra.ports.guardrails import get_guardrails
+from rra.ports.identity import get_identity
 from rra.ports.llm import get_llm
 from rra.ports.observability import get_observability
 from rra.ports.tools import get_tool_transport
@@ -56,6 +58,8 @@ def run_researcher(state: dict[str, Any]) -> dict[str, Any]:
     llm = get_llm()
     obs = get_observability()
     transport = get_tool_transport()
+    guardrails = get_guardrails()
+    researcher_principal = get_identity().agent_principal("researcher")
 
     total_input_tokens = 0
     total_output_tokens = 0
@@ -114,10 +118,30 @@ def run_researcher(state: dict[str, Any]) -> dict[str, Any]:
 
             # Step 2: Retrieve passages for the reformulated query via the tool transport.
             result = transport.call_tool(
-                "search_corpus", {"query": reformulated, "k": settings.rerank_top_k}
+                "search_corpus",
+                {"query": reformulated, "k": settings.rerank_top_k},
+                researcher_principal,
             )
             assert isinstance(result, SearchCorpusResult)
-            passages = result.passages
+            raw_passages = result.passages
+
+            # Step 2b: Guardrails — retrieval-boundary indirect-injection control.
+            # Drop any passage whose text is flagged by the content policy.  With
+            # AllowAllGuardrails (phase-2 wiring) this is a no-op; the real
+            # detector is swapped in during the security-harness phase.
+            # Logging: ONLY guidance_id + chunk_index logged on block; never text.
+            passages = []
+            for p in raw_passages:
+                verdict = guardrails.check(p.text, boundary="retrieved_content")
+                if verdict.allowed:
+                    passages.append(p)
+                else:
+                    log.warning(
+                        "guardrails.passage_blocked",
+                        guidance_id=p.guidance_id,
+                        chunk_index=p.chunk_index,
+                        # Intentionally omit: p.text, p.guidance_title, categories, score.
+                    )
 
             with span.start_as_current_observation(
                 name="search_corpus",
