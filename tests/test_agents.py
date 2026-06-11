@@ -140,19 +140,34 @@ class TestPlannerAgent:
 
 # ─── Researcher ────────────────────────────────────────────────────────────────
 
+def _make_transport_mock(call_tool_fn: Any) -> MagicMock:
+    """Return a mock ToolTransportPort whose .call_tool() uses call_tool_fn.
+
+    After the ports refactor, researcher.py calls get_tool_transport().call_tool(...)
+    rather than _tool_search_corpus directly.  Tests patch rra.ports.tools.get_tool_transport
+    to return this mock so the call-path is:
+      run_researcher()  →  get_tool_transport()  →  transport_mock.call_tool(...)
+    """
+    transport_mock = MagicMock()
+    transport_mock.call_tool.side_effect = call_tool_fn
+    return transport_mock
+
+
 class TestResearcherAgent:
     def test_reformulates_and_retrieves(self, sample_passage: RetrievedPassage) -> None:
         """Haiku reformulates each sub-question; search_corpus returns passages."""
         from rra.mcp_server.tools import SearchCorpusResult
 
         text_msg = _make_text_message("substantial equivalence 510(k) premarket notification")
+        sc_result = SearchCorpusResult(passages=[sample_passage])
+
+        def mock_call_tool(tool: str, arguments: dict) -> Any:
+            assert tool == "search_corpus"
+            return sc_result
 
         with (
             patch("rra.agents.researcher.get_llm", return_value=_make_llm_mock(text_msg)),
-            patch(
-                "rra.agents.researcher._tool_search_corpus",
-                return_value=SearchCorpusResult(passages=[sample_passage]),
-            ),
+            patch("rra.agents.researcher.get_tool_transport", return_value=_make_transport_mock(mock_call_tool)),
         ):
             from rra.agents.researcher import run_researcher
 
@@ -171,23 +186,24 @@ class TestResearcherAgent:
         self, sample_passage: RetrievedPassage
     ) -> None:
         """If two sub-questions return the same chunk, keep the higher score copy."""
+        from rra.mcp_server.tools import SearchCorpusResult
+
         high_score = RetrievedPassage(**{**sample_passage.model_dump(), "score": 0.95})
         low_score = RetrievedPassage(**{**sample_passage.model_dump(), "score": 0.70})
 
         call_count = [0]
 
-        from rra.mcp_server.tools import SearchCorpusResult
-
-        def mock_search(query: str, k: int | None = None) -> SearchCorpusResult:
+        def mock_call_tool(tool: str, arguments: dict) -> Any:
             n = call_count[0]
             call_count[0] += 1
-            return SearchCorpusResult(passages=[high_score] if n == 0 else [low_score])
+            passages = [high_score] if n == 0 else [low_score]
+            return SearchCorpusResult(passages=passages)
 
         text_msg = _make_text_message("reformulated query")
 
         with (
             patch("rra.agents.researcher.get_llm", return_value=_make_llm_mock(text_msg)),
-            patch("rra.agents.researcher._tool_search_corpus", side_effect=mock_search),
+            patch("rra.agents.researcher.get_tool_transport", return_value=_make_transport_mock(mock_call_tool)),
         ):
             from rra.agents.researcher import run_researcher
 
@@ -208,23 +224,24 @@ class TestResearcherAgent:
         assert result["passages"] == []
 
     def test_passages_sorted_by_score_descending(self, sample_passage: RetrievedPassage) -> None:
+        from rra.mcp_server.tools import SearchCorpusResult
+
         p_low = RetrievedPassage(**{**sample_passage.model_dump(), "chunk_index": 10, "score": 0.5})
         p_high = RetrievedPassage(**{**sample_passage.model_dump(), "chunk_index": 11, "score": 0.9})
 
         call_count = [0]
 
-        from rra.mcp_server.tools import SearchCorpusResult
-
-        def mock_search(query: str, k: int | None = None) -> SearchCorpusResult:
+        def mock_call_tool(tool: str, arguments: dict) -> Any:
             n = call_count[0]
             call_count[0] += 1
-            return SearchCorpusResult(passages=[p_low] if n == 0 else [p_high])
+            passages = [p_low] if n == 0 else [p_high]
+            return SearchCorpusResult(passages=passages)
 
         text_msg = _make_text_message("reformulated")
 
         with (
             patch("rra.agents.researcher.get_llm", return_value=_make_llm_mock(text_msg)),
-            patch("rra.agents.researcher._tool_search_corpus", side_effect=mock_search),
+            patch("rra.agents.researcher.get_tool_transport", return_value=_make_transport_mock(mock_call_tool)),
         ):
             from rra.agents.researcher import run_researcher
 

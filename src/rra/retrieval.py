@@ -6,13 +6,13 @@ The function signature is part of the frozen API contract (docs/plan/day03.md).
 """
 from __future__ import annotations
 
-import contextlib
 from typing import Any
 
 import structlog
 
 from rra.config import settings
 from rra.ports.embeddings import get_embeddings
+from rra.ports.observability import get_observability
 from rra.ports.vectorstore import get_vector_store
 from rra.schemas import RetrievedPassage
 
@@ -39,23 +39,20 @@ def search_corpus(
                  Defaults to settings.rerank_top_k (5).
         filters: Optional filter dict. Recognised key:
                    "guidance_ids": list[str] — restrict to these guidance_ids.
-        lf:      Langfuse client for nested instrumentation.
-                 Pass None (default) to skip instrumentation entirely.
+        lf:      DEPRECATED — kept for signature compatibility (frozen contract).
+                 Previously accepted a raw Langfuse client; now ignored.
+                 Instrumentation is handled via get_observability() internally.
+                 Pass None (default). Passing a non-None value has no effect.
     """
     if k is None:
         k = settings.rerank_top_k
 
-    obs_cm = (
-        lf.start_as_current_observation(
-            name="search_corpus",
-            as_type="retriever",
-            input={"query": query, "k": k},
-        )
-        if lf is not None
-        else contextlib.nullcontext(None)
-    )
-
-    with obs_cm as span:
+    obs = get_observability()
+    with obs.start_span(
+        "search_corpus",
+        as_type="retriever",
+        input={"query": query, "k": k},
+    ) as span:
         return _search_corpus_inner(query, k, filters, span)
 
 
@@ -63,7 +60,7 @@ def _search_corpus_inner(
     query: str,
     k: int,
     filters: dict[str, Any] | None,
-    span: Any | None,
+    span: Any,
 ) -> list[RetrievedPassage]:
     emb = get_embeddings()
 
@@ -86,8 +83,7 @@ def _search_corpus_inner(
     )
 
     if not rows:
-        if span is not None:
-            span.update(output={"passage_count": 0, "passages": []})
+        span.update(output={"passage_count": 0, "passages": []})
         return []
 
     candidates = [
@@ -113,20 +109,19 @@ def _search_corpus_inner(
         for r in rerank_results
     ]
 
-    if span is not None:
-        span.update(
-            output={
-                "passage_count": len(results),
-                "passages": [
-                    {
-                        "guidance_id": p.guidance_id,
-                        "chunk_index": p.chunk_index,
-                        "title": p.guidance_title,
-                        "score": p.score,
-                    }
-                    for p in results
-                ],
-            }
-        )
+    span.update(
+        output={
+            "passage_count": len(results),
+            "passages": [
+                {
+                    "guidance_id": p.guidance_id,
+                    "chunk_index": p.chunk_index,
+                    "title": p.guidance_title,
+                    "score": p.score,
+                }
+                for p in results
+            ],
+        }
+    )
 
     return results

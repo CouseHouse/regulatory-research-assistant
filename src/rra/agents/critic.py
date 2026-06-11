@@ -31,7 +31,6 @@ Prompt caching applied to system prompt (exceeds 1024-token threshold).
 """
 from __future__ import annotations
 
-import contextlib
 import json
 from typing import Any
 
@@ -47,9 +46,9 @@ from rra.agents.types import CriticNote, CriticOutput
 from rra.citations import parse_answer
 from rra.config import settings
 from rra.ports.llm import get_llm
+from rra.ports.observability import get_observability
 from rra.mcp_server.tools import CitationCheckResult, ToolError, check_citation
 from rra.schemas import RetrievedPassage
-from rra.tracing import get_langfuse
 
 log = structlog.get_logger(__name__)
 
@@ -190,17 +189,12 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
     query: str = state.get("query", "")
     revision_count: int = state.get("revision_count", 0)
 
-    lf = get_langfuse()
-    span_cm = (
-        lf.start_as_current_observation(
-            name="critic",
-            as_type="span",
-            input={"draft_preview": draft[:200], "revision_count": revision_count},
-        )
-        if lf is not None
-        else contextlib.nullcontext(None)
-    )
-    with span_cm as span:
+    obs = get_observability()
+    with obs.start_span(
+        "critic",
+        as_type="span",
+        input={"draft_preview": draft[:200], "revision_count": revision_count},
+    ) as span:
         # ── Force-verdict gate (TEST/EVAL ONLY) ───────────────────────────────
         # When set, skip the LLM call and emit the configured verdict directly.
         # Downstream logic (revision_count increment, cap_hit, routing) is unchanged.
@@ -223,10 +217,9 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
                 new_revision_count = revision_count + 1
                 if new_revision_count >= settings.max_critic_revisions:
                     cap_hit = True
-            if span is not None:
-                span.update(
-                    output={"verdict": force_verdict, "forced": True, "cap_hit": cap_hit},
-                )
+            span.update(
+                output={"verdict": force_verdict, "forced": True, "cap_hit": cap_hit},
+            )
             suffix = "" if revision_count == 0 else f"_rev{revision_count}"
             return {
                 "verdict": force_verdict,
@@ -284,16 +277,11 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
         checks: list[tuple[str, str | None, CitationCheckResult | ToolError]] = []
         for guidance_id, chunk_index, quote in inline_citations:
             ckey = f"{guidance_id}:{chunk_index}"
-            cc_cm = (
-                span.start_as_current_observation(
-                    name="check_citation",
-                    as_type="span",
-                    input={"citation_key": ckey, "has_quote": quote is not None},
-                )
-                if span is not None
-                else contextlib.nullcontext(None)
-            )
-            with cc_cm as cc_span:
+            with span.start_as_current_observation(
+                name="check_citation",
+                as_type="span",
+                input={"citation_key": ckey, "has_quote": quote is not None},
+            ) as cc_span:
                 try:
                     cc_result = check_citation(
                         claim=query,
@@ -302,19 +290,17 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
                         quoted_text=quote,
                     )
                     checks.append((ckey, quote, cc_result))
-                    if cc_span is not None:
-                        cc_span.update(
-                            output={
-                                "verified": cc_result.verified,
-                                "similarity_score": cc_result.similarity_score,
-                            }
-                        )
+                    cc_span.update(
+                        output={
+                            "verified": cc_result.verified,
+                            "similarity_score": cc_result.similarity_score,
+                        }
+                    )
                 except ToolError as exc:
                     checks.append((ckey, quote, exc))
-                    if cc_span is not None:
-                        cc_span.update(
-                            output={"error": exc.code, "retryable": exc.retryable}
-                        )
+                    cc_span.update(
+                        output={"error": exc.code, "retryable": exc.retryable}
+                    )
                 except Exception as exc:
                     tool_err = ToolError(
                         code="UNKNOWN",
@@ -323,8 +309,7 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
                         retryable=True,
                     )
                     checks.append((ckey, quote, tool_err))
-                    if cc_span is not None:
-                        cc_span.update(output={"error": "UNKNOWN", "retryable": True})
+                    cc_span.update(output={"error": "UNKNOWN", "retryable": True})
 
         # Build <citation_checks> XML. After the flip, verified="false" is no
         # longer monolithic: it splits into an ADDRESS failure (cited chunk
@@ -401,16 +386,11 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
 
         llm = get_llm()
 
-        gen_cm = (
-            span.start_as_current_observation(
-                name="anthropic:critic",
-                as_type="generation",
-                model=settings.critic_model,
-            )
-            if span is not None
-            else contextlib.nullcontext(None)
-        )
-        with gen_cm as gen:
+        with span.start_as_current_observation(
+            name="anthropic:critic",
+            as_type="generation",
+            model=settings.critic_model,
+        ) as gen:
             message = llm.complete(
                 model=settings.critic_model,
                 max_tokens=512,
@@ -425,13 +405,12 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
                 tools=_VERDICT_TOOL,
                 tool_choice=ToolChoiceToolParam(type="tool", name="submit_verdict"),
             )
-            if gen is not None:
-                gen.update(
-                    usage_details={
-                        "input": message.usage.input_tokens,
-                        "output": message.usage.output_tokens,
-                    },
-                )
+            gen.update(
+                usage_details={
+                    "input": message.usage.input_tokens,
+                    "output": message.usage.output_tokens,
+                },
+            )
 
         # Extract tool-use block.
         tool_input: dict[str, Any] = {}
@@ -506,14 +485,13 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
             output_tokens=message.usage.output_tokens,
         )
 
-        if span is not None:
-            span.update(
-                output={
-                    "verdict": critic_output.verdict,
-                    "note_count": len(validated_notes),
-                    "cap_hit": cap_hit,
-                },
-            )
+        span.update(
+            output={
+                "verdict": critic_output.verdict,
+                "note_count": len(validated_notes),
+                "cap_hit": cap_hit,
+            },
+        )
 
         suffix = "" if revision_count == 0 else f"_rev{revision_count}"
         return {
