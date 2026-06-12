@@ -120,18 +120,44 @@ class GuardrailsPort(Protocol):
 def get_guardrails() -> GuardrailsPort:
     """Return the profile-resolved guardrails adapter (process-lifetime singleton).
 
-    local profile → AllowAllGuardrails (phase-2 wiring adapter; swapped in the
-    security-harness phase for the real detector).
-
-    Cloud profiles raise NotImplementedError until the cloud-adapter phase.
+    Resolution:
+      - "allowall" → AllowAllGuardrails (unconditional pass; tests and explicit
+                     cloud stubs).  Valid in ANY profile.
+      - "local-hf" → HFInjectionGuardrails (DeBERTa CPU; the secure default for
+                     the local profile per CLAUDE.md / ADR 0022).  Valid ONLY in
+                     the local profile.
+      - Any non-local profile that has NOT explicitly chosen "allowall" raises
+        NotImplementedError: the cloud-native adapter (Bedrock Guardrails /
+        Model Armor / Content Safety) lands in the cloud-adapter phase.  This
+        guard exists because `guardrail*` fields carry a local field default
+        (local-hf); without it, RRA_PROFILE=aws would SILENTLY run the local HF
+        detector as if it were the cloud guardrail (SC Phase 3 Finding B).
     """
+    detector = settings.guardrails_detector
     profile = settings.rra_profile
 
-    if profile == "local":
-        from rra.adapters.allowall_guardrails import AllowAllGuardrails  # lazy
+    if detector == "allowall":
+        from rra.adapters.allowall_guardrails import AllowAllGuardrails
 
         return AllowAllGuardrails()
 
+    # Beyond this point the only built adapter is the local HF detector.  A
+    # non-local profile must not fall through to it via the field default.
+    if profile != "local":
+        raise NotImplementedError(
+            f"guardrails adapter for profile={profile!r} lands in the "
+            f"cloud-adapter phase; set GUARDRAILS_DETECTOR=allowall to stub it"
+        )
+
+    if detector == "local-hf":
+        from rra.adapters.hf_injection_guardrails import HFInjectionGuardrails
+
+        return HFInjectionGuardrails(
+            model_name=settings.guardrail_model,
+            threshold=settings.guardrail_threshold,
+            revision=settings.guardrail_model_revision,
+        )
+
     raise NotImplementedError(
-        f"{profile!r} guardrails adapter lands in the cloud-adapter phase"
+        f"unknown guardrails detector {detector!r} for profile={profile!r}"
     )

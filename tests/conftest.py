@@ -74,6 +74,13 @@ os.environ.setdefault("VOYAGE_API_KEY", "pa-test")
 os.environ.setdefault("POSTGRES_PASSWORD", "test-postgres-password")
 os.environ.setdefault("RRA_API_KEY", "dev-key-change-me")
 
+# Force the allow-all guardrails adapter for every unit test so that torch and
+# the HuggingFace pipeline are NEVER imported during the standard test suite.
+# The 359 non-detector unit tests run with zero GPU/ML overhead.
+# Detector-specific tests are in tests/test_hf_injection_guardrails.py and are
+# marked @pytest.mark.detector; they set GUARDRAILS_DETECTOR themselves.
+os.environ.setdefault("GUARDRAILS_DETECTOR", "allowall")
+
 
 @pytest.fixture(autouse=True, scope="session")
 def _isolate_external_services() -> Generator[None, None, None]:

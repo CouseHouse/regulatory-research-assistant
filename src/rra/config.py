@@ -85,6 +85,13 @@ PROFILE_DEFAULTS: dict[str, dict[str, Any]] = {
         "postgres_port": 5432,
         "postgres_user": "rra",
         "postgres_db": "rra",
+        # Guardrails: SECURE BY DEFAULT — the local profile ships with the
+        # real HuggingFace injection detector ON.  Set GUARDRAILS_DETECTOR=allowall
+        # in tests (conftest.py does this) to prevent torch from loading.
+        "guardrails_detector": "local-hf",
+        "guardrail_model": "protectai/deberta-v3-base-prompt-injection-v2",
+        "guardrail_model_revision": "e6535ca4ce3ba852083e75ec585d7c8aeb4be4c5",
+        "guardrail_threshold": 0.2,
     },
     # aws / azure / gcp: sparse until adapter phases fill them in.
     # No secret values here — ever.
@@ -208,6 +215,34 @@ class Settings(BaseSettings):
     # is the primary control.
     max_tokens_per_query: int = Field(default=200_000, ge=1000)
     max_tool_calls_per_query: int = Field(default=20, ge=1, le=100)
+
+    # ─── Guardrails / injection detection ──────────────────────────────────
+    # Which guardrails adapter to use.
+    # "local-hf" → HFInjectionGuardrails (protectai DeBERTa model, CPU).
+    # "allowall" → AllowAllGuardrails (phase-2 wiring; test isolation; cloud stubs).
+    # SECURE BY DEFAULT: the local profile ships with "local-hf" so detection is
+    # ON in every dev/local run unless explicitly overridden.
+    guardrails_detector: Literal["allowall", "local-hf"] = "local-hf"
+
+    # HuggingFace model ID for injection detection.  Apache 2.0, ungated, ~184M
+    # DeBERTa params. Change only if replacing the detector with a newer model.
+    guardrail_model: str = "protectai/deberta-v3-base-prompt-injection-v2"
+
+    # Exact Hub commit the detector weights are pinned to (RT-8 supply chain).
+    # The Python lockfile pins packages, not model weights — a bare repo id would
+    # resolve to whatever `main` points at, so a repo re-push could swap weights
+    # silently.  Recorded in the security report header so a swap is visible.
+    guardrail_model_revision: str = "e6535ca4ce3ba852083e75ec585d7c8aeb4be4c5"
+
+    # Classifier score threshold: INJECTION label score ≥ this → blocked.
+    # 0.2 is the secure-by-default operating point ("block unless confidently
+    # safe"), not the classifier's argmax (0.5): at the retrieved_content
+    # boundary the cost of a block is one dropped passage, so uncertainty
+    # resolves toward blocking. On the red-team corpus the margin is wide —
+    # benign controls score ≤ 0.011; the one hard look-alike (rt-c03) is
+    # misclassified at ANY threshold and is the accepted FP. See ADR 0023 and
+    # RT-redteam.md for the by-layer gate this feeds.
+    guardrail_threshold: float = Field(default=0.2, ge=0.0, le=1.0)
 
     # ─── Test / eval gates ──────────────────────────────────────────────────
     # critic_force_verdict: skip the LLM call and emit this verdict instead.

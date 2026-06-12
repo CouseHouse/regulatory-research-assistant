@@ -1,5 +1,63 @@
 # Dev log
 
+## 2026-06-12 — Phase 3: local security spine — injection detector + layer-aware gate (ADR 0023)
+
+**Branch:** `refactor/phase3-security-harness`. Swapped the Phase-2 `AllowAllGuardrails`
+wiring adapter for a real local detector and made the red-team suite a measured,
+merge-blocking gate. RT (offensive) and SC (defensive) subagents reviewed the phase at
+max reasoning before it landed; their findings were fixed at source, not patched
+downstream (RT-log.md, SC-matrix.md).
+
+**What landed:**
+- **HF injection detector** (`adapters/hf_injection_guardrails.py`): `protectai/deberta-v3-base-prompt-injection-v2`
+  on CPU, lazy-loaded so the 400+ non-detector unit tests never import torch
+  (`GUARDRAILS_DETECTOR=allowall` in conftest). Secure-by-default: `guardrails_detector="local-hf"`
+  in `PROFILE_DEFAULTS["local"]`, threshold **0.2** ("block unless confidently safe" — at
+  `retrieved_content` the cost of a block is one dropped passage).
+- **Layer-aware gate** (`evals/security.py`, ADR 0023): each attack row is tagged with the
+  control(s) expected to stop it; the harness mechanically exercises detector, sanitizer,
+  citation-gate (through the transport chokepoint), tool-scoping, secret-confinement, and
+  output-filter, then gates on **coverage ≥ 0.80, detector FP ≤ 0.20, zero harness errors**.
+  EXERCISED vs ASSERTED (rt-017, inert-no-resume) vs RESIDUAL (rt-006/rt-014, behavioral)
+  are reported separately by id — the metric-integrity discipline, not a single inflated rate.
+- **RT-1 structural fix:** passage text/title/source_text/quoted_text XML-escaped at all six
+  analyst/critic sites; `Citation.quoted_text` image-stripped before it ships to the client.
+- **RT-2 fix:** critic now fails **CLOSED** to `escalate` on malformed/parse-error verdict
+  (was default-approve — an injection that merely disrupted the tool call yielded auto-approval).
+- **RT-4/LLM05:** `strip_markdown_images` deny-all output filter on answer prose AND citation quotes.
+- **CI:** new free `security-gate` job (HF model cached) runs the gate as a merge blocker.
+
+**RT/SC review → fixes (all at source, no anti-compounding STOP):**
+- RT-P3-1 (gate integrity, H×H): the sanitizer probe was a tautology (escaping always strips
+  `<`/`>`). Rewrote it to assemble the real passage XML and assert no forged structural tag
+  survives. RT-P3-2 (H×M): the chunking/truncation path was never exercised (no fixture >531
+  chars); set `_CHARS_PER_TOKEN`→3, added 25% sliding-window overlap, added fixtures rt-018
+  (end-of-passage) and rt-019 (boundary-straddle). RT-P3-3: closed the unfiltered
+  `Citation.quoted_text` client channel. RT-P3-4/SC-A: dropped the harness `os.environ` leak;
+  added singleton restore + `skipif` on the detector test class. RT-P3-5: detector fails
+  CLOSED on unexpected label / empty result. RT-P3-7: pinned the model revision
+  (`e6535ca4…`) + `use_safetensors=True` + explicit `trust_remote_code=False`, printed in the
+  report. SC-B: cloud profiles now raise instead of silently inheriting the local-hf default.
+- **Accepted/external:** RT-P3-6 (rt-006/rt-014 owned by the credit-gated two-arm eval),
+  SC-C (mark the CI job a required check — branch protection, lead action), SC-D (FP 0.200
+  zero-margin) — all recorded in ADR 0023 with reopening triggers. RT-P3-8 (attribute-channel
+  `"`-escape) documented as a precondition in RT-redteam.md RT-1.
+
+**Gates (all green, free — no paid model/embedding calls):**
+- `HF_HUB_OFFLINE=1 uv run pytest tests/ --no-cov` → **443 passed** (was 359; +84 security/probe/
+  fixture tests). Deterministic offline once the model revision is pinned.
+- `uv run mypy` on all Phase-3 files → clean. (Pre-existing errors in `evals/{run,judge,scorers,dataset}.py`
+  are untouched by this phase — not a regression.)
+- `uv run python -m rra.evals.security` → coverage **0.895** (17/19), FP **0.200**,
+  detector-only 0.526, 0 errors. Report: `evals/results/security-latest.md`.
+- Eval harness (citation_validity) NOT run — paid Claude/Voyage, credits-gated. The XML-escaping
+  changes the bytes the LLM sees for passage text; golden re-validation is **owed** when credits
+  return (tracked in `_sanitize.py` and analyst/critic NOTE comments).
+
+**Unilateral decisions logged:** detector implemented via `transformers` directly rather than LLM
+Guard (named in ADR 0022) — same protectai model, smaller supply-chain surface (ADR 0023
+alternatives). Threshold 0.2 over the classifier argmax 0.5. Both recorded in ADR 0023.
+
 ## 2026-06-11 — Phase 2b: security spine — identity/NHI + guardrails ports (ADR 0021, 0022)
 
 **Branch:** `refactor/phase2b-security-ports` (off phase2-ports). Implemented by subagent
