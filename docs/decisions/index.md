@@ -27,6 +27,7 @@ A flat list of all ADRs with status and one-line summary. Keep current — updat
 | 0022  | [Guardrails/policy port at user-input + retrieval boundaries](0022-guardrails-policy-port.md) | Active | 2026-06-11 | Phase 2b; AllowAll wiring adapter; detector lands with security harness |
 | 0023  | [Layer-aware defense-in-depth security gate](0023-layer-aware-security-gate.md) | Active | 2026-06-12 | Phase 3; HF DeBERTa detector @ 0.2; coverage ≥ 0.80 merge gate; named residuals |
 | 0024  | [Security-incident observability (guardrail block → Langfuse score)](0024-security-incident-observability.md) | Active | 2026-06-15 | Phase 3.1; extends 0020 observability port; metadata-only `security.guardrail_block` |
+| 0025  | [Trace-content / PII posture: metadata, never confidential content](0025-trace-content-pii-posture.md) | Active | 2026-06-15 | redact product_context from traces; closes RT-4 gap; generation I/O policy |
 
 
 ## Conventions for this file

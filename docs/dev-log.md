@@ -1,5 +1,33 @@
 # Dev log
 
+## 2026-06-15 — Langfuse trace review + cleanup (items 1, 5; ADR 0025; item 2/3 disposition)
+
+Reviewed LIVE Langfuse traces via the public API (happy-path `/query` = 47 observations, a
+failed query, a `security.guardrail_block` one-shot) for accuracy + necessity. Full task list:
+`docs/refactor/trace-cleanup.md`.
+
+- **Item 1 (DONE) — de-duped `search_corpus` retriever spans.** `retrieval.search_corpus`
+  already emits a metadata-only retriever span (`guidance_id`/`chunk_index`/`title`/`score` —
+  no passage text); `researcher.py` opened a SECOND thin one per sub-question. Removed the
+  researcher wrapper → one canonical span at the retrieval boundary.
+- **Item 5 (DONE, ADR 0025) — trace-content/PII posture.** The only real exposure was full
+  `product_context` (device CCI) in the `api.py` `query` span input (RT-4 gap). Now records
+  `product_context_chars` (size only); `query` kept (general question, trace utility); passages
+  already metadata-only; generations stay usage-only. Blocked content still never traced (ADR 0024).
+- **Item 3 (EVALUATED → folded into ADR 0025).** The generation-I/O inconsistency (researcher
+  records the reformulated query; planner/analyst/critic record usage only) is resolved by the
+  ADR rule: usage + PII-safe *derived* I/O only, never raw prompts. Current behavior complies;
+  researcher's reformulated-query I/O is a derived search string (kept). No code change.
+- **Item 2 (DEFERRED w/ root cause).** Analyst revision generation parents to the `critic` span
+  instead of `analyst:rev{n}` (renders empty). Agent code is correct; it's an OTEL active-span
+  context bleed across LangGraph nodes — needs runtime iteration + a looped trace (paid) to
+  verify, not a blind edit. Tracked in trace-cleanup.md.
+- **Item 4 (DEFERRED).** Condense the 24 `check_citation` spans — optional, lowest.
+
+**Gates:** `uv run mypy` clean on api.py/researcher.py; `tests/test_api.py + test_agents.py`
+→ 47 passed (offline). **Owed:** one paid `/query` to re-verify the trace shape (one
+`search_corpus` per retrieval; `product_context` redacted; obs count drops from 47).
+
 ## 2026-06-15 — Phase 3.1: security-incident observability — guardrail block → Langfuse score (ADR 0024)
 
 **Branch:** `refactor/phase3-security-harness` (on top of Phase 3, PR #13). Closes the original

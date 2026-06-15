@@ -154,14 +154,10 @@ def run_researcher(state: dict[str, Any]) -> dict[str, Any]:
                         location=f"{p.guidance_id}#{p.chunk_index}",
                     )
 
-            with span.start_as_current_observation(
-                name="search_corpus",
-                as_type="retriever",
-                input={"query": reformulated},
-                output={"passage_count": len(passages)},
-                metadata={"sub_question": sq[:80]},
-            ):
-                pass
+            # NOTE: the search_corpus retriever span is emitted at the retrieval
+            # boundary (retrieval.search_corpus, reached via the tool transport) and
+            # is metadata-only. We deliberately do NOT open a second one here — that
+            # was a duplicate retriever observation (ADR 0025 / trace-cleanup item 1).
 
             # Step 3: Chunk-level dedup — keep the copy with the higher rerank score.
             for p in passages:

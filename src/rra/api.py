@@ -179,7 +179,10 @@ def query(
     with obs.propagate_session(session_id), obs.start_span(
         "query",
         as_type="span",
-        input={"query": request.query, "product_context": request.product_context},
+        # ADR 0025: product_context is confidential commercial info — never store its
+        # text in a trace; record only its size. The query (regulatory question) is kept
+        # for trace utility (general question, not device CCI).
+        input={"query": request.query, "product_context_chars": len(request.product_context)},
         metadata={"session_id": session_id},
     ) as trace_span:
         trace_id = obs.current_trace_id()
