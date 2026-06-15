@@ -26,6 +26,7 @@ A flat list of all ADRs with status and one-line summary. Keep current — updat
 | 0021  | [Identity/NHI port: deny-by-default tool scoping](0021-identity-nhi-port.md) | Active | 2026-06-11 | Phase 2b; advisory-locally/enforced-in-cloud trust model; constant-time key fix |
 | 0022  | [Guardrails/policy port at user-input + retrieval boundaries](0022-guardrails-policy-port.md) | Active | 2026-06-11 | Phase 2b; AllowAll wiring adapter; detector lands with security harness |
 | 0023  | [Layer-aware defense-in-depth security gate](0023-layer-aware-security-gate.md) | Active | 2026-06-12 | Phase 3; HF DeBERTa detector @ 0.2; coverage ≥ 0.80 merge gate; named residuals |
+| 0024  | [Security-incident observability (guardrail block → Langfuse score)](0024-security-incident-observability.md) | Active | 2026-06-15 | Phase 3.1; extends 0020 observability port; metadata-only `security.guardrail_block` |
 
 
 ## Conventions for this file

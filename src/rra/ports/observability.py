@@ -52,7 +52,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from functools import lru_cache
-from typing import Any, Generator, Protocol
+from typing import Any, Generator, Literal, Protocol
 
 from rra.config import settings
 
@@ -144,6 +144,36 @@ class ObservabilityPort(Protocol):
         """
         ...  # pragma: no cover
 
+    def record_security_event(
+        self,
+        *,
+        boundary: Literal["user_input", "retrieved_content"],
+        categories: tuple[str, ...] = (),
+        detector_score: float | None = None,
+        reason: str | None = None,
+        location: str | None = None,
+    ) -> None:
+        """Record a BLOCKED security event so it surfaces in the trace UI (ADR 0024).
+
+        Emitted when a guardrail blocks untrusted input. The adapter maps this to
+        a filterable ``security.guardrail_block`` score, so a caught injection is
+        visible and auditable in observability — the original "show the security
+        incident" requirement.
+
+        METADATA-ONLY by contract (RT-redteam.md): boundary, detector categories,
+        detector confidence, and a corpus *location* (``guidance_id#chunk_index``)
+        may be recorded — but NEVER the offending text, which must not reach traces.
+
+        Args:
+            boundary:       Which guardrail boundary fired.
+            categories:     Detector category labels (machine labels, not text).
+            detector_score: Detector confidence (0.0–1.0), if available.
+            reason:         Short machine-ish label; NEVER the raw text.
+            location:       Corpus locator for a blocked passage
+                            (``guidance_id#chunk_index``); None for user input.
+        """
+        ...  # pragma: no cover
+
 
 # ─── Noop adapters ────────────────────────────────────────────────────────────
 
@@ -200,6 +230,17 @@ class NoopObservabilityAdapter:
         import contextlib
 
         return contextlib.nullcontext()
+
+    def record_security_event(
+        self,
+        *,
+        boundary: Literal["user_input", "retrieved_content"],
+        categories: tuple[str, ...] = (),
+        detector_score: float | None = None,
+        reason: str | None = None,
+        location: str | None = None,
+    ) -> None:
+        return
 
 
 # ─── Factory ──────────────────────────────────────────────────────────────────

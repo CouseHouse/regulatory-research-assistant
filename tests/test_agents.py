@@ -259,6 +259,52 @@ class TestResearcherAgent:
         scores = [p.score for p in result["passages"]]
         assert scores == sorted(scores, reverse=True)
 
+    def test_blocked_passage_drops_and_records_security_event(
+        self, sample_passage: RetrievedPassage
+    ) -> None:
+        """A retrieved_content block drops the passage AND surfaces the incident
+        to the trace (ADR 0024) — metadata-only, never the passage text."""
+        from rra.mcp_server.tools import SearchCorpusResult
+        from rra.ports.guardrails import GuardrailVerdict
+
+        sc_result = SearchCorpusResult(passages=[sample_passage])
+
+        def mock_call_tool(tool: str, arguments: dict, principal: Any) -> Any:
+            return sc_result
+
+        blocking = GuardrailVerdict(
+            allowed=False,
+            boundary="retrieved_content",
+            categories=("prompt_injection",),
+            score=0.97,
+            reason="prompt_injection",
+        )
+        guardrails_mock = MagicMock()
+        guardrails_mock.check.return_value = blocking
+        obs_mock = MagicMock()
+
+        with (
+            patch("rra.agents.researcher.get_llm", return_value=_make_llm_mock(_make_text_message("reformulated"))),
+            patch("rra.agents.researcher.get_tool_transport", return_value=_make_transport_mock(mock_call_tool)),
+            patch("rra.agents.researcher.get_identity"),
+            patch("rra.agents.researcher.get_guardrails", return_value=guardrails_mock),
+            patch("rra.agents.researcher.get_observability", return_value=obs_mock),
+        ):
+            from rra.agents.researcher import run_researcher
+
+            result = run_researcher({"sub_questions": ["q1"], "query": "q", "session_id": "t"})
+
+        # Passage was dropped …
+        assert result["passages"] == []
+        # … and the incident was emitted, metadata-only.
+        obs_mock.record_security_event.assert_called_once()
+        kwargs = obs_mock.record_security_event.call_args.kwargs
+        assert kwargs["boundary"] == "retrieved_content"
+        assert kwargs["location"] == f"{sample_passage.guidance_id}#{sample_passage.chunk_index}"
+        assert kwargs["categories"] == ("prompt_injection",)
+        # The blocked passage TEXT must never reach the trace.
+        assert sample_passage.text not in repr(kwargs)
+
 
 # ─── Analyst ───────────────────────────────────────────────────────────────────
 

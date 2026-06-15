@@ -1,5 +1,44 @@
 # Dev log
 
+## 2026-06-15 — Phase 3.1: security-incident observability — guardrail block → Langfuse score (ADR 0024)
+
+**Branch:** `refactor/phase3-security-harness` (on top of Phase 3, PR #13). Closes the original
+"show the security incident in observability" gap: a caught injection was only a structlog
+warning and never reached Langfuse — and the observability port had no surface to emit one.
+
+**What landed:**
+- **Observability port extension** (`ports/observability.py`): `record_security_event(boundary,
+  categories, detector_score, reason, location)` on `ObservabilityPort` + a no-op on the Noop
+  adapter. Additive evolution of ADR 0020 — built against the port, so cloud (and a hypothetical
+  LangWatch) observability adapters implement the same method.
+- **Langfuse adapter** (`adapters/langfuse_observability.py`): maps it to a categorical
+  `security.guardrail_block` score via the same `create_score` surface the eval harness uses
+  (langfuse_eval), so blocks are FILTERABLE in the Scores view. Attaches to the live request
+  trace when one is active (retrieved_content); opens a one-shot home trace when none is
+  (user_input blocks before the request span opens). Never raises (swallows + logs
+  `observability.security_event_failed`).
+- **Wired at both guardrail block sites**: researcher `retrieved_content` (location =
+  `guidance_id#chunk_index`) and api `user_input` (query + product_context). Metadata-only —
+  boundary/category/score/location, NEVER the offending text (the method does not accept it).
+- **Docs**: ADR 0024 (+ index); RT-redteam.md RT-4 control note (a block is now *surfaced* as
+  metadata; the content-exclusion rule is what keeps that safe); CLAUDE.md stale "LangWatch"
+  wording fixed to Langfuse + "guardrail runs in-process, not via docker-compose" — the strings
+  that seeded the original question. LangWatch is not used anywhere; observability is Langfuse v3.
+
+**Decision (LangWatch — NOT adopted):** building against the observability port already makes
+LangWatch a future adapter swap; adopting it now = a second heavy observability stack vs. the
+self-hosted-free local profile. Recorded in ADR 0024 alternatives.
+
+**Gates (green, free):**
+- `HF_HUB_OFFLINE=1 uv run pytest tests/ --no-cov` → **447 passed, 3 skipped** (the 3 skips are
+  Postgres-integration tests with the DB down; was 443 passed with DB up). +7 tests: 5
+  observability (trace-active / one-shot-trace / never-raises / metadata-allowlist / noop) +
+  researcher-block + api-400-block (asserts generic 400, no query echo, no graph run, metadata-only).
+- `uv run mypy` on the 4 touched src files → clean.
+- Security gate (`rra.evals.security`) UNAFFECTED by construction — this is runtime observability,
+  not detection/coverage; not re-run. The `citation_validity` re-run owed from Phase 3 is
+  unchanged (no new LLM-visible byte change here).
+
 ## 2026-06-12 — Phase 3: local security spine — injection detector + layer-aware gate (ADR 0023)
 
 **Branch:** `refactor/phase3-security-harness`. Swapped the Phase-2 `AllowAllGuardrails`
