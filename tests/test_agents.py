@@ -436,10 +436,16 @@ class TestCriticAgent:
         assert result["cap_hit"] is False
         assert result["revision_count"] == 0  # escalate does not increment
 
-    def test_malformed_output_falls_back_to_approve(
+    def test_malformed_output_falls_back_to_escalate(
         self, sample_passage: RetrievedPassage
     ) -> None:
-        """No tool-use block in response → fallback to approve to avoid infinite loop."""
+        """No tool-use block in response → RT-2 fix: escalate to human review, NOT approve.
+
+        The old default-approve was a fail-open path: an injection that merely
+        disrupts the critic's tool call yields automatic approval of a fabricated
+        draft.  'escalate' exits the graph immediately (ADR 0009) and is a safe,
+        non-looping fallback (RT-2 fix, docs/refactor/RT-redteam.md).
+        """
         text_msg = _make_text_message("I could not parse this.")
 
         with patch("rra.agents.critic.get_llm", return_value=_make_llm_mock(text_msg)):
@@ -453,7 +459,11 @@ class TestCriticAgent:
                 "session_id": "t",
             })
 
-        assert result["verdict"] == "approve"
+        # RT-2: malformed output → escalate (fail closed), NOT approve (fail open).
+        assert result["verdict"] == "escalate"
+        # escalate does not increment revision_count (same as normal escalate path).
+        assert result["revision_count"] == 0
+        assert result["cap_hit"] is False
 
 
 # ─── Critic flip: quote-faithfulness wiring (Day 8, ADR 0013) ──────────────────

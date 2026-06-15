@@ -42,6 +42,7 @@ from anthropic.types import (
     ToolParam,
 )
 
+from rra.agents._sanitize import xml_escape_untrusted
 from rra.agents.types import CriticNote, CriticOutput
 from rra.citations import parse_answer
 from rra.config import settings
@@ -239,12 +240,17 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
         passage_map = {(p.guidance_id, p.chunk_index): p for p in passages}
 
         # Build passage summary for the critic prompt.
+        # RT-1 fix sites #3 (guidance_title) and #4 (text): passage text and
+        # title are untrusted corpus content and must be XML-escaped before
+        # interpolation into the prompt structure.  See _sanitize.py for rationale.
         passage_summary_parts = ["<passages>"]
         for p in passages:
+            safe_title = xml_escape_untrusted(p.guidance_title)
+            safe_text = xml_escape_untrusted(p.text)
             passage_summary_parts.append(
                 f'<passage guidance_id="{p.guidance_id}" chunk_index="{p.chunk_index}">\n'
-                f"<title>{p.guidance_title}</title>\n"
-                f"<text>{p.text}</text>\n"
+                f"<title>{safe_title}</title>\n"
+                f"<text>{safe_text}</text>\n"
                 f"</passage>"
             )
         passage_summary_parts.append("</passages>")
@@ -325,6 +331,16 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
         # faithful). Each <check> carries check="address|quote" plus a machine
         # reason so the critic can tell a hallucinated address from an unfaithful
         # quote (ADR 0013); a valid bare address stays a clean key-existence pass.
+        #
+        # RT-1 fix sites #5 (source_text) and #6 (quoted_text):
+        # - source_text is the stored corpus chunk returned by check_citation —
+        #   untrusted corpus content; XML-escaped per ADR 0022 untrusted-text rule.
+        # - quoted_text is the analyst's verbatim quote copied from the passage,
+        #   which itself originates from untrusted corpus content; XML-escaped.
+        # Both are data, not commands.  Escaping prevents injection via the
+        # critic's trust-anchor channel (<citation_checks> is the one block the
+        # critic is told is deterministic ground truth — the highest-value target
+        # for a forged passage to exploit).
         check_parts = ["<citation_checks>"]
         for ckey, quote, result in checks:
             if isinstance(result, ToolError):
@@ -336,17 +352,22 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
                 )
             elif result.verified and quote is None:
                 # Bare citation, address resolves — key-existence mode (no quote).
+                # RT-1 fix site #5: source_text is corpus content — escape it.
+                safe_source = xml_escape_untrusted(result.source_text or "")
                 check_parts.append(
                     f'  <check citation_key="{ckey}" verified="true" inconclusive="false" check="address">\n'
-                    f"    <source_text>{result.source_text}</source_text>\n"
+                    f"    <source_text>{safe_source}</source_text>\n"
                     f"  </check>"
                 )
             elif result.verified:
                 # Quote supplied AND faithfully present in the cited chunk.
+                # RT-1 fix sites #5 (source_text) and #6 (quoted_text).
+                safe_quote = xml_escape_untrusted(quote or "")
+                safe_source = xml_escape_untrusted(result.source_text or "")
                 check_parts.append(
                     f'  <check citation_key="{ckey}" verified="true" inconclusive="false" check="quote">\n'
-                    f"    <quoted_text>{quote}</quoted_text>\n"
-                    f"    <source_text>{result.source_text}</source_text>\n"
+                    f"    <quoted_text>{safe_quote}</quoted_text>\n"
+                    f"    <source_text>{safe_source}</source_text>\n"
                     f"  </check>"
                 )
             elif not result.source_text:
@@ -358,15 +379,18 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
                 )
             else:
                 # Quote-faithfulness failure: chunk exists, quote not faithful.
+                # RT-1 fix sites #5 (source_text) and #6 (quoted_text).
                 score = (
                     "n/a"
                     if result.similarity_score is None
                     else f"{result.similarity_score:.2f}"
                 )
+                safe_quote = xml_escape_untrusted(quote or "")
+                safe_source = xml_escape_untrusted(result.source_text or "")
                 check_parts.append(
                     f'  <check citation_key="{ckey}" verified="false" inconclusive="false" check="quote" reason="quote_unfaithful">\n'
-                    f"    <quoted_text>{quote}</quoted_text>\n"
-                    f"    <source_text>{result.source_text}</source_text>\n"
+                    f"    <quoted_text>{safe_quote}</quoted_text>\n"
+                    f"    <source_text>{safe_source}</source_text>\n"
                     f"    <similarity_score>{score}</similarity_score>\n"
                     f"  </check>"
                 )
@@ -428,23 +452,48 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
                 break
 
         if not tool_input:
-            # Malformed output: treat as approve to avoid infinite loop (ADR 0009).
+            # RT-2 fix: fail CLOSED on malformed output — escalate to human
+            # review, NEVER approve.  The old default-approve "to avoid infinite
+            # loop" is dangerous: an injection (RT-1) that merely disrupts the
+            # critic's tool call yields automatic approval of a fabricated draft.
+            # escalate exits the graph immediately (ADR 0009) without looping, so
+            # it is a correct infinite-loop guard and a safer default.
+            # Logged with session_id only — no draft content, no payload.
             log.error(
-                "critic.no_tool_output",
+                "critic.malformed_verdict",
                 session_id=state.get("session_id"),
-                draft_preview=draft[:120],
+                reason="no_tool_output",
             )
-            tool_input = {"verdict": "approve", "notes": []}
+            tool_input = {
+                "verdict": "escalate",
+                "notes": [
+                    {
+                        "citation_key": None,
+                        "issue": "critic produced no tool call; escalating to human review",
+                        "severity": "hard",
+                    }
+                ],
+            }
 
         try:
             critic_output = CriticOutput.model_validate(tool_input)
         except Exception:
+            # RT-2 fix: fail CLOSED on parse errors too — same rationale.
             log.error(
-                "critic.parse_error",
+                "critic.malformed_verdict",
                 session_id=state.get("session_id"),
-                raw=json.dumps(tool_input)[:200],
+                reason="parse_error",
             )
-            critic_output = CriticOutput(verdict="approve", notes=[])
+            critic_output = CriticOutput(
+                verdict="escalate",
+                notes=[
+                    CriticNote(
+                        citation_key=None,
+                        issue="critic tool-call parse error; escalating to human review",
+                        severity="hard",
+                    )
+                ],
+            )
 
         # Validate notes — drop any that reference non-existent passages.
         validated_notes: list[CriticNote] = []

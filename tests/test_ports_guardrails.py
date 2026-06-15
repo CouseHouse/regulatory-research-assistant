@@ -68,17 +68,54 @@ def test_guardrail_verdict_all_fields() -> None:
 # ─── Factory: profile resolution ──────────────────────────────────────────────
 
 
-def test_get_guardrails_returns_local_adapter() -> None:
-    """get_guardrails() under RRA_PROFILE=local returns AllowAllGuardrails."""
+def test_get_guardrails_returns_allowall_when_detector_is_allowall() -> None:
+    """get_guardrails() returns AllowAllGuardrails when guardrails_detector=allowall.
+
+    This is the test-isolation path — conftest.py sets GUARDRAILS_DETECTOR=allowall
+    so the 359 unit tests never import torch.
+    """
     from rra.adapters.allowall_guardrails import AllowAllGuardrails
+    from rra.config import settings
     from rra.ports.guardrails import get_guardrails
 
     get_guardrails.cache_clear()
     try:
-        adapter = get_guardrails()
+        with patch.object(settings, "guardrails_detector", "allowall"):
+            adapter = get_guardrails()
         assert isinstance(adapter, AllowAllGuardrails)
     finally:
         get_guardrails.cache_clear()
+
+
+def test_get_guardrails_local_profile_default_is_local_hf(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The UNPATCHED local-profile default for guardrails_detector is 'local-hf'.
+
+    This test constructs a fresh Settings() with GUARDRAILS_DETECTOR removed from
+    the environment so it falls back to the PROFILE_DEFAULTS["local"] value, which
+    MUST be 'local-hf' (secure-by-default per CLAUDE.md / ADR 0022).
+
+    The test does NOT load the model — it only verifies the config default.
+    """
+    from rra.config import PROFILE_DEFAULTS, Settings
+
+    # Remove GUARDRAILS_DETECTOR from the environment so profile defaults apply.
+    monkeypatch.delenv("GUARDRAILS_DETECTOR", raising=False)
+
+    # Construct a fresh Settings with only the required secrets supplied.
+    # Profile defaults fill in guardrails_detector.
+    fresh = Settings(
+        anthropic_api_key="sk-ant-test",  # type: ignore[arg-type]
+        voyage_api_key="pa-test",  # type: ignore[arg-type]
+        postgres_password="test",  # type: ignore[arg-type]
+        rra_api_key="key",  # type: ignore[arg-type]
+    )
+    # The local profile default must be "local-hf" (secure by default).
+    assert fresh.guardrails_detector == "local-hf", (
+        f"Expected guardrails_detector='local-hf' from PROFILE_DEFAULTS['local'], "
+        f"got {fresh.guardrails_detector!r}"
+    )
+    # Also verify the PROFILE_DEFAULTS registry itself has the right value.
+    assert PROFILE_DEFAULTS["local"]["guardrails_detector"] == "local-hf"
 
 
 @pytest.mark.parametrize("profile", ["aws", "azure", "gcp"])
@@ -91,9 +128,44 @@ def test_get_guardrails_raises_not_implemented_for_cloud_profiles(
 
     get_guardrails.cache_clear()
     try:
-        with patch.object(settings, "rra_profile", profile):
-            with pytest.raises(NotImplementedError, match="cloud-adapter phase"):
-                get_guardrails()
+        with patch.object(settings, "guardrails_detector", "unknown-cloud-detector"):
+            with patch.object(settings, "rra_profile", profile):
+                with pytest.raises(NotImplementedError, match="cloud-adapter phase"):
+                    get_guardrails()
+    finally:
+        get_guardrails.cache_clear()
+
+
+@pytest.mark.parametrize("profile", ["aws", "azure", "gcp"])
+def test_cloud_profile_with_local_hf_default_still_raises(profile: str) -> None:
+    """SC Finding B: a non-local profile must NOT silently inherit the local-hf
+    field default and run the local detector as if it were the cloud guardrail.
+    It raises until the cloud-adapter phase (unless explicitly stubbed allowall)."""
+    from rra.config import settings
+    from rra.ports.guardrails import get_guardrails
+
+    get_guardrails.cache_clear()
+    try:
+        with patch.object(settings, "guardrails_detector", "local-hf"):
+            with patch.object(settings, "rra_profile", profile):
+                with pytest.raises(NotImplementedError, match="cloud-adapter phase"):
+                    get_guardrails()
+    finally:
+        get_guardrails.cache_clear()
+
+
+@pytest.mark.parametrize("profile", ["aws", "azure", "gcp"])
+def test_cloud_profile_allowall_stub_is_permitted(profile: str) -> None:
+    """An explicit allowall stub is allowed in any profile (cloud test stub)."""
+    from rra.adapters.allowall_guardrails import AllowAllGuardrails
+    from rra.config import settings
+    from rra.ports.guardrails import get_guardrails
+
+    get_guardrails.cache_clear()
+    try:
+        with patch.object(settings, "guardrails_detector", "allowall"):
+            with patch.object(settings, "rra_profile", profile):
+                assert isinstance(get_guardrails(), AllowAllGuardrails)
     finally:
         get_guardrails.cache_clear()
 

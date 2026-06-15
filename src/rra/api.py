@@ -12,6 +12,7 @@ from typing import Annotated, Any
 import structlog
 from fastapi import FastAPI, Header, HTTPException, status
 
+from rra.agents._sanitize import strip_markdown_images
 from rra.citations import parse_answer
 from rra.config import settings
 from rra.db import get_pool
@@ -182,6 +183,16 @@ def query(
         # user-facing prose (with <q>…</q> envelopes stripped) and the citation
         # triples carrying each analyst-emitted supporting quote (ADR 0013).
         clean_prose, triples = parse_answer(draft)
+        # Output filter (RT-4 / LLM05): markdown images are a zero-click
+        # exfiltration channel when the answer renders in a downstream client.
+        # Deny-all — regulatory answers never legitimately contain images.
+        clean_prose, images_stripped = strip_markdown_images(clean_prose)
+        if images_stripped:
+            log.warning(
+                "output_filter.images_stripped",
+                session_id=session_id,
+                count=images_stripped,
+            )
         citations = _resolve_citations(triples, passages, session_id=session_id)
         no_quote_count = sum(1 for c in citations if not c.quoted_text)
         warning = _build_warning(final_state)
@@ -264,13 +275,30 @@ def _resolve_citations(
                 session_id=session_id,
             )
 
+        # Output filter (RT-4 / LLM05, RT Phase-3 finding RT-P3-3): quoted_text
+        # is a verbatim span the analyst copied from untrusted corpus content and
+        # ships to the client in the citations[] array.  The prose-level image
+        # strip does NOT reach here, so a markdown-image exfil payload laundered
+        # through the <q> channel would otherwise bypass the filter.  Strip it
+        # here too — same deny-all rationale.
+        safe_quote = ""
+        if quote:
+            safe_quote, q_imgs = strip_markdown_images(quote)
+            if q_imgs:
+                log.warning(
+                    "output_filter.images_stripped",
+                    session_id=session_id,
+                    location="citation_quote",
+                    count=q_imgs,
+                )
+
         citations.append(
             Citation(
                 guidance_id=guidance_id,
                 chunk_index=chunk_index,
                 char_start=passage.char_start,
                 char_end=passage.char_end,
-                quoted_text=quote or "",  # NO slice fallback — ever (ADR 0013).
+                quoted_text=safe_quote,  # NO slice fallback — ever (ADR 0013).
             )
         )
 

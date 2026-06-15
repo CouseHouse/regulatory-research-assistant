@@ -19,6 +19,7 @@ from typing import Any
 import structlog
 from anthropic.types import CacheControlEphemeralParam, TextBlockParam
 
+from rra.agents._sanitize import xml_escape_untrusted
 from rra.agents.types import CriticNote
 from rra.config import settings
 from rra.ports.llm import get_llm
@@ -90,15 +91,28 @@ When a <prior_draft> and <critic_notes> are provided, edit the draft in place:
 def _format_passages_xml(passages: list[RetrievedPassage]) -> str:
     """Format retrieved passages as XML for the analyst prompt.
 
-    This is the UNCHANGED passage XML format from Day 3 api.py so that
-    _resolve_citations() continues to work without modification.
+    RT-1 (indirect injection via poisoned corpus): passage.guidance_title and
+    passage.text are untrusted corpus content that must be XML-escaped before
+    interpolation.  A chunk containing `</text></passage><passage ...>` would
+    otherwise forge a fake passage element inside the analyst's context window.
+    xml_escape_untrusted() is applied to both fields (RT-1 fix site #1: title;
+    RT-1 fix site #2: text).
+
+    NOTE: This changes the bytes the LLM receives for passage text and title.
+    Golden-eval re-validation is owed when credits return (tracked by the lead).
     """
     parts = ["<passages>"]
     for p in passages:
+        # RT-1 fix sites #1 (guidance_title) and #2 (text):
+        # guidance_id and chunk_index are corpus metadata (operator-controlled)
+        # and are NOT escaped — they go in attributes, not text nodes, and are
+        # never user-supplied in the current architecture.
+        safe_title = xml_escape_untrusted(p.guidance_title)
+        safe_text = xml_escape_untrusted(p.text)
         parts.append(
             f'<passage guidance_id="{p.guidance_id}" chunk_index="{p.chunk_index}">\n'
-            f"<title>{p.guidance_title}</title>\n"
-            f"<text>{p.text}</text>\n"
+            f"<title>{safe_title}</title>\n"
+            f"<text>{safe_text}</text>\n"
             f"</passage>"
         )
     parts.append("</passages>")
