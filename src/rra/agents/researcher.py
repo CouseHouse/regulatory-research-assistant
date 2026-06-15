@@ -13,16 +13,17 @@ Final list is sorted by score descending.
 """
 from __future__ import annotations
 
-import contextlib
 from typing import Any
 
 import structlog
-from anthropic import Anthropic
 
 from rra.config import settings
-from rra.mcp_server.tools import search_corpus as _tool_search_corpus
+from rra.ports.guardrails import get_guardrails
+from rra.ports.identity import get_identity
+from rra.ports.llm import get_llm
+from rra.ports.observability import get_observability
+from rra.ports.tools import get_tool_transport
 from rra.schemas import RetrievedPassage
-from rra.tracing import get_langfuse
 
 log = structlog.get_logger(__name__)
 
@@ -54,7 +55,11 @@ def run_researcher(state: dict[str, Any]) -> dict[str, Any]:
         log.warning("researcher.no_sub_questions", session_id=state.get("session_id"))
         return {"passages": [], "token_usage": {}}
 
-    client = Anthropic(api_key=settings.anthropic_api_key.get_secret_value())
+    llm = get_llm()
+    obs = get_observability()
+    transport = get_tool_transport()
+    guardrails = get_guardrails()
+    researcher_principal = get_identity().agent_principal("researcher")
 
     total_input_tokens = 0
     total_output_tokens = 0
@@ -62,31 +67,22 @@ def run_researcher(state: dict[str, Any]) -> dict[str, Any]:
     # (guidance_id, chunk_index) → best RetrievedPassage
     passage_map: dict[tuple[str, int], RetrievedPassage] = {}
 
-    lf = get_langfuse()
-    span_cm = (
-        lf.start_as_current_observation(
-            name="researcher",
-            as_type="span",
-            input={"sub_questions": sub_questions},
-        )
-        if lf is not None
-        else contextlib.nullcontext(None)
-    )
-    with span_cm as span:
+    from rra.mcp_server.tools import SearchCorpusResult  # wire type only
+
+    with obs.start_span(
+        "researcher",
+        as_type="span",
+        input={"sub_questions": sub_questions},
+    ) as span:
         for sq in sub_questions:
             # Step 1: Haiku reformulates the sub-question into an optimised search query.
-            gen_cm = (
-                span.start_as_current_observation(
-                    name="anthropic:researcher",
-                    as_type="generation",
-                    model=settings.researcher_model,
-                    input={"sub_question": sq},
-                )
-                if span is not None
-                else contextlib.nullcontext(None)
-            )
-            with gen_cm as gen:
-                message = client.messages.create(
+            with span.start_as_current_observation(
+                name="anthropic:researcher",
+                as_type="generation",
+                model=settings.researcher_model,
+                input={"sub_question": sq},
+            ) as gen:
+                message = llm.complete(
                     model=settings.researcher_model,
                     max_tokens=128,
                     system=_SYSTEM_PROMPT,
@@ -99,14 +95,13 @@ def run_researcher(state: dict[str, Any]) -> dict[str, Any]:
                         reformulated = block.text.strip()
                         break
 
-                if gen is not None:
-                    gen.update(
-                        usage_details={
-                            "input": message.usage.input_tokens,
-                            "output": message.usage.output_tokens,
-                        },
-                        output={"reformulated": reformulated},
-                    )
+                gen.update(
+                    usage_details={
+                        "input": message.usage.input_tokens,
+                        "output": message.usage.output_tokens,
+                    },
+                    output={"reformulated": reformulated},
+                )
 
             total_input_tokens += message.usage.input_tokens
             total_output_tokens += message.usage.output_tokens
@@ -121,18 +116,48 @@ def run_researcher(state: dict[str, Any]) -> dict[str, Any]:
                 reformulated=reformulated[:80],
             )
 
-            # Step 2: Retrieve passages for the reformulated query via the MCP tool layer.
-            passages = _tool_search_corpus(reformulated, k=settings.rerank_top_k).passages
+            # Step 2: Retrieve passages for the reformulated query via the tool transport.
+            result = transport.call_tool(
+                "search_corpus",
+                {"query": reformulated, "k": settings.rerank_top_k},
+                researcher_principal,
+            )
+            assert isinstance(result, SearchCorpusResult)
+            raw_passages = result.passages
 
-            if span is not None:
-                with span.start_as_current_observation(
-                    name="search_corpus",
-                    as_type="retriever",
-                    input={"query": reformulated},
-                    output={"passage_count": len(passages)},
-                    metadata={"sub_question": sq[:80]},
-                ):
-                    pass
+            # Step 2b: Guardrails — retrieval-boundary indirect-injection control.
+            # Drop any passage whose text is flagged by the content policy.  With
+            # AllowAllGuardrails (phase-2 wiring) this is a no-op; the real
+            # detector is swapped in during the security-harness phase.
+            # Logging: ONLY guidance_id + chunk_index logged on block; never text.
+            passages = []
+            for p in raw_passages:
+                verdict = guardrails.check(p.text, boundary="retrieved_content")
+                if verdict.allowed:
+                    passages.append(p)
+                else:
+                    log.warning(
+                        "guardrails.passage_blocked",
+                        guidance_id=p.guidance_id,
+                        chunk_index=p.chunk_index,
+                        # Intentionally omit: p.text, p.guidance_title, categories, score.
+                    )
+                    # Surface the indirect-injection block in the trace UI (ADR
+                    # 0024) as a filterable security score on the live request
+                    # trace. Metadata-only: guidance_id#chunk_index locate the
+                    # passage; the blocked TEXT is never recorded (RT-redteam.md).
+                    obs.record_security_event(
+                        boundary="retrieved_content",
+                        categories=verdict.categories,
+                        detector_score=verdict.score,
+                        reason=verdict.reason,
+                        location=f"{p.guidance_id}#{p.chunk_index}",
+                    )
+
+            # NOTE: the search_corpus retriever span is emitted at the retrieval
+            # boundary (retrieval.search_corpus, reached via the tool transport) and
+            # is metadata-only. We deliberately do NOT open a second one here — that
+            # was a duplicate retriever observation (ADR 0025 / trace-cleanup item 1).
 
             # Step 3: Chunk-level dedup — keep the copy with the higher rerank score.
             for p in passages:
@@ -153,13 +178,12 @@ def run_researcher(state: dict[str, Any]) -> dict[str, Any]:
             output_tokens=total_output_tokens,
         )
 
-        if span is not None:
-            span.update(
-                output={
-                    "passage_count": len(results),
-                    "sub_question_count": len(sub_questions),
-                },
-            )
+        span.update(
+            output={
+                "passage_count": len(results),
+                "sub_question_count": len(sub_questions),
+            },
+        )
 
         return {
             "passages": results,

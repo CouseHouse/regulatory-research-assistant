@@ -72,3 +72,61 @@ jobs:
         # does NOT block merge. Removing this step would silence the safety net demo.
         continue-on-error: true
         run: uv run python -m rra.evals.run --fixture ci --no-llm-judges
+
+  # Red-team injection gate (CLAUDE.md foot-gun rule 2, ADR 0023).
+  # FREE: local HF model on CPU + deterministic layer probes; no Anthropic or
+  # Voyage calls. The citation-gate probe runs against the CI fixture DB
+  # (guidance 999999 is absent, so the fabricated citation must be rejected).
+  security-gate:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: rra
+          POSTGRES_PASSWORD: rra_dev_password
+          POSTGRES_DB: rra
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://rra:rra_dev_password@localhost:5432/rra
+      ANTHROPIC_API_KEY: stub-not-used-in-ci
+      VOYAGE_API_KEY: stub-not-used-in-ci
+      POSTGRES_PASSWORD: rra_dev_password
+      RRA_API_KEY: stub-not-used-in-ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+
+      - name: Cache HuggingFace model
+        # The detector weights (~700 MB) — cached so only the first run on a
+        # new lockfile downloads them.
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-deberta-injection-v2
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Apply database schema
+        run: |
+          PGPASSWORD=rra_dev_password psql \
+            -h localhost -U rra -d rra \
+            -f init-db/01-init.sql
+
+      - name: Load CI key fixture
+        run: uv run python tests/evals/load_ci_fixture.py
+
+      - name: Run security gate (merge gate)
+        # Layer-aware defense-in-depth coverage; exit 1 below thresholds.
+        run: uv run python -m rra.evals.security --tag ci --json

@@ -19,11 +19,10 @@ from difflib import SequenceMatcher
 from typing import Any, Literal
 
 import structlog
-from psycopg.rows import dict_row
 from pydantic import BaseModel, Field
 
 from rra.config import settings
-from rra.db import get_conn
+from rra.ports.vectorstore import get_vector_store
 from rra.schemas import RetrievedPassage
 
 log = structlog.get_logger(__name__)
@@ -133,17 +132,8 @@ def fetch_guidance(guidance_id: str) -> FetchGuidanceResult:
     boilerplate headers) are present by design; cleaning is deferred to Day 7 ingest.
     Returning raw text preserves the dirty baseline that Day 6 evals must measure.
     """
-    sql = """
-        SELECT chunk_index, guidance_title, text
-        FROM corpus.chunks
-        WHERE guidance_id = %(guidance_id)s
-        ORDER BY chunk_index
-    """
     try:
-        with get_conn() as conn:
-            with conn.cursor(row_factory=dict_row) as cur:
-                cur.execute(sql, {"guidance_id": guidance_id})
-                rows: list[dict[str, Any]] = cur.fetchall()
+        rows: list[dict[str, Any]] = get_vector_store().fetch_guidance_chunks(guidance_id)
     except Exception as exc:
         raise ToolError(
             code="DB_ERROR",
@@ -393,19 +383,10 @@ def check_citation(
     NOT_FOUND returns CitationCheckResult(verified=False), never ToolError.
     Only DB connection failures raise ToolError.
     """
-    _sql = """
-        SELECT text, char_start, char_end
-        FROM corpus.chunks
-        WHERE guidance_id = %(guidance_id)s AND chunk_index = %(chunk_index)s
-    """
     try:
-        with get_conn() as conn:
-            with conn.cursor(row_factory=dict_row) as cur:
-                cur.execute(
-                    _sql,
-                    {"guidance_id": guidance_id, "chunk_index": chunk_index},
-                )
-                row: dict[str, Any] | None = cur.fetchone()
+        row: dict[str, Any] | None = get_vector_store().fetch_chunk(
+            guidance_id, chunk_index
+        )
     except Exception as exc:
         raise ToolError(
             code="DB_ERROR",
@@ -498,18 +479,8 @@ def list_recent_guidances(since_date: str) -> ListRecentGuidancesResult:
             retryable=False,
         ) from exc
 
-    sql = """
-        SELECT guidance_id, guidance_title, MIN(created_at) AS ingest_date
-        FROM corpus.chunks
-        GROUP BY guidance_id, guidance_title
-        HAVING MIN(created_at) >= %(since_date)s
-        ORDER BY ingest_date DESC
-    """
     try:
-        with get_conn() as conn:
-            with conn.cursor(row_factory=dict_row) as cur:
-                cur.execute(sql, {"since_date": since_date})
-                rows = cur.fetchall()
+        rows = get_vector_store().list_recent_guidances_rows(since_date)
     except Exception as exc:
         raise ToolError(
             code="DB_ERROR",

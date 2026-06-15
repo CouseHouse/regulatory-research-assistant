@@ -55,7 +55,7 @@ def test_judge_call_prefill_appends_assistant_turn_and_prepends_brace():
     longer emit "Here is the JSON:" because its first token follows "{".
     """
     fake = MagicMock()
-    fake.messages.create.return_value = MagicMock(
+    fake.complete.return_value = MagicMock(
         content=[MagicMock(text='"present": [true, false]}')]
     )
     with patch("rra.evals.judge._get_client", return_value=fake):
@@ -63,7 +63,7 @@ def test_judge_call_prefill_appends_assistant_turn_and_prepends_brace():
 
     assert result == '{"present": [true, false]}'
 
-    sent = fake.messages.create.call_args.kwargs["messages"]
+    sent = fake.complete.call_args.kwargs["messages"]
     assert sent[-1] == {"role": "assistant", "content": "{"}
 
 
@@ -72,14 +72,14 @@ def test_judge_call_without_prefill_is_unchanged():
     Guards that PositionQualityScorer's path (prefill=None) is untouched.
     """
     fake = MagicMock()
-    fake.messages.create.return_value = MagicMock(
+    fake.complete.return_value = MagicMock(
         content=[MagicMock(text='{"score": 5}')]
     )
     with patch("rra.evals.judge._get_client", return_value=fake):
         result = judge_call("claude-sonnet-4-6", "grade this")
 
     assert result == '{"score": 5}'
-    sent = fake.messages.create.call_args.kwargs["messages"]
+    sent = fake.complete.call_args.kwargs["messages"]
     assert all(m["role"] != "assistant" for m in sent)
 
 
@@ -141,7 +141,7 @@ def test_keyfact_scorer_through_real_judge_call_neutralizes_prose_model():
     """
     fake = MagicMock()
     # What a previously-prose-prone model returns once forced to continue from "{":
-    fake.messages.create.return_value = MagicMock(
+    fake.complete.return_value = MagicMock(
         content=[MagicMock(text='"present": [true, false], "notes": "ok"}')]
     )
     with patch("rra.evals.judge._get_client", return_value=fake):
@@ -151,7 +151,7 @@ def test_keyfact_scorer_through_real_judge_call_neutralizes_prose_model():
     assert result.score == 0.5          # 1 of 2 present — a REAL number, not None
     assert result.score is not None
     # The scorer actually opted into the prefill: an assistant "{" turn was sent.
-    sent = fake.messages.create.call_args.kwargs["messages"]
+    sent = fake.complete.call_args.kwargs["messages"]
     assert sent[-1] == {"role": "assistant", "content": "{"}
 
 
@@ -159,9 +159,9 @@ def test_keyfact_scorer_through_real_judge_call_neutralizes_prose_model():
 
 
 def _client_with_usage(text: str, *, input_tokens: int, output_tokens: int):
-    """A mocked Anthropic client whose one response carries token usage."""
+    """A mocked LLMPort whose one response carries token usage."""
     fake = MagicMock()
-    fake.messages.create.return_value = MagicMock(
+    fake.complete.return_value = MagicMock(
         content=[MagicMock(text=text)],
         usage=MagicMock(input_tokens=input_tokens, output_tokens=output_tokens),
     )

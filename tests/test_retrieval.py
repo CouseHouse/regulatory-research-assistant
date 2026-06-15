@@ -36,79 +36,70 @@ def _db_rows(n: int = 3) -> list[dict[str, Any]]:
     ]
 
 
-def _rerank_response(indices: list[int], scores: list[float]) -> Any:
-    results = [
-        MagicMock(index=idx, relevance_score=score)
-        for idx, score in zip(indices, scores)
-    ]
-    return MagicMock(results=results)
-
-
-def _mock_voyage(
-    db_rows: list[dict[str, Any]],
+def _mock_embeddings_port(
     rerank_indices: list[int],
     rerank_scores: list[float],
-) -> tuple[Any, Any]:
-    """Return (mock_voyage_client, mock_get_conn) preconfigured for the given rows."""
-    mock_client = MagicMock()
-    mock_client.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
-    mock_client.rerank.return_value = _rerank_response(rerank_indices, rerank_scores)
+) -> MagicMock:
+    """Return a mock EmbeddingsPort for the given rerank result."""
+    from rra.ports.embeddings import RerankResult
 
-    mock_cur = MagicMock()
-    mock_cur.__enter__ = MagicMock(return_value=mock_cur)
-    mock_cur.__exit__ = MagicMock(return_value=False)
-    mock_cur.fetchall.return_value = db_rows
+    mock_port = MagicMock()
+    mock_port.embed_query.return_value = [0.1] * 1024
+    mock_port.rerank.return_value = [
+        RerankResult(index=idx, relevance_score=score)
+        for idx, score in zip(rerank_indices, rerank_scores)
+    ]
+    return mock_port
 
-    mock_conn = MagicMock()
-    mock_conn.cursor.return_value = mock_cur
 
-    mock_get_conn = MagicMock()
-    mock_get_conn.return_value.__enter__.return_value = mock_conn
-    mock_get_conn.return_value.__exit__.return_value = False
-
-    return mock_client, mock_get_conn
+def _mock_vector_store(db_rows: list[dict[str, Any]]) -> MagicMock:
+    """Return a mock VectorStorePort whose similarity_search returns db_rows."""
+    mock_store = MagicMock()
+    mock_store.similarity_search.return_value = db_rows
+    return mock_store
 
 
 # ─── Unit tests ────────────────────────────────────────────────────────────────
 
 def test_embed_uses_query_input_type() -> None:
-    """ADR 0005: search_corpus must embed the query with input_type='query'."""
+    """ADR 0005: search_corpus must embed the query with input_type='query'.
+
+    After the ports refactor, retrieval delegates to get_embeddings().embed_query()
+    which uses input_type='query' in VoyageEmbeddingsAdapter. This test pins the
+    port contract: embed_query is called (not embed_documents).
+    """
     from rra.retrieval import search_corpus
 
     rows = _db_rows(1)
-    mc, mgc = _mock_voyage(rows, [0], [0.9])
+    mock_port = _mock_embeddings_port([0], [0.9])
+    mock_store = _mock_vector_store(rows)
 
     with (
-        patch("rra.retrieval._voyage_client", return_value=mc),
-        patch("rra.retrieval.get_conn", mgc),
+        patch("rra.retrieval.get_embeddings", return_value=mock_port),
+        patch("rra.retrieval.get_vector_store", return_value=mock_store),
     ):
         search_corpus("what are the SaMD requirements?")
 
-    embed_kwargs = mc.embed.call_args.kwargs
-    assert embed_kwargs.get("input_type") == "query", (
-        "ADR 0005 violation: query was not embedded with input_type='query'. "
-        f"Got: {embed_kwargs.get('input_type')!r}"
-    )
+    mock_port.embed_query.assert_called_once_with("what are the SaMD requirements?")
+    mock_port.embed_documents.assert_not_called()
 
 
 def test_embed_not_document_input_type() -> None:
-    """ADR 0005: guard against the 'symmetric for simplicity' refactor trap."""
+    """ADR 0005: guard against using embed_documents (input_type='document') for queries."""
     from rra.retrieval import search_corpus
 
     rows = _db_rows(1)
-    mc, mgc = _mock_voyage(rows, [0], [0.9])
+    mock_port = _mock_embeddings_port([0], [0.9])
+    mock_store = _mock_vector_store(rows)
 
     with (
-        patch("rra.retrieval._voyage_client", return_value=mc),
-        patch("rra.retrieval.get_conn", mgc),
+        patch("rra.retrieval.get_embeddings", return_value=mock_port),
+        patch("rra.retrieval.get_vector_store", return_value=mock_store),
     ):
         search_corpus("test")
 
-    embed_kwargs = mc.embed.call_args.kwargs
-    assert embed_kwargs.get("input_type") != "document", (
-        "ADR 0005 violation: query was embedded with input_type='document'. "
-        "Voyage 3 is asymmetric; using 'document' for queries silently degrades recall."
-    )
+    # embed_documents uses input_type='document' — must NOT be called for a query.
+    mock_port.embed_documents.assert_not_called()
 
 
 def test_reranker_called_with_query_and_texts() -> None:
@@ -116,20 +107,18 @@ def test_reranker_called_with_query_and_texts() -> None:
     from rra.retrieval import search_corpus
 
     rows = _db_rows(2)
-    mc, mgc = _mock_voyage(rows, [1, 0], [0.95, 0.80])
+    mock_port = _mock_embeddings_port([1, 0], [0.95, 0.80])
+    mock_store = _mock_vector_store(rows)
 
     with (
-        patch("rra.retrieval._voyage_client", return_value=mc),
-        patch("rra.retrieval.get_conn", mgc),
+        patch("rra.retrieval.get_embeddings", return_value=mock_port),
+        patch("rra.retrieval.get_vector_store", return_value=mock_store),
     ):
         search_corpus("software validation requirements")
 
-    rerank_args = mc.rerank.call_args.args
-    query_arg: str = rerank_args[0]
-    docs_arg: list[str] = rerank_args[1]
-
-    assert query_arg == "software validation requirements"
-    assert len(docs_arg) == 2
+    rerank_call = mock_port.rerank.call_args
+    assert rerank_call.args[0] == "software validation requirements"
+    assert len(rerank_call.args[1]) == 2
 
 
 def test_returns_in_rerank_order() -> None:
@@ -138,11 +127,12 @@ def test_returns_in_rerank_order() -> None:
 
     rows = _db_rows(3)
     # Reranker says best=index 2, second=index 0 (drops index 1)
-    mc, mgc = _mock_voyage(rows, [2, 0], [0.99, 0.75])
+    mock_port = _mock_embeddings_port([2, 0], [0.99, 0.75])
+    mock_store = _mock_vector_store(rows)
 
     with (
-        patch("rra.retrieval._voyage_client", return_value=mc),
-        patch("rra.retrieval.get_conn", mgc),
+        patch("rra.retrieval.get_embeddings", return_value=mock_port),
+        patch("rra.retrieval.get_vector_store", return_value=mock_store),
     ):
         results = search_corpus("test query", k=2)
 
@@ -157,69 +147,55 @@ def test_empty_corpus_returns_empty_without_rerank() -> None:
     """Empty DB result returns [] immediately; reranker is never called."""
     from rra.retrieval import search_corpus
 
-    mc = MagicMock()
-    mc.embed.return_value = MagicMock(embeddings=[[0.1] * 1024])
-
-    mock_cur = MagicMock()
-    mock_cur.__enter__ = MagicMock(return_value=mock_cur)
-    mock_cur.__exit__ = MagicMock(return_value=False)
-    mock_cur.fetchall.return_value = []
-
-    mock_conn = MagicMock()
-    mock_conn.cursor.return_value = mock_cur
-
-    mock_get_conn = MagicMock()
-    mock_get_conn.return_value.__enter__.return_value = mock_conn
-    mock_get_conn.return_value.__exit__.return_value = False
+    mock_port = _mock_embeddings_port([], [])
+    mock_store = _mock_vector_store([])
 
     with (
-        patch("rra.retrieval._voyage_client", return_value=mc),
-        patch("rra.retrieval.get_conn", mock_get_conn),
+        patch("rra.retrieval.get_embeddings", return_value=mock_port),
+        patch("rra.retrieval.get_vector_store", return_value=mock_store),
     ):
         results = search_corpus("test query")
 
     assert results == []
-    mc.rerank.assert_not_called()
+    mock_port.rerank.assert_not_called()
 
 
 def test_guidance_ids_filter_adds_any_clause() -> None:
-    """When guidance_ids filter is set, the SQL contains an ANY clause."""
+    """When guidance_ids filter is set, the SQL forwarded to the store contains an ANY clause."""
     from rra.retrieval import search_corpus
 
     rows = _db_rows(1)
-    mc, mgc = _mock_voyage(rows, [0], [0.9])
-
-    mock_conn = mgc.return_value.__enter__.return_value
-    mock_cur = mock_conn.cursor.return_value.__enter__.return_value
+    mock_port = _mock_embeddings_port([0], [0.9])
+    mock_store = _mock_vector_store(rows)
 
     with (
-        patch("rra.retrieval._voyage_client", return_value=mc),
-        patch("rra.retrieval.get_conn", mgc),
+        patch("rra.retrieval.get_embeddings", return_value=mock_port),
+        patch("rra.retrieval.get_vector_store", return_value=mock_store),
     ):
         search_corpus("test", filters={"guidance_ids": ["doc1", "doc2"]})
 
-    sql_executed: str = mock_cur.execute.call_args.args[0]
-    assert "ANY" in sql_executed
+    # The filter reaches the port as the guidance_ids kwarg.
+    call_kwargs = mock_store.similarity_search.call_args.kwargs
+    assert call_kwargs["guidance_ids"] == ["doc1", "doc2"]
 
 
 def test_empty_guidance_ids_filter_ignored() -> None:
-    """An empty guidance_ids list should behave as no filter (no ANY clause)."""
+    """An empty guidance_ids list should behave as no filter (no ANY clause in SQL)."""
     from rra.retrieval import search_corpus
 
     rows = _db_rows(1)
-    mc, mgc = _mock_voyage(rows, [0], [0.9])
-
-    mock_conn = mgc.return_value.__enter__.return_value
-    mock_cur = mock_conn.cursor.return_value.__enter__.return_value
+    mock_port = _mock_embeddings_port([0], [0.9])
+    mock_store = _mock_vector_store(rows)
 
     with (
-        patch("rra.retrieval._voyage_client", return_value=mc),
-        patch("rra.retrieval.get_conn", mgc),
+        patch("rra.retrieval.get_embeddings", return_value=mock_port),
+        patch("rra.retrieval.get_vector_store", return_value=mock_store),
     ):
         search_corpus("test", filters={"guidance_ids": []})
 
-    sql_executed: str = mock_cur.execute.call_args.args[0]
-    assert "ANY" not in sql_executed
+    # An empty list is normalised to None — no filter reaches the port.
+    call_kwargs = mock_store.similarity_search.call_args.kwargs
+    assert call_kwargs["guidance_ids"] is None
 
 
 def test_returned_passages_have_correct_schema() -> None:
@@ -227,11 +203,12 @@ def test_returned_passages_have_correct_schema() -> None:
     from rra.retrieval import search_corpus
 
     rows = _db_rows(2)
-    mc, mgc = _mock_voyage(rows, [0, 1], [0.9, 0.8])
+    mock_port = _mock_embeddings_port([0, 1], [0.9, 0.8])
+    mock_store = _mock_vector_store(rows)
 
     with (
-        patch("rra.retrieval._voyage_client", return_value=mc),
-        patch("rra.retrieval.get_conn", mgc),
+        patch("rra.retrieval.get_embeddings", return_value=mock_port),
+        patch("rra.retrieval.get_vector_store", return_value=mock_store),
     ):
         results = search_corpus("test")
 

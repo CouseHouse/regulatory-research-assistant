@@ -1,5 +1,290 @@
 # Dev log
 
+## 2026-06-15 — Langfuse trace review + cleanup (items 1, 5; ADR 0025; item 2/3 disposition)
+
+Reviewed LIVE Langfuse traces via the public API (happy-path `/query` = 47 observations, a
+failed query, a `security.guardrail_block` one-shot) for accuracy + necessity. Full task list:
+`docs/refactor/trace-cleanup.md`.
+
+- **Item 1 (DONE) — de-duped `search_corpus` retriever spans.** `retrieval.search_corpus`
+  already emits a metadata-only retriever span (`guidance_id`/`chunk_index`/`title`/`score` —
+  no passage text); `researcher.py` opened a SECOND thin one per sub-question. Removed the
+  researcher wrapper → one canonical span at the retrieval boundary.
+- **Item 5 (DONE, ADR 0025) — trace-content/PII posture.** The only real exposure was full
+  `product_context` (device CCI) in the `api.py` `query` span input (RT-4 gap). Now records
+  `product_context_chars` (size only); `query` kept (general question, trace utility); passages
+  already metadata-only; generations stay usage-only. Blocked content still never traced (ADR 0024).
+- **Item 3 (EVALUATED → folded into ADR 0025).** The generation-I/O inconsistency (researcher
+  records the reformulated query; planner/analyst/critic record usage only) is resolved by the
+  ADR rule: usage + PII-safe *derived* I/O only, never raw prompts. Current behavior complies;
+  researcher's reformulated-query I/O is a derived search string (kept). No code change.
+- **Item 2 (DEFERRED w/ root cause).** Analyst revision generation parents to the `critic` span
+  instead of `analyst:rev{n}` (renders empty). Agent code is correct; it's an OTEL active-span
+  context bleed across LangGraph nodes — needs runtime iteration + a looped trace (paid) to
+  verify, not a blind edit. Tracked in trace-cleanup.md.
+- **Item 4 (DEFERRED).** Condense the 24 `check_citation` spans — optional, lowest.
+
+**Gates:** `uv run mypy` clean on api.py/researcher.py; `tests/test_api.py + test_agents.py`
+→ 47 passed (offline). **Owed:** one paid `/query` to re-verify the trace shape (one
+`search_corpus` per retrieval; `product_context` redacted; obs count drops from 47).
+
+## 2026-06-15 — Phase 3.1: security-incident observability — guardrail block → Langfuse score (ADR 0024)
+
+**Branch:** `refactor/phase3-security-harness` (on top of Phase 3, PR #13). Closes the original
+"show the security incident in observability" gap: a caught injection was only a structlog
+warning and never reached Langfuse — and the observability port had no surface to emit one.
+
+**What landed:**
+- **Observability port extension** (`ports/observability.py`): `record_security_event(boundary,
+  categories, detector_score, reason, location)` on `ObservabilityPort` + a no-op on the Noop
+  adapter. Additive evolution of ADR 0020 — built against the port, so cloud (and a hypothetical
+  LangWatch) observability adapters implement the same method.
+- **Langfuse adapter** (`adapters/langfuse_observability.py`): maps it to a categorical
+  `security.guardrail_block` score via the same `create_score` surface the eval harness uses
+  (langfuse_eval), so blocks are FILTERABLE in the Scores view. Attaches to the live request
+  trace when one is active (retrieved_content); opens a one-shot home trace when none is
+  (user_input blocks before the request span opens). Never raises (swallows + logs
+  `observability.security_event_failed`).
+- **Wired at both guardrail block sites**: researcher `retrieved_content` (location =
+  `guidance_id#chunk_index`) and api `user_input` (query + product_context). Metadata-only —
+  boundary/category/score/location, NEVER the offending text (the method does not accept it).
+- **Docs**: ADR 0024 (+ index); RT-redteam.md RT-4 control note (a block is now *surfaced* as
+  metadata; the content-exclusion rule is what keeps that safe); CLAUDE.md stale "LangWatch"
+  wording fixed to Langfuse + "guardrail runs in-process, not via docker-compose" — the strings
+  that seeded the original question. LangWatch is not used anywhere; observability is Langfuse v3.
+
+**Decision (LangWatch — NOT adopted):** building against the observability port already makes
+LangWatch a future adapter swap; adopting it now = a second heavy observability stack vs. the
+self-hosted-free local profile. Recorded in ADR 0024 alternatives.
+
+**Gates (green, free):**
+- `HF_HUB_OFFLINE=1 uv run pytest tests/ --no-cov` → **447 passed, 3 skipped** (the 3 skips are
+  Postgres-integration tests with the DB down; was 443 passed with DB up). +7 tests: 5
+  observability (trace-active / one-shot-trace / never-raises / metadata-allowlist / noop) +
+  researcher-block + api-400-block (asserts generic 400, no query echo, no graph run, metadata-only).
+- `uv run mypy` on the 4 touched src files → clean.
+- Security gate (`rra.evals.security`) UNAFFECTED by construction — this is runtime observability,
+  not detection/coverage; not re-run. The `citation_validity` re-run owed from Phase 3 is
+  unchanged (no new LLM-visible byte change here).
+
+## 2026-06-12 — Phase 3: local security spine — injection detector + layer-aware gate (ADR 0023)
+
+**Branch:** `refactor/phase3-security-harness`. Swapped the Phase-2 `AllowAllGuardrails`
+wiring adapter for a real local detector and made the red-team suite a measured,
+merge-blocking gate. RT (offensive) and SC (defensive) subagents reviewed the phase at
+max reasoning before it landed; their findings were fixed at source, not patched
+downstream (RT-log.md, SC-matrix.md).
+
+**What landed:**
+- **HF injection detector** (`adapters/hf_injection_guardrails.py`): `protectai/deberta-v3-base-prompt-injection-v2`
+  on CPU, lazy-loaded so the 400+ non-detector unit tests never import torch
+  (`GUARDRAILS_DETECTOR=allowall` in conftest). Secure-by-default: `guardrails_detector="local-hf"`
+  in `PROFILE_DEFAULTS["local"]`, threshold **0.2** ("block unless confidently safe" — at
+  `retrieved_content` the cost of a block is one dropped passage).
+- **Layer-aware gate** (`evals/security.py`, ADR 0023): each attack row is tagged with the
+  control(s) expected to stop it; the harness mechanically exercises detector, sanitizer,
+  citation-gate (through the transport chokepoint), tool-scoping, secret-confinement, and
+  output-filter, then gates on **coverage ≥ 0.80, detector FP ≤ 0.20, zero harness errors**.
+  EXERCISED vs ASSERTED (rt-017, inert-no-resume) vs RESIDUAL (rt-006/rt-014, behavioral)
+  are reported separately by id — the metric-integrity discipline, not a single inflated rate.
+- **RT-1 structural fix:** passage text/title/source_text/quoted_text XML-escaped at all six
+  analyst/critic sites; `Citation.quoted_text` image-stripped before it ships to the client.
+- **RT-2 fix:** critic now fails **CLOSED** to `escalate` on malformed/parse-error verdict
+  (was default-approve — an injection that merely disrupted the tool call yielded auto-approval).
+- **RT-4/LLM05:** `strip_markdown_images` deny-all output filter on answer prose AND citation quotes.
+- **CI:** new free `security-gate` job (HF model cached) runs the gate as a merge blocker.
+
+**RT/SC review → fixes (all at source, no anti-compounding STOP):**
+- RT-P3-1 (gate integrity, H×H): the sanitizer probe was a tautology (escaping always strips
+  `<`/`>`). Rewrote it to assemble the real passage XML and assert no forged structural tag
+  survives. RT-P3-2 (H×M): the chunking/truncation path was never exercised (no fixture >531
+  chars); set `_CHARS_PER_TOKEN`→3, added 25% sliding-window overlap, added fixtures rt-018
+  (end-of-passage) and rt-019 (boundary-straddle). RT-P3-3: closed the unfiltered
+  `Citation.quoted_text` client channel. RT-P3-4/SC-A: dropped the harness `os.environ` leak;
+  added singleton restore + `skipif` on the detector test class. RT-P3-5: detector fails
+  CLOSED on unexpected label / empty result. RT-P3-7: pinned the model revision
+  (`e6535ca4…`) + `use_safetensors=True` + explicit `trust_remote_code=False`, printed in the
+  report. SC-B: cloud profiles now raise instead of silently inheriting the local-hf default.
+- **Accepted/external:** RT-P3-6 (rt-006/rt-014 owned by the credit-gated two-arm eval),
+  SC-C (mark the CI job a required check — branch protection, lead action), SC-D (FP 0.200
+  zero-margin) — all recorded in ADR 0023 with reopening triggers. RT-P3-8 (attribute-channel
+  `"`-escape) documented as a precondition in RT-redteam.md RT-1.
+
+**Gates (all green, free — no paid model/embedding calls):**
+- `HF_HUB_OFFLINE=1 uv run pytest tests/ --no-cov` → **443 passed** (was 359; +84 security/probe/
+  fixture tests). Deterministic offline once the model revision is pinned.
+- `uv run mypy` on all Phase-3 files → clean. (Pre-existing errors in `evals/{run,judge,scorers,dataset}.py`
+  are untouched by this phase — not a regression.)
+- `uv run python -m rra.evals.security` → coverage **0.895** (17/19), FP **0.200**,
+  detector-only 0.526, 0 errors. Report: `evals/results/security-latest.md`.
+- Eval harness (citation_validity) NOT run — paid Claude/Voyage, credits-gated. The XML-escaping
+  changes the bytes the LLM sees for passage text; golden re-validation is **owed** when credits
+  return (tracked in `_sanitize.py` and analyst/critic NOTE comments).
+
+**Unilateral decisions logged:** detector implemented via `transformers` directly rather than LLM
+Guard (named in ADR 0022) — same protectai model, smaller supply-chain surface (ADR 0023
+alternatives). Threshold 0.2 over the classifier argmax 0.5. Both recorded in ADR 0023.
+
+## 2026-06-11 — Phase 2b: security spine — identity/NHI + guardrails ports (ADR 0021, 0022)
+
+**Branch:** `refactor/phase2b-security-ports` (off phase2-ports). Implemented by subagent
+B4 to a fixed lead spec; adversarially reviewed by a Security Critic agent before landing.
+
+- **Identity/NHI port** (`ports/identity.py`, `adapters/local_identity.py`): frozen
+  `Principal` with frozenset scopes; `verify_api_caller` via `secrets.compare_digest`
+  (fixes the timing-attack-prone `!=` in api.py); deny-by-default `authorize_tool`
+  enforced at the tool-transport chokepoint, authz **before** tool-existence lookup
+  (probing tool names requires a scope). Scopes = observed usage: researcher
+  {search_corpus}, critic {check_citation}, planner/analyst {}.
+- **Lead catch:** the critic — the agent that consumes untrusted retrieved content —
+  still called check_citation directly, bypassing the chokepoint. Routed through
+  `call_tool` with the critic principal (`0ad76b4`); every agent tool call is now governed.
+- **Guardrails port** (`ports/guardrails.py`, `adapters/allowall_guardrails.py`):
+  `check(text, boundary)` wired at `user_input` (api.py, before any side effect; generic
+  400, echoes nothing) and `retrieved_content` (researcher drops blocked passages;
+  logs guidance_id+chunk_index only). Phase-2 adapter is AllowAll — wiring without
+  detection, behavior-identical (pinned by tests) — so the harness phase swaps in LLM
+  Guard as a pure adapter change.
+- **Security Critic verdict: PASS, no blockers** (16 findings: 12 OK-by-design, 3 notes,
+  1 stale-comment fix applied). Key honest finding now recorded in ADR 0021: the local
+  NHI layer is *advisory intra-process scoping* — `authorize_tool` trusts the
+  caller-supplied Principal; the enforced local boundary is the API key; non-forgeable
+  per-agent identity arrives with cloud managed-identity adapters behind this port.
+  Threat-model note: `call_tool`'s tool argument must stay a caller-side literal.
+
+**Gates:** 359 passed (310→359; 49 new security tests incl. structlog-capture
+no-content-in-logs assertions), mypy clean. Eval runs still deferred (credits).
+
+## 2026-06-11 — Phase 2a: six functional ports + local adapters (ADR 0020)
+
+**Branch:** `refactor/phase2-ports` (off the integration branch). Three implementation
+subagents (B1/B2/B3) sequenced by the lead, full test gate between each.
+
+Ports landed in `src/rra/ports/`, local adapters in `src/rra/adapters/`, all as
+Protocol + profile-resolved `lru_cache` factory (non-local profiles raise until the
+cloud-adapter phase):
+
+- **LLM** → `AnthropicLLMAdapter`. Client construction is the seam; `anthropic.types`
+  stay the wire types (ADR 0020 §wire-types — the SDK's own Bedrock/Vertex clients are
+  the cross-cloud story). Call sites rewired: 4 agents + evals/judge. Only behavior
+  delta: one process-lifetime client instead of per-call construction.
+- **Embeddings/rerank** → `VoyageEmbeddingsAdapter` (owns VOYAGE_MAX_BATCH, preserves
+  the retry asymmetry: batch-embed retries, query-embed doesn't).
+- **Vector store** → `PgVectorStoreAdapter`. All corpus SQL moved verbatim from
+  retrieval/tools/ingest. **Review catch:** the first cut passed caller-built SQL
+  through the port (a connection factory, not a boundary); reworked so the port takes
+  `(embedding, top_k, guidance_ids)` and the adapter owns SQL + vector literals
+  (commit `0dc7e7e`). `/readyz`'s pool probe in api.py stays outside the port (health,
+  not corpus).
+- **Memory/state** → `PostgresStateAdapter` (graph checkpointer moved verbatim).
+- **Tool transport** → `InProcessToolTransport`, single `call_tool(name, args)`
+  chokepoint (MCP-native shape; the identity port enforces scoping here in phase 2b).
+- **Observability** → `LangfuseObservabilityAdapter` + `NoopObservabilityAdapter`
+  (replaces the `if lf is not None`/nullcontext dances; langfuse imports now confined
+  to the adapter + the exempted eval harness). `search_corpus(lf=...)` param kept but
+  deprecated (frozen contract).
+
+**Gates:** 310 passed (262→310 with port tests), mypy clean on touched files, grep
+gates verify SDK-construction confinement. Eval runs still deferred (credits); the free
+CI citation gate runs on the PR.
+
+## 2026-06-11 — Phase 1: RRA_PROFILE config/profile system
+
+**Branch:** `refactor/phase1-profile-system` (based on `refactor/ports-adapters-security`)
+
+### What landed
+
+- **`RRA_PROFILE` field** added to `Settings` (`Literal["local","aws","azure","gcp"]`, default `"local"`).
+- **`PROFILE_DEFAULTS` registry** + `@model_validator(mode="before")` in `config.py`: per-profile
+  config defaults injected only for fields absent from env + .env. Strict precedence: explicit env >
+  .env > profile default > field default. The `local` profile reproduces today's field-level defaults
+  exactly — behaviour is byte-identical when `RRA_PROFILE` is unset or `"local"`.
+  `aws`/`azure`/`gcp` entries are empty dicts; adapter phases (Phase 2+) fill them.
+- **Conftest `.env`-seed fix**: `tests/conftest.py` now seeds `os.environ` from the project `.env`
+  (via `dotenv_values`) before applying stub defaults. Stubs apply only when a key is absent from
+  both shell and `.env` — the CI case. Fixes the pre-existing footgun where stub values shadowed real
+  keys (env beats .env in pydantic-settings), causing live-DB integration tests to fail without
+  manual key export.
+- **`tests/test_no_secret_leak.py`** (14 tests): pins that `repr`/`str`/`model_dump`/`model_dump_json`
+  never expose raw `SecretStr` sentinel values; `pg_dsn` is the documented exception (it is a plain-str
+  computed field that must contain the password); structlog capture confirms no sentinel leaks into
+  log events; profile-system invariants (default profile, precedence, valid profiles, no secrets in
+  `PROFILE_DEFAULTS`) are all tested.
+- **ADR 0019** (`docs/decisions/0019-rra-profile-config-system.md`): documents context, decision,
+  alternatives, consequences, and a Security implications section. ADR index updated.
+
+### Test results
+
+`uv run pytest tests/ -q --no-cov` → **246 passed** (232 original + 14 new), no failures.
+
+### Conftest fix rationale
+
+pydantic-settings source priority: env vars > .env file > defaults.
+`os.environ.setdefault(key, stub)` writes to the env-var source — it wins over the .env file.
+Result: real developer credentials in `.env` were shadowed by stubs, so any test that hit a live
+service saw stub values and failed (Voyage `pa-test`, Postgres `test-postgres-password`).
+Fix: read the `.env` into `os.environ` via `dotenv_values` BEFORE calling `setdefault`, so real
+credentials win when present. CI has no `.env`, so stubs still apply there. `dotenv_values` is a
+direct dep of python-dotenv (already in the lock file as a dep of pydantic-settings).
+
+### Deviations from brief
+
+- `retrieval.py` line ~151 already used `settings.rerank_model` (not a literal `"rerank-2"`).
+  The Phase 0 dev-log entry documented a pre-existing issue, but it had already been fixed.
+  No change needed. Verified with `grep -rn '"rerank-2"' src/` — the only occurrences are the
+  field default in `config.py`.
+
+## 2026-06-11 — Refactor kickoff (Phase 0): orient + baseline on `refactor/ports-adapters-security`
+
+Autonomous run start for the ports/adapters/profiles + security refactor (see CLAUDE.md north-star
+section, committed as the first commit on the integration branch).
+
+### Branch decision (unilateral, logged per working-style rule)
+
+Integration branch **`refactor/ports-adapters-security`** is based on **`docs/postmortems`**, not
+`main`. Rationale: `docs/postmortems` is a strict superset of main (6 commits, doc-only plus
+`7696564` which adds the POSTGRES_PASSWORD/RRA_API_KEY stubs the eval-gate CI workflow needs to
+pass). Basing on main would have made every phase PR fail CI until that fix merged. No code
+diverges; when `docs/postmortems` merges to main this collapses to a normal main-based branch.
+
+### Preconditions verified
+
+- `CRITIC_FORCE_VERDICT`: **unset** in shell (`printenv`) and **absent** from `.env` (checked key
+  names only; values never read into the session).
+- Local stack: `docker compose up -d` → all 7 services healthy; corpus present
+  (`corpus.chunks` = 2,745 rows).
+
+### Green baseline (commands + results)
+
+- **Unit + integration tests:** `uv run pytest tests/ -q` → **232 passed** (with `.env` exported).
+  Note: a bare `pytest` run fails `test_search_corpus_returns_results_from_live_db` because
+  `tests/conftest.py:23-24` stubs `ANTHROPIC_API_KEY`/`VOYAGE_API_KEY` via `os.environ.setdefault`,
+  and an env var (even a stub) beats the `.env` file in pydantic-settings. Pre-existing footgun,
+  not a regression; candidate fix in the config/profile phase.
+- **Eval harness, CI mode (free, no LLM calls):**
+  `uv run python -m rra.evals.run --fixture ci-valid --no-llm-judges --tag refactor-baseline-ci`
+  → citation_validity **1.000 PASS** (`evals/results/20260611T034138Z-refactor-baseline-ci.md`).
+- **Eval harness, full golden:** `uv run python -m rra.evals.run --tag refactor-baseline`
+  → **PARTIAL**: 24/30 scored, citation_validity **0.930**, 6 cases errored with Anthropic
+  **"credit balance is too low"** mid-run (`evals/results/20260611T040923Z-refactor-baseline.md`).
+  The errors are account-credit exhaustion, not system behavior. Last clean full-run anchor stays
+  **0.972** (critic ON, 2026-06-05, eval-maturation work).
+
+### Eval policy for the rest of this run (human directive)
+
+Owner directed: **no further eval runs** this session (API credits exhausted). Per-phase gates are
+therefore: unit tests locally + the free CI-mode citation gate in GitHub Actions on each PR. The
+full golden eval re-run to prove no regression vs baseline is **deferred until credits are
+restored** — it stays on the final-phase checklist, explicitly owed.
+
+### Current-state inventory
+
+Captured (boundaries, config-vs-hardcoded, secrets/PII flow, Fargate path, identity state); lands
+in `docs/refactor/00-implementation-report.md` with Phase 1. Headlines: config is already fully
+centralized (no `os.getenv` outside `src/rra/config.py`); MCP tools are in-process (ADR 0011) with
+**no scoping**; identity is a single `X-API-Key` compared non-constant-time (`src/rra/api.py:77`);
+`rerank-2` model string hardcoded at `src/rra/retrieval.py:151`; Terraform state is empty (nothing
+live, deploy-and-destroy honored).
 
 ## 2026-06-08 — ALB 503 hunt: wrong Dockerfile stage shipped, then a pinned deployment hid the fix
 

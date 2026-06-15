@@ -20,9 +20,6 @@ import psycopg
 import pypdf
 import structlog
 import tiktoken
-import voyageai
-import voyageai.error as _voyageai_error
-from pgvector.psycopg import register_vector
 from psycopg.types.json import Jsonb
 from tenacity import (
     retry,
@@ -32,13 +29,17 @@ from tenacity import (
 )
 
 from rra.config import PROJECT_ROOT, settings
+from rra.ports.embeddings import get_embeddings
+from rra.ports.vectorstore import get_vector_store
 from rra.rate_limit import RateLimiter
 
 log = structlog.get_logger(__name__)
 
 # ─── Constants ─────────────────────────────────────────────────────────────────
 
-VOYAGE_MAX_BATCH: Final[int] = 128
+# Note: VOYAGE_MAX_BATCH has moved to rra.adapters.voyage_embeddings — it is a
+# provider limit and belongs with the adapter.  Ingest now delegates batching
+# to the embeddings port, which handles batching internally.
 PDF_MIN_TEXT_LEN: Final[int] = 500  # texts shorter than this are likely scanned images
 
 DATA_DIR: Final[Path] = PROJECT_ROOT / "data" / "corpus"
@@ -419,55 +420,27 @@ def chunk_text(
 # ─── Embed ─────────────────────────────────────────────────────────────────────
 
 def embed_chunks(chunks: list[Chunk]) -> list[EmbeddedChunk]:
-    """Embed *chunks* with Voyage in batches of at most VOYAGE_MAX_BATCH."""
-    result: list[EmbeddedChunk] = []
+    """Embed *chunks* via the embeddings port.
 
-    for batch_start in range(0, len(chunks), VOYAGE_MAX_BATCH):
-        batch = chunks[batch_start : batch_start + VOYAGE_MAX_BATCH]
-        texts = [c.text for c in batch]
-        embeddings = _embed_batch(texts)
-        if len(embeddings) != len(batch):
-            raise RuntimeError(
-                f"Voyage returned {len(embeddings)} embeddings for {len(batch)} inputs"
-            )
-        for chunk, emb in zip(batch, embeddings):
-            result.append(EmbeddedChunk(chunk=chunk, embedding=emb))
+    Batching, retry logic, and the VOYAGE_MAX_BATCH limit have moved into the
+    VoyageEmbeddingsAdapter (rra.adapters.voyage_embeddings).  The public
+    signature of embed_chunks is UNCHANGED so callers and tests are unaffected.
+    """
+    if not chunks:
+        return []
 
-    return result
+    texts = [c.text for c in chunks]
+    embeddings = get_embeddings().embed_documents(texts)
 
+    if len(embeddings) != len(chunks):
+        raise RuntimeError(
+            f"Embeddings adapter returned {len(embeddings)} embeddings for {len(chunks)} inputs"
+        )
 
-def _is_embed_retryable(exc: BaseException) -> bool:
-    # Retry on transient Voyage errors: rate limits, server errors, timeouts,
-    # connection issues. AuthenticationError and InvalidRequestError are
-    # permanent — retrying wastes up to 4 minutes and still fails.
-    return isinstance(
-        exc,
-        (
-            _voyageai_error.RateLimitError,
-            _voyageai_error.ServerError,
-            _voyageai_error.ServiceUnavailableError,
-            _voyageai_error.APIConnectionError,
-            _voyageai_error.TryAgain,
-            _voyageai_error.Timeout,
-        ),
-    )
-
-
-@retry(
-    retry=retry_if_exception(_is_embed_retryable),
-    wait=wait_exponential(multiplier=1, min=2, max=60),
-    stop=stop_after_attempt(4),
-    reraise=True,
-)
-def _embed_batch(texts: list[str]) -> list[list[float]]:
-    """Call the Voyage embed endpoint for a single batch (≤ VOYAGE_MAX_BATCH items)."""
-    client = voyageai.Client(  # type: ignore[attr-defined]
-        api_key=settings.voyage_api_key.get_secret_value()
-    )
-    response = client.embed(texts, model=settings.embedding_model, input_type="document")
-    # voyageai stubs type .embeddings as list[list[float]] | list[list[int]];
-    # explicit float conversion ensures the return type is always list[list[float]].
-    return [[float(v) for v in emb] for emb in response.embeddings]
+    return [
+        EmbeddedChunk(chunk=chunk, embedding=emb)
+        for chunk, emb in zip(chunks, embeddings)
+    ]
 
 
 # ─── Write ─────────────────────────────────────────────────────────────────────
@@ -543,25 +516,8 @@ def write_to_scratch(chunks: list[Chunk]) -> None:
     )
 
 
-_UPSERT_SQL: Final[str] = """
-INSERT INTO corpus.chunks
-    (guidance_id, guidance_title, chunk_index, text, char_start, char_end, token_count, embedding, metadata)
-VALUES
-    (%(guidance_id)s, %(guidance_title)s, %(chunk_index)s, %(text)s,
-     %(char_start)s, %(char_end)s, %(token_count)s, %(embedding)s, %(metadata)s)
-ON CONFLICT (guidance_id, chunk_index) DO UPDATE SET
-    guidance_title = EXCLUDED.guidance_title,
-    text           = EXCLUDED.text,
-    char_start     = EXCLUDED.char_start,
-    char_end       = EXCLUDED.char_end,
-    token_count    = EXCLUDED.token_count,
-    embedding      = EXCLUDED.embedding,
-    metadata       = EXCLUDED.metadata
-"""
-
-
 def write_to_postgres(chunks: list[EmbeddedChunk]) -> None:
-    """Write (or upsert) *chunks* into corpus.chunks.
+    """Write (or upsert) *chunks* into corpus.chunks via the vector store port.
 
     All rows for the batch are written in a single transaction.
     The schema is created idempotently at the start of each call so the
@@ -570,67 +526,27 @@ def write_to_postgres(chunks: list[EmbeddedChunk]) -> None:
     if not chunks:
         return
 
-    with psycopg.connect(settings.pg_dsn) as conn:
-        _ensure_schema(conn)
-        register_vector(conn)
-
-        rows: list[dict[str, Any]] = [
-            {
-                "guidance_id": ec.chunk.guidance_id,
-                "guidance_title": ec.chunk.guidance_title,
-                "chunk_index": ec.chunk.chunk_index,
-                "text": ec.chunk.text,
-                "char_start": ec.chunk.char_start,
-                "char_end": ec.chunk.char_end,
-                "token_count": ec.chunk.token_count,
-                "embedding": ec.embedding,
-                "metadata": Jsonb({"cluster": ec.chunk.cluster}),
-            }
-            for ec in chunks
-        ]
-        with conn.cursor() as cur:
-            cur.executemany(_UPSERT_SQL, rows)
-        # psycopg Connection context manager commits on clean exit
+    rows: list[dict[str, Any]] = [
+        {
+            "guidance_id": ec.chunk.guidance_id,
+            "guidance_title": ec.chunk.guidance_title,
+            "chunk_index": ec.chunk.chunk_index,
+            "text": ec.chunk.text,
+            "char_start": ec.chunk.char_start,
+            "char_end": ec.chunk.char_end,
+            "token_count": ec.chunk.token_count,
+            "embedding": ec.embedding,
+            "metadata": Jsonb({"cluster": ec.chunk.cluster}),
+        }
+        for ec in chunks
+    ]
+    get_vector_store().upsert_chunks(rows)
 
     log.info(
         "corpus.write.done",
         guidance_id=chunks[0].chunk.guidance_id,
         n_chunks=len(chunks),
     )
-
-
-def _ensure_schema(conn: psycopg.Connection[Any]) -> None:
-    """Create the corpus schema and chunks table if they don't exist.
-
-    DDL mirrors init-db/01-init.sql exactly — update both together.
-    """
-    dim = settings.embedding_dim
-    ddl = f"""
-    CREATE EXTENSION IF NOT EXISTS vector;
-    CREATE SCHEMA IF NOT EXISTS corpus;
-    CREATE SCHEMA IF NOT EXISTS app;
-    CREATE TABLE IF NOT EXISTS corpus.chunks (
-        id              bigserial    PRIMARY KEY,
-        guidance_id     text         NOT NULL,
-        guidance_title  text         NOT NULL,
-        section         text,
-        chunk_index     int          NOT NULL,
-        text            text         NOT NULL,
-        char_start      int          NOT NULL,
-        char_end        int          NOT NULL,
-        token_count     int          NOT NULL,
-        embedding       vector({dim}) NOT NULL,
-        metadata        jsonb        DEFAULT '{{}}'::jsonb,
-        created_at      timestamptz  NOT NULL DEFAULT now(),
-        UNIQUE (guidance_id, chunk_index)
-    );
-    CREATE INDEX IF NOT EXISTS chunks_guidance_id_idx
-        ON corpus.chunks (guidance_id);
-    CREATE INDEX IF NOT EXISTS chunks_embedding_hnsw_idx
-        ON corpus.chunks USING hnsw (embedding vector_cosine_ops);
-    """
-    with conn.cursor() as cur:
-        cur.execute(ddl)
 
 
 # ─── Entry point ───────────────────────────────────────────────────────────────
@@ -720,12 +636,12 @@ def main() -> int:
     # Bootstrap schema — and optionally truncate — before any download or
     # embedding work. This surfaces schema problems immediately rather than
     # after expensive Voyage API calls have already been made.
-    with psycopg.connect(settings.pg_dsn) as conn:
-        _ensure_schema(conn)
-        if args.truncate:
+    get_vector_store().ensure_schema()
+    if args.truncate:
+        with psycopg.connect(settings.pg_dsn) as conn:
             with conn.cursor() as cur:
                 cur.execute("TRUNCATE TABLE corpus.chunks RESTART IDENTITY")
-            log.info("corpus.truncated")
+        log.info("corpus.truncated")
 
     limiter = RateLimiter(
         rate_per_second=settings.download_rate_per_second,

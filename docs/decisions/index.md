@@ -21,6 +21,13 @@ A flat list of all ADRs with status and one-line summary. Keep current — updat
 | 0015  | [Session tracking: persist and surface session_id](0015-session-tracking.md) | Active | 2026-06-02 | Day 10 (new); amends 0008; opens ADR 0016 |
 | 0017  | [Private-RDS bootstrap via a one-off in-VPC ingest task](0017-private-rds-bootstrap.md) | Superseded by 0018 | 2026-06-08 | Closes pre-deploy finding B1; → 0018 (corpus-sourcing) |
 | 0018  | [Bootstrap image bakes the cached corpus (FDA blocks the Fargate IP)](0018-bootstrap-bakes-cached-corpus.md) | Active | 2026-06-08 | Supersedes 0017; FDA/Akamai 4xx-blocks the datacenter IP |
+| 0019  | [RRA_PROFILE config/profile system](0019-rra-profile-config-system.md) | Active | 2026-06-11 | Phase 1 of ports/adapters refactor; per-profile defaults + SecretStr leak tests |
+| 0020  | [Ports and adapters at every external boundary](0020-ports-and-adapters-boundary.md) | Active | 2026-06-11 | Phase 2; wire-type decisions; security ports → 0021/0022 |
+| 0021  | [Identity/NHI port: deny-by-default tool scoping](0021-identity-nhi-port.md) | Active | 2026-06-11 | Phase 2b; advisory-locally/enforced-in-cloud trust model; constant-time key fix |
+| 0022  | [Guardrails/policy port at user-input + retrieval boundaries](0022-guardrails-policy-port.md) | Active | 2026-06-11 | Phase 2b; AllowAll wiring adapter; detector lands with security harness |
+| 0023  | [Layer-aware defense-in-depth security gate](0023-layer-aware-security-gate.md) | Active | 2026-06-12 | Phase 3; HF DeBERTa detector @ 0.2; coverage ≥ 0.80 merge gate; named residuals |
+| 0024  | [Security-incident observability (guardrail block → Langfuse score)](0024-security-incident-observability.md) | Active | 2026-06-15 | Phase 3.1; extends 0020 observability port; metadata-only `security.guardrail_block` |
+| 0025  | [Trace-content / PII posture: metadata, never confidential content](0025-trace-content-pii-posture.md) | Active | 2026-06-15 | redact product_context from traces; closes RT-4 gap; generation I/O policy |
 
 
 ## Conventions for this file

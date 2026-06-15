@@ -19,7 +19,7 @@ import pytest
 import psycopg
 
 from rra.config import settings
-from rra.ingest import Chunk, EmbeddedChunk, _ensure_schema, chunk_text, write_to_postgres
+from rra.ingest import Chunk, EmbeddedChunk, chunk_text, write_to_postgres
 
 # ─── Infrastructure ────────────────────────────────────────────────────────────
 

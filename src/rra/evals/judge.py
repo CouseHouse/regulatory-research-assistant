@@ -1,25 +1,17 @@
-"""Thin Anthropic SDK wrapper used by LLM-as-judge scorers.
+"""Thin LLM port wrapper used by LLM-as-judge scorers.
 
-A single module-level client is reused across all scorer calls in a run.
-The callable returned by make_judge_client() matches the (model, prompt) -> str
+A single module-level adapter is reused across all scorer calls in a run,
+via get_llm() which is already lru_cache'd to a process-lifetime singleton.
+The callable returned by judge_call() matches the (model, prompt) -> str
 interface both KeyFactCoverageScorer and PositionQualityScorer expect.
 """
 from __future__ import annotations
 
-import anthropic
-
-from rra.config import settings
-
-_client: anthropic.Anthropic | None = None
+from rra.ports.llm import LLMPort, get_llm
 
 
-def _get_client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(
-            api_key=settings.anthropic_api_key.get_secret_value()
-        )
-    return _client
+def _get_client() -> LLMPort:
+    return get_llm()
 
 
 def _emit_judge_observation(model: str, trace_id: str, usage: object) -> None:
@@ -89,7 +81,7 @@ def judge_call(
     if prefill is not None:
         messages.append({"role": "assistant", "content": prefill})
 
-    msg = _get_client().messages.create(
+    msg = _get_client().complete(
         model=model,
         max_tokens=512,
         messages=messages,

@@ -46,33 +46,25 @@ from rra.mcp_server.tools import (  # noqa: E402
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 
-def _make_cursor(rows: list[dict] | dict | None) -> MagicMock:
-    """Return a mock cursor that yields rows from fetchone/fetchall."""
-    cur = MagicMock()
-    cur.__enter__ = lambda s: s
-    cur.__exit__ = MagicMock(return_value=False)
-    if isinstance(rows, list):
-        cur.fetchall.return_value = rows
-        cur.fetchone.return_value = rows[0] if rows else None
-    else:
-        cur.fetchone.return_value = rows
-        cur.fetchall.return_value = [] if rows is None else [rows]
-    return cur
+def _patch_fetch_guidance(rows: list[dict]):
+    """Patch get_vector_store().fetch_guidance_chunks() to return *rows*."""
+    mock_store = MagicMock()
+    mock_store.fetch_guidance_chunks.return_value = rows
+    return patch("rra.mcp_server.tools.get_vector_store", return_value=mock_store)
 
 
-def _make_conn(cursor: MagicMock) -> MagicMock:
-    conn = MagicMock()
-    conn.__enter__ = lambda s: s
-    conn.__exit__ = MagicMock(return_value=False)
-    conn.cursor.return_value = cursor
-    return conn
+def _patch_fetch_chunk(row: dict | None):
+    """Patch get_vector_store().fetch_chunk() to return *row* (or None)."""
+    mock_store = MagicMock()
+    mock_store.fetch_chunk.return_value = row
+    return patch("rra.mcp_server.tools.get_vector_store", return_value=mock_store)
 
 
-def _patch_get_conn(row_or_rows):
-    """Context manager: patch db.get_conn to return the given row(s)."""
-    cur = _make_cursor(row_or_rows)
-    conn = _make_conn(cur)
-    return patch("rra.mcp_server.tools.get_conn", return_value=conn)
+def _patch_list_recent(rows: list[dict]):
+    """Patch get_vector_store().list_recent_guidances_rows() to return *rows*."""
+    mock_store = MagicMock()
+    mock_store.list_recent_guidances_rows.return_value = rows
+    return patch("rra.mcp_server.tools.get_vector_store", return_value=mock_store)
 
 
 # ─── config ──────────────────────────────────────────────────────────────────
@@ -296,7 +288,7 @@ class TestFetchGuidance:
             {"chunk_index": 0, "guidance_title": "My Guide", "text": "Part A"},
             {"chunk_index": 1, "guidance_title": "My Guide", "text": "Part B"},
         ]
-        with _patch_get_conn(rows):
+        with _patch_fetch_guidance(rows):
             result = fetch_guidance("gd-test")
         assert isinstance(result, FetchGuidanceResult)
         assert result.guidance_id == "gd-test"
@@ -305,7 +297,7 @@ class TestFetchGuidance:
         assert result.chunk_count == 2
 
     def test_not_found_raises_tool_error(self) -> None:
-        with _patch_get_conn([]):
+        with _patch_fetch_guidance([]):
             with pytest.raises(ToolError) as exc_info:
                 fetch_guidance("nonexistent")
         err = exc_info.value
@@ -313,7 +305,9 @@ class TestFetchGuidance:
         assert err.retryable is False
 
     def test_db_failure_raises_retryable_error(self) -> None:
-        with patch("rra.mcp_server.tools.get_conn", side_effect=Exception("pool timeout")):
+        mock_store = MagicMock()
+        mock_store.fetch_guidance_chunks.side_effect = Exception("pool timeout")
+        with patch("rra.mcp_server.tools.get_vector_store", return_value=mock_store):
             with pytest.raises(ToolError) as exc_info:
                 fetch_guidance("gd-1")
         assert exc_info.value.code == "DB_ERROR"
@@ -327,7 +321,7 @@ class TestFetchGuidance:
                 "text": "Text with\nembedded\nnewlines",
             }
         ]
-        with _patch_get_conn(rows):
+        with _patch_fetch_guidance(rows):
             result = fetch_guidance("gd-1")
         assert "\n" in result.text  # raw artifacts preserved
 
@@ -340,7 +334,7 @@ class TestCheckCitationKeyExistence:
 
     def test_key_exists_verified_true(self) -> None:
         row = {"text": "The chunk text.", "char_start": 100, "char_end": 115}
-        with _patch_get_conn(row):
+        with _patch_fetch_chunk(row):
             result = check_citation("some claim", "gd-1", 3)
         assert result.verified is True
         assert result.source_text == "The chunk text."
@@ -349,7 +343,7 @@ class TestCheckCitationKeyExistence:
 
     def test_key_not_found_verified_false_not_tool_error(self) -> None:
         """NOT_FOUND must return CitationCheckResult(verified=False), not raise ToolError."""
-        with _patch_get_conn(None):
+        with _patch_fetch_chunk(None):
             result = check_citation("claim", "gd-missing", 99)
         assert isinstance(result, CitationCheckResult)
         assert result.verified is False
@@ -358,7 +352,9 @@ class TestCheckCitationKeyExistence:
         assert result.similarity_score is None
 
     def test_db_failure_raises_tool_error(self) -> None:
-        with patch("rra.mcp_server.tools.get_conn", side_effect=Exception("timeout")):
+        mock_store = MagicMock()
+        mock_store.fetch_chunk.side_effect = Exception("timeout")
+        with patch("rra.mcp_server.tools.get_vector_store", return_value=mock_store):
             with pytest.raises(ToolError) as exc_info:
                 check_citation("claim", "gd-1", 0)
         assert exc_info.value.code == "DB_ERROR"
@@ -367,7 +363,7 @@ class TestCheckCitationKeyExistence:
     def test_source_text_returned_unconditionally(self) -> None:
         """source_text must come back even on key-existence mode."""
         row = {"text": "Important passage.", "char_start": 0, "char_end": 18}
-        with _patch_get_conn(row):
+        with _patch_fetch_chunk(row):
             result = check_citation("claim", "gd-1", 0)
         assert result.source_text == "Important passage."
 
@@ -382,7 +378,7 @@ class TestCheckCitationEmptyQuote:
 
     def test_empty_quote_not_verified(self) -> None:
         row = {"text": "Some chunk text exists.", "char_start": 0, "char_end": 23}
-        with _patch_get_conn(row):
+        with _patch_fetch_chunk(row):
             result = check_citation("claim", "gd-1", 0, quoted_text="")
         assert result.verified is False
         assert result.similarity_score is None
@@ -391,7 +387,7 @@ class TestCheckCitationEmptyQuote:
 
     def test_whitespace_only_quote_not_verified(self) -> None:
         row = {"text": "Some chunk text exists.", "char_start": 0, "char_end": 23}
-        with _patch_get_conn(row):
+        with _patch_fetch_chunk(row):
             result = check_citation("claim", "gd-1", 0, quoted_text="   \n  ")
         assert result.verified is False
 
@@ -399,7 +395,7 @@ class TestCheckCitationEmptyQuote:
         """Guard (Sign-off A): the empty-quote fix must NOT change the None
         key-existence path — that is the critic's path and stays verified=True."""
         row = {"text": "Some chunk text exists.", "char_start": 0, "char_end": 23}
-        with _patch_get_conn(row):
+        with _patch_fetch_chunk(row):
             result = check_citation("claim", "gd-1", 0, quoted_text=None)
         assert result.verified is True
 
@@ -422,7 +418,7 @@ class TestCheckCitationBoilerplateSeam:
             "the software for its intended use"
         )
         row = {"text": chunk_text, "char_start": 0, "char_end": len(chunk_text)}
-        with _patch_get_conn(row):
+        with _patch_fetch_chunk(row):
             result = check_citation("claim", "gd-1", 0, quoted_text=quote)
         # Seam breaks the substring path; coverage falls below τ → verified=False,
         # but a similarity_score IS returned for the τ-distribution.
@@ -441,7 +437,7 @@ class TestCheckCitationSubstringMatch:
         chunk_text = "The applicant must submit a 510(k) premarket notification."
         quote = "submit a 510(k) premarket notification"
         row = self._chunk_row(chunk_text, char_start=200)
-        with _patch_get_conn(row):
+        with _patch_fetch_chunk(row):
             result = check_citation("claim", "gd-1", 0, quoted_text=quote)
         assert result.verified is True
         assert result.matched_doc_span is not None
@@ -456,7 +452,7 @@ class TestCheckCitationSubstringMatch:
         quote = "comply with 21 CFR Part 820"
         char_start = 1000
         row = {"text": chunk_text, "char_start": char_start, "char_end": char_start + len(chunk_text)}
-        with _patch_get_conn(row):
+        with _patch_fetch_chunk(row):
             result = check_citation("claim", "gd-1", 0, quoted_text=quote)
         assert result.verified is True
         assert result.matched_doc_span is not None
@@ -470,7 +466,7 @@ class TestCheckCitationSubstringMatch:
         stored = "The device\nmust comply\nwith all requirements."
         quote = "device must comply with all"  # normalized form from model
         row = {"text": stored, "char_start": 0, "char_end": len(stored)}
-        with _patch_get_conn(row):
+        with _patch_fetch_chunk(row):
             result = check_citation("claim", "gd-1", 0, quoted_text=quote)
         assert result.verified is True
 
@@ -479,7 +475,7 @@ class TestCheckCitationSubstringMatch:
         chunk_text = "A clear and direct statement."
         quote = "clear and direct"
         row = {"text": chunk_text, "char_start": 0, "char_end": len(chunk_text)}
-        with _patch_get_conn(row):
+        with _patch_fetch_chunk(row):
             result = check_citation("claim", "gd-1", 0, quoted_text=quote)
         assert result.similarity_score is None
 
@@ -508,7 +504,7 @@ class TestCheckCitationCoverageRatio:
             quote = "sponsor  must demonstrate substantial equivalence"  # double space
         # The coverage ratio for this quote should be high
         row = self._row(chunk_text)
-        with _patch_get_conn(row):
+        with _patch_fetch_chunk(row):
             result = check_citation("claim", "gd-1", 0, quoted_text=quote)
         # Either verified via substring (Step 2) or coverage (Step 3) — both acceptable
         # The key invariant is it must verify
@@ -519,7 +515,7 @@ class TestCheckCitationCoverageRatio:
         chunk_text = "The 510(k) pathway requires substantial equivalence to a predicate device."
         quote = "Premarket Approval requires safety and effectiveness studies"  # totally different
         row = self._row(chunk_text)
-        with _patch_get_conn(row):
+        with _patch_fetch_chunk(row):
             result = check_citation("claim", "gd-1", 0, quoted_text=quote)
         assert result.verified is False
         assert result.similarity_score is not None
@@ -530,7 +526,7 @@ class TestCheckCitationCoverageRatio:
         chunk_text = "A" * 200
         quote = "B" * 50  # completely different
         row = self._row(chunk_text)
-        with _patch_get_conn(row):
+        with _patch_fetch_chunk(row):
             result = check_citation("claim", "gd-1", 0, quoted_text=quote)
         assert result.verified is False
         assert result.similarity_score is not None
@@ -540,7 +536,7 @@ class TestCheckCitationCoverageRatio:
         chunk_text = "Actual chunk content."
         quote = "Something completely different that will not match."
         row = self._row(chunk_text)
-        with _patch_get_conn(row):
+        with _patch_fetch_chunk(row):
             result = check_citation("claim", "gd-1", 0, quoted_text=quote)
         assert result.verified is False
         assert result.source_text == chunk_text
@@ -557,7 +553,7 @@ class TestCheckCitationCoverageRatio:
         if norm_q not in norm_c:
             # Good — falls to Step 3
             row = self._row(chunk_text)
-            with _patch_get_conn(row):
+            with _patch_fetch_chunk(row):
                 result = check_citation("claim", "gd-1", 0, quoted_text=quote)
             if result.verified:
                 assert result.matched_doc_span is None  # Step 3 cannot pinpoint
@@ -590,16 +586,7 @@ class TestRatioBugRegression:
 
         # But our implementation should verify it (via substring or coverage)
         row = {"text": chunk_text, "char_start": 0, "char_end": len(chunk_text)}
-        with patch("rra.mcp_server.tools.get_conn") as mock_gc:
-            cur = MagicMock()
-            cur.__enter__ = lambda s: s
-            cur.__exit__ = MagicMock(return_value=False)
-            cur.fetchone.return_value = row
-            conn = MagicMock()
-            conn.__enter__ = lambda s: s
-            conn.__exit__ = MagicMock(return_value=False)
-            conn.cursor.return_value = cur
-            mock_gc.return_value = conn
+        with _patch_fetch_chunk(row):
             result = check_citation("claim", "gd-1", 0, quoted_text=quote)
 
         assert result.verified is True, (
@@ -731,7 +718,7 @@ class TestListRecentGuidances:
                 "ingest_date": datetime(2026, 1, 15, tzinfo=timezone.utc),
             }
         ]
-        with _patch_get_conn(rows):
+        with _patch_list_recent(rows):
             result = list_recent_guidances("2026-01-01")
         assert isinstance(result, ListRecentGuidancesResult)
         assert len(result.guidances) == 1
@@ -745,13 +732,15 @@ class TestListRecentGuidances:
         assert err.retryable is False
 
     def test_db_failure_raises_retryable_error(self) -> None:
-        with patch("rra.mcp_server.tools.get_conn", side_effect=Exception("pool exhausted")):
+        mock_store = MagicMock()
+        mock_store.list_recent_guidances_rows.side_effect = Exception("pool exhausted")
+        with patch("rra.mcp_server.tools.get_vector_store", return_value=mock_store):
             with pytest.raises(ToolError) as exc_info:
                 list_recent_guidances("2026-01-01")
         assert exc_info.value.code == "DB_ERROR"
         assert exc_info.value.retryable is True
 
     def test_empty_result_ok(self) -> None:
-        with _patch_get_conn([]):
+        with _patch_list_recent([]):
             result = list_recent_guidances("2030-01-01")
         assert result.guidances == []

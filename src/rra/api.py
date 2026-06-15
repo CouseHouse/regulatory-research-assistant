@@ -6,19 +6,21 @@ Day 4: replaces the Anthropic call block with the LangGraph orchestrator.
 """
 from __future__ import annotations
 
-import contextlib
 import uuid
 from typing import Annotated, Any
 
 import structlog
 from fastapi import FastAPI, Header, HTTPException, status
 
+from rra.agents._sanitize import strip_markdown_images
 from rra.citations import parse_answer
 from rra.config import settings
 from rra.db import get_pool
 from rra.graph import run_graph
+from rra.ports.guardrails import get_guardrails
+from rra.ports.identity import get_identity
+from rra.ports.observability import get_observability
 from rra.schemas import Citation, QueryRequest, QueryResponse, RetrievedPassage
-from rra.tracing import get_langfuse
 
 log = structlog.get_logger(__name__)
 
@@ -75,7 +77,18 @@ def readyz() -> dict[str, str]:
 
 
 def _verify_api_key(x_api_key: str | None) -> None:
-    if x_api_key != settings.rra_api_key.get_secret_value():
+    """Verify the caller's API key via the identity port.
+
+    Delegates to get_identity().verify_api_caller() which uses
+    secrets.compare_digest for constant-time comparison (fixes the
+    timing-attack-prone != compare; ADR 0021).
+
+    Returns normally on success.  Raises HTTP 401 on any mismatch.
+    The response body is identical whether the key was absent, wrong, or
+    close — no hint about the mismatch is surfaced.
+    """
+    principal = get_identity().verify_api_caller(x_api_key or "")
+    if principal is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing API key",
@@ -104,37 +117,75 @@ def query(
 ) -> QueryResponse:
     _verify_api_key(x_api_key)
 
+    obs = get_observability()
+
+    # ── Guardrails: user-input boundary ───────────────────────────────────────
+    # Check the query and product_context BEFORE the graph runs.
+    # With AllowAllGuardrails (phase-2 wiring) this is a no-op; the real
+    # detector is swapped in during the security-harness phase.
+    # On block: HTTP 400 with a generic message — NO echoing of the query text.
+    # Logging: ONLY boundary + categories logged on block; never the text.
+    guardrails = get_guardrails()
+    query_verdict = guardrails.check(request.query, boundary="user_input")
+    if not query_verdict.allowed:
+        log.warning(
+            "guardrails.blocked",
+            boundary=query_verdict.boundary,
+            categories=query_verdict.categories,
+            # Intentionally omit: request.query, score, reason (might echo content).
+        )
+        # Surface the incident in the trace UI (ADR 0024). Metadata-only — the
+        # offending query text is NEVER recorded (RT-redteam.md). No request span
+        # is open yet, so the adapter hosts the score on a one-shot incident trace.
+        obs.record_security_event(
+            boundary="user_input",
+            categories=query_verdict.categories,
+            detector_score=query_verdict.score,
+            reason=query_verdict.reason,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="request blocked by content policy",
+        )
+    if request.product_context:
+        ctx_verdict = guardrails.check(
+            request.product_context, boundary="user_input"
+        )
+        if not ctx_verdict.allowed:
+            log.warning(
+                "guardrails.blocked",
+                boundary=ctx_verdict.boundary,
+                categories=ctx_verdict.categories,
+            )
+            obs.record_security_event(
+                boundary="user_input",
+                categories=ctx_verdict.categories,
+                detector_score=ctx_verdict.score,
+                reason=ctx_verdict.reason,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="request blocked by content policy",
+            )
+
     session_id = str(uuid.uuid4())
     log.info("query.start", session_id=session_id, query=request.query[:120])
 
-    lf = get_langfuse()
     # Propagate session_id onto the parent span AND the child spans the graph
     # opens, so Langfuse's Sessions view groups this request's whole trace —
     # metadata={"session_id": ...} alone does NOT populate Sessions (v4). The
     # "query" span must START INSIDE this context to inherit it, so session_cm is
-    # the OUTER with-context. Imported lazily to keep langfuse off the cold-path
-    # when tracing is disabled (mirrors tracing.get_langfuse).
-    session_cm: Any
-    if lf is not None:
-        from langfuse import propagate_attributes
-
-        session_cm = propagate_attributes(session_id=session_id)
-    else:
-        session_cm = contextlib.nullcontext()
-
-    trace_cm = (
-        lf.start_as_current_observation(
-            name="query",
-            as_type="span",
-            input={"query": request.query, "product_context": request.product_context},
-            metadata={"session_id": session_id},
-        )
-        if lf is not None
-        else contextlib.nullcontext(None)
-    )
-
-    with session_cm, trace_cm as trace_span:
-        trace_id = lf.get_current_trace_id() if lf is not None else None
+    # the OUTER with-context.
+    with obs.propagate_session(session_id), obs.start_span(
+        "query",
+        as_type="span",
+        # ADR 0025: product_context is confidential commercial info — never store its
+        # text in a trace; record only its size. The query (regulatory question) is kept
+        # for trace utility (general question, not device CCI).
+        input={"query": request.query, "product_context_chars": len(request.product_context)},
+        metadata={"session_id": session_id},
+    ) as trace_span:
+        trace_id = obs.current_trace_id()
 
         final_state = run_graph(
             {
@@ -151,6 +202,16 @@ def query(
         # user-facing prose (with <q>…</q> envelopes stripped) and the citation
         # triples carrying each analyst-emitted supporting quote (ADR 0013).
         clean_prose, triples = parse_answer(draft)
+        # Output filter (RT-4 / LLM05): markdown images are a zero-click
+        # exfiltration channel when the answer renders in a downstream client.
+        # Deny-all — regulatory answers never legitimately contain images.
+        clean_prose, images_stripped = strip_markdown_images(clean_prose)
+        if images_stripped:
+            log.warning(
+                "output_filter.images_stripped",
+                session_id=session_id,
+                count=images_stripped,
+            )
         citations = _resolve_citations(triples, passages, session_id=session_id)
         no_quote_count = sum(1 for c in citations if not c.quoted_text)
         warning = _build_warning(final_state)
@@ -166,16 +227,14 @@ def query(
             total_tokens=sum(final_state.get("token_usage", {}).values()),
         )
 
-        if trace_span is not None:
-            trace_span.update(
-                output={
-                    "answer": clean_prose[:200],
-                    "citation_count": len(citations),
-                    "no_quote_citations": no_quote_count,
-                }
-            )
-        if lf is not None:
-            lf.flush()
+        trace_span.update(
+            output={
+                "answer": clean_prose[:200],
+                "citation_count": len(citations),
+                "no_quote_citations": no_quote_count,
+            }
+        )
+        obs.flush()
 
         return QueryResponse(
             answer=clean_prose,
@@ -235,13 +294,30 @@ def _resolve_citations(
                 session_id=session_id,
             )
 
+        # Output filter (RT-4 / LLM05, RT Phase-3 finding RT-P3-3): quoted_text
+        # is a verbatim span the analyst copied from untrusted corpus content and
+        # ships to the client in the citations[] array.  The prose-level image
+        # strip does NOT reach here, so a markdown-image exfil payload laundered
+        # through the <q> channel would otherwise bypass the filter.  Strip it
+        # here too — same deny-all rationale.
+        safe_quote = ""
+        if quote:
+            safe_quote, q_imgs = strip_markdown_images(quote)
+            if q_imgs:
+                log.warning(
+                    "output_filter.images_stripped",
+                    session_id=session_id,
+                    location="citation_quote",
+                    count=q_imgs,
+                )
+
         citations.append(
             Citation(
                 guidance_id=guidance_id,
                 chunk_index=chunk_index,
                 char_start=passage.char_start,
                 char_end=passage.char_end,
-                quoted_text=quote or "",  # NO slice fallback — ever (ADR 0013).
+                quoted_text=safe_quote,  # NO slice fallback — ever (ADR 0013).
             )
         )
 

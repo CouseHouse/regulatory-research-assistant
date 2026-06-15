@@ -31,12 +31,10 @@ Prompt caching applied to system prompt (exceeds 1024-token threshold).
 """
 from __future__ import annotations
 
-import contextlib
 import json
 from typing import Any
 
 import structlog
-from anthropic import Anthropic
 from anthropic.types import (
     CacheControlEphemeralParam,
     TextBlockParam,
@@ -44,12 +42,16 @@ from anthropic.types import (
     ToolParam,
 )
 
+from rra.agents._sanitize import xml_escape_untrusted
 from rra.agents.types import CriticNote, CriticOutput
 from rra.citations import parse_answer
 from rra.config import settings
-from rra.mcp_server.tools import CitationCheckResult, ToolError, check_citation
+from rra.ports.llm import get_llm
+from rra.ports.observability import get_observability
+from rra.mcp_server.tools import CitationCheckResult, ToolError
+from rra.ports.identity import get_identity
+from rra.ports.tools import get_tool_transport
 from rra.schemas import RetrievedPassage
-from rra.tracing import get_langfuse
 
 log = structlog.get_logger(__name__)
 
@@ -190,17 +192,12 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
     query: str = state.get("query", "")
     revision_count: int = state.get("revision_count", 0)
 
-    lf = get_langfuse()
-    span_cm = (
-        lf.start_as_current_observation(
-            name="critic",
-            as_type="span",
-            input={"draft_preview": draft[:200], "revision_count": revision_count},
-        )
-        if lf is not None
-        else contextlib.nullcontext(None)
-    )
-    with span_cm as span:
+    obs = get_observability()
+    with obs.start_span(
+        "critic",
+        as_type="span",
+        input={"draft_preview": draft[:200], "revision_count": revision_count},
+    ) as span:
         # ── Force-verdict gate (TEST/EVAL ONLY) ───────────────────────────────
         # When set, skip the LLM call and emit the configured verdict directly.
         # Downstream logic (revision_count increment, cap_hit, routing) is unchanged.
@@ -223,10 +220,9 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
                 new_revision_count = revision_count + 1
                 if new_revision_count >= settings.max_critic_revisions:
                     cap_hit = True
-            if span is not None:
-                span.update(
-                    output={"verdict": force_verdict, "forced": True, "cap_hit": cap_hit},
-                )
+            span.update(
+                output={"verdict": force_verdict, "forced": True, "cap_hit": cap_hit},
+            )
             suffix = "" if revision_count == 0 else f"_rev{revision_count}"
             return {
                 "verdict": force_verdict,
@@ -244,12 +240,17 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
         passage_map = {(p.guidance_id, p.chunk_index): p for p in passages}
 
         # Build passage summary for the critic prompt.
+        # RT-1 fix sites #3 (guidance_title) and #4 (text): passage text and
+        # title are untrusted corpus content and must be XML-escaped before
+        # interpolation into the prompt structure.  See _sanitize.py for rationale.
         passage_summary_parts = ["<passages>"]
         for p in passages:
+            safe_title = xml_escape_untrusted(p.guidance_title)
+            safe_text = xml_escape_untrusted(p.text)
             passage_summary_parts.append(
                 f'<passage guidance_id="{p.guidance_id}" chunk_index="{p.chunk_index}">\n'
-                f"<title>{p.guidance_title}</title>\n"
-                f"<text>{p.text}</text>\n"
+                f"<title>{safe_title}</title>\n"
+                f"<text>{safe_text}</text>\n"
                 f"</passage>"
             )
         passage_summary_parts.append("</passages>")
@@ -284,37 +285,36 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
         checks: list[tuple[str, str | None, CitationCheckResult | ToolError]] = []
         for guidance_id, chunk_index, quote in inline_citations:
             ckey = f"{guidance_id}:{chunk_index}"
-            cc_cm = (
-                span.start_as_current_observation(
-                    name="check_citation",
-                    as_type="span",
-                    input={"citation_key": ckey, "has_quote": quote is not None},
-                )
-                if span is not None
-                else contextlib.nullcontext(None)
-            )
-            with cc_cm as cc_span:
+            with span.start_as_current_observation(
+                name="check_citation",
+                as_type="span",
+                input={"citation_key": ckey, "has_quote": quote is not None},
+            ) as cc_span:
                 try:
-                    cc_result = check_citation(
-                        claim=query,
-                        guidance_id=guidance_id,
-                        chunk_index=chunk_index,
-                        quoted_text=quote,
+                    cc_raw = get_tool_transport().call_tool(
+                        "check_citation",
+                        {
+                            "claim": query,
+                            "guidance_id": guidance_id,
+                            "chunk_index": chunk_index,
+                            "quoted_text": quote,
+                        },
+                        principal=get_identity().agent_principal("critic"),
                     )
+                    assert isinstance(cc_raw, CitationCheckResult)
+                    cc_result = cc_raw
                     checks.append((ckey, quote, cc_result))
-                    if cc_span is not None:
-                        cc_span.update(
-                            output={
-                                "verified": cc_result.verified,
-                                "similarity_score": cc_result.similarity_score,
-                            }
-                        )
+                    cc_span.update(
+                        output={
+                            "verified": cc_result.verified,
+                            "similarity_score": cc_result.similarity_score,
+                        }
+                    )
                 except ToolError as exc:
                     checks.append((ckey, quote, exc))
-                    if cc_span is not None:
-                        cc_span.update(
-                            output={"error": exc.code, "retryable": exc.retryable}
-                        )
+                    cc_span.update(
+                        output={"error": exc.code, "retryable": exc.retryable}
+                    )
                 except Exception as exc:
                     tool_err = ToolError(
                         code="UNKNOWN",
@@ -323,8 +323,7 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
                         retryable=True,
                     )
                     checks.append((ckey, quote, tool_err))
-                    if cc_span is not None:
-                        cc_span.update(output={"error": "UNKNOWN", "retryable": True})
+                    cc_span.update(output={"error": "UNKNOWN", "retryable": True})
 
         # Build <citation_checks> XML. After the flip, verified="false" is no
         # longer monolithic: it splits into an ADDRESS failure (cited chunk
@@ -332,6 +331,16 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
         # faithful). Each <check> carries check="address|quote" plus a machine
         # reason so the critic can tell a hallucinated address from an unfaithful
         # quote (ADR 0013); a valid bare address stays a clean key-existence pass.
+        #
+        # RT-1 fix sites #5 (source_text) and #6 (quoted_text):
+        # - source_text is the stored corpus chunk returned by check_citation —
+        #   untrusted corpus content; XML-escaped per ADR 0022 untrusted-text rule.
+        # - quoted_text is the analyst's verbatim quote copied from the passage,
+        #   which itself originates from untrusted corpus content; XML-escaped.
+        # Both are data, not commands.  Escaping prevents injection via the
+        # critic's trust-anchor channel (<citation_checks> is the one block the
+        # critic is told is deterministic ground truth — the highest-value target
+        # for a forged passage to exploit).
         check_parts = ["<citation_checks>"]
         for ckey, quote, result in checks:
             if isinstance(result, ToolError):
@@ -343,17 +352,22 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
                 )
             elif result.verified and quote is None:
                 # Bare citation, address resolves — key-existence mode (no quote).
+                # RT-1 fix site #5: source_text is corpus content — escape it.
+                safe_source = xml_escape_untrusted(result.source_text or "")
                 check_parts.append(
                     f'  <check citation_key="{ckey}" verified="true" inconclusive="false" check="address">\n'
-                    f"    <source_text>{result.source_text}</source_text>\n"
+                    f"    <source_text>{safe_source}</source_text>\n"
                     f"  </check>"
                 )
             elif result.verified:
                 # Quote supplied AND faithfully present in the cited chunk.
+                # RT-1 fix sites #5 (source_text) and #6 (quoted_text).
+                safe_quote = xml_escape_untrusted(quote or "")
+                safe_source = xml_escape_untrusted(result.source_text or "")
                 check_parts.append(
                     f'  <check citation_key="{ckey}" verified="true" inconclusive="false" check="quote">\n'
-                    f"    <quoted_text>{quote}</quoted_text>\n"
-                    f"    <source_text>{result.source_text}</source_text>\n"
+                    f"    <quoted_text>{safe_quote}</quoted_text>\n"
+                    f"    <source_text>{safe_source}</source_text>\n"
                     f"  </check>"
                 )
             elif not result.source_text:
@@ -365,15 +379,18 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
                 )
             else:
                 # Quote-faithfulness failure: chunk exists, quote not faithful.
+                # RT-1 fix sites #5 (source_text) and #6 (quoted_text).
                 score = (
                     "n/a"
                     if result.similarity_score is None
                     else f"{result.similarity_score:.2f}"
                 )
+                safe_quote = xml_escape_untrusted(quote or "")
+                safe_source = xml_escape_untrusted(result.source_text or "")
                 check_parts.append(
                     f'  <check citation_key="{ckey}" verified="false" inconclusive="false" check="quote" reason="quote_unfaithful">\n'
-                    f"    <quoted_text>{quote}</quoted_text>\n"
-                    f"    <source_text>{result.source_text}</source_text>\n"
+                    f"    <quoted_text>{safe_quote}</quoted_text>\n"
+                    f"    <source_text>{safe_source}</source_text>\n"
                     f"    <similarity_score>{score}</similarity_score>\n"
                     f"  </check>"
                 )
@@ -399,19 +416,14 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
             "Return your verdict via the submit_verdict tool."
         )
 
-        client = Anthropic(api_key=settings.anthropic_api_key.get_secret_value())
+        llm = get_llm()
 
-        gen_cm = (
-            span.start_as_current_observation(
-                name="anthropic:critic",
-                as_type="generation",
-                model=settings.critic_model,
-            )
-            if span is not None
-            else contextlib.nullcontext(None)
-        )
-        with gen_cm as gen:
-            message = client.messages.create(
+        with span.start_as_current_observation(
+            name="anthropic:critic",
+            as_type="generation",
+            model=settings.critic_model,
+        ) as gen:
+            message = llm.complete(
                 model=settings.critic_model,
                 max_tokens=512,
                 system=[
@@ -425,13 +437,12 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
                 tools=_VERDICT_TOOL,
                 tool_choice=ToolChoiceToolParam(type="tool", name="submit_verdict"),
             )
-            if gen is not None:
-                gen.update(
-                    usage_details={
-                        "input": message.usage.input_tokens,
-                        "output": message.usage.output_tokens,
-                    },
-                )
+            gen.update(
+                usage_details={
+                    "input": message.usage.input_tokens,
+                    "output": message.usage.output_tokens,
+                },
+            )
 
         # Extract tool-use block.
         tool_input: dict[str, Any] = {}
@@ -441,23 +452,48 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
                 break
 
         if not tool_input:
-            # Malformed output: treat as approve to avoid infinite loop (ADR 0009).
+            # RT-2 fix: fail CLOSED on malformed output — escalate to human
+            # review, NEVER approve.  The old default-approve "to avoid infinite
+            # loop" is dangerous: an injection (RT-1) that merely disrupts the
+            # critic's tool call yields automatic approval of a fabricated draft.
+            # escalate exits the graph immediately (ADR 0009) without looping, so
+            # it is a correct infinite-loop guard and a safer default.
+            # Logged with session_id only — no draft content, no payload.
             log.error(
-                "critic.no_tool_output",
+                "critic.malformed_verdict",
                 session_id=state.get("session_id"),
-                draft_preview=draft[:120],
+                reason="no_tool_output",
             )
-            tool_input = {"verdict": "approve", "notes": []}
+            tool_input = {
+                "verdict": "escalate",
+                "notes": [
+                    {
+                        "citation_key": None,
+                        "issue": "critic produced no tool call; escalating to human review",
+                        "severity": "hard",
+                    }
+                ],
+            }
 
         try:
             critic_output = CriticOutput.model_validate(tool_input)
         except Exception:
+            # RT-2 fix: fail CLOSED on parse errors too — same rationale.
             log.error(
-                "critic.parse_error",
+                "critic.malformed_verdict",
                 session_id=state.get("session_id"),
-                raw=json.dumps(tool_input)[:200],
+                reason="parse_error",
             )
-            critic_output = CriticOutput(verdict="approve", notes=[])
+            critic_output = CriticOutput(
+                verdict="escalate",
+                notes=[
+                    CriticNote(
+                        citation_key=None,
+                        issue="critic tool-call parse error; escalating to human review",
+                        severity="hard",
+                    )
+                ],
+            )
 
         # Validate notes — drop any that reference non-existent passages.
         validated_notes: list[CriticNote] = []
@@ -506,14 +542,13 @@ def run_critic(state: dict[str, Any]) -> dict[str, Any]:
             output_tokens=message.usage.output_tokens,
         )
 
-        if span is not None:
-            span.update(
-                output={
-                    "verdict": critic_output.verdict,
-                    "note_count": len(validated_notes),
-                    "cap_hit": cap_hit,
-                },
-            )
+        span.update(
+            output={
+                "verdict": critic_output.verdict,
+                "note_count": len(validated_notes),
+                "cap_hit": cap_hit,
+            },
+        )
 
         suffix = "" if revision_count == 0 else f"_rev{revision_count}"
         return {
