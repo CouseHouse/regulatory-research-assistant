@@ -142,15 +142,22 @@ def run_researcher(state: dict[str, Any]) -> dict[str, Any]:
                         chunk_index=p.chunk_index,
                         # Intentionally omit: p.text, p.guidance_title, categories, score.
                     )
+                    # Surface the indirect-injection block in the trace UI (ADR
+                    # 0024) as a filterable security score on the live request
+                    # trace. Metadata-only: guidance_id#chunk_index locate the
+                    # passage; the blocked TEXT is never recorded (RT-redteam.md).
+                    obs.record_security_event(
+                        boundary="retrieved_content",
+                        categories=verdict.categories,
+                        detector_score=verdict.score,
+                        reason=verdict.reason,
+                        location=f"{p.guidance_id}#{p.chunk_index}",
+                    )
 
-            with span.start_as_current_observation(
-                name="search_corpus",
-                as_type="retriever",
-                input={"query": reformulated},
-                output={"passage_count": len(passages)},
-                metadata={"sub_question": sq[:80]},
-            ):
-                pass
+            # NOTE: the search_corpus retriever span is emitted at the retrieval
+            # boundary (retrieval.search_corpus, reached via the tool transport) and
+            # is metadata-only. We deliberately do NOT open a second one here — that
+            # was a duplicate retriever observation (ADR 0025 / trace-cleanup item 1).
 
             # Step 3: Chunk-level dedup — keep the copy with the higher rerank score.
             for p in passages:

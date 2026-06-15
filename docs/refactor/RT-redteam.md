@@ -273,6 +273,10 @@ assess for disclosure; a leaked `pg_dsn` is direct corpus/checkpoint tampering a
 **Existing control.** `SecretStr` everywhere but `pg_dsn`, masking pinned by
 `tests/test_no_secret_leak.py` (ADR 0019); guardrail verdicts carry no raw text (ADR 0022);
 blocked content never reaches traces; CLAUDE.md "never log secret values or PII".
+A guardrail block is now *surfaced* (not hidden) as a metadata-only
+`security.guardrail_block` Langfuse score — boundary/category/score/location, never the
+blocked text (ADR 0024); the content-exclusion rule above is exactly what keeps that
+emission safe (pinned by the allow-list test in `tests/test_ports_observability.py`).
 **Gap.** Decide and document the PII posture for `query`/`product_context` in traces (the
 current behavior contradicts the "no PII in traces" rule as written); scrub/deny-list DSN
 fragments in error paths; answer-side output filter for URLs/encoded blobs (LLM05).

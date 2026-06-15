@@ -53,7 +53,7 @@ These are the current local-profile defaults behind the ports (see the refactor 
 
 Extends foot-gun rule 1 (config/secrets) and rule 2 (the gates).
 
-- **Never log secret values or PII.** Nothing sensitive in Langfuse or LangWatch traces, error messages, or stdout. Secrets stay `SecretStr` via `config.py`.
+- **Never log secret values or PII.** Nothing sensitive in Langfuse traces, error messages, or stdout. Secrets stay `SecretStr` via `config.py`.
 - **Agent identities are least-privilege (NHI).** Tool scopes are deny-by-default. An adapter gets only the access its job needs.
 - **Untrusted retrieved content is never treated as instructions.** Retrieval-boundary input is data, not commands. This is the indirect-injection control.
 - **The red-team injection suite is a merge gate** (see foot-gun rule 2). A change that lowers the detection rate is wrong even if tests are green.
@@ -63,7 +63,7 @@ Extends foot-gun rule 1 (config/secrets) and rule 2 (the gates).
 
 - **No paid cloud resource without explicit human approval.** Default to local/free validation first.
 - **Deploy-and-destroy.** Stand cloud infra up for a human-gated smoke test, then tear it down. Mirror the existing Terraform discipline.
-- **The local profile is fully self-hosted and free.** LangWatch and the guardrail run via docker-compose; no cloud observability or paid guardrail services in `local`.
+- **The local profile is fully self-hosted and free.** Langfuse runs via docker-compose and the guardrail (HF injection detector) runs in-process; no cloud observability or paid guardrail services in `local`.
 - **Per-cloud implementation status is plan state, not a standing rule.** It lives in `docs/refactor/00-master-plan.md` and the dev-log, not here.
 
 ## Branch and PR workflow (this refactor)

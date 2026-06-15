@@ -14,9 +14,17 @@ rather than get_langfuse() directly.  Exemptions:
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
+
+import structlog
 
 from rra.tracing import get_langfuse  # Only this adapter + exempted evals touch tracing.get_langfuse
+
+log = structlog.get_logger(__name__)
+
+# Stable Langfuse categorical-score name for a blocked security event (ADR 0024).
+# One name → filter/group every guardrail block in the Langfuse Scores view.
+_SECURITY_SCORE_NAME = "security.guardrail_block"
 
 
 class LangfuseObservabilityAdapter:
@@ -80,3 +88,75 @@ class LangfuseObservabilityAdapter:
         from langfuse import propagate_attributes  # lazy — mirrors api.py's existing pattern
 
         return propagate_attributes(session_id=session_id)
+
+    def record_security_event(
+        self,
+        *,
+        boundary: Literal["user_input", "retrieved_content"],
+        categories: tuple[str, ...] = (),
+        detector_score: float | None = None,
+        reason: str | None = None,
+        location: str | None = None,
+    ) -> None:
+        """Emit a blocked security event as a categorical Langfuse score.
+
+        Reuses the same ``create_score`` surface as the eval harness
+        (langfuse_eval.emit_scores), so a caught injection shows up — and is
+        FILTERABLE — in the Langfuse Scores view under ``security.guardrail_block``.
+
+        Trace attachment:
+          - Inside a live request trace (retrieved_content during /query): the
+            score hangs on that trace, in context with the agent spans.
+          - No active trace (user_input blocked before the request span opens): a
+            one-shot observation is opened so the incident still has a home trace
+            rather than an orphaned score.
+
+        Metadata-only (RT-redteam.md): boundary, detector categories/score, and a
+        corpus location may be recorded; the offending TEXT never is. Never raises
+        — observability must not break the request path.
+        """
+        client = self._client
+        if client is None:  # langfuse disabled; nothing to record
+            return
+
+        metadata: dict[str, Any] = {
+            "boundary": boundary,
+            "categories": list(categories),
+        }
+        if detector_score is not None:
+            metadata["detector_score"] = round(float(detector_score), 4)
+        if location is not None:
+            metadata["location"] = location
+
+        try:
+            if client.get_current_trace_id() is not None:
+                self._emit_security_score(client, boundary, reason, metadata)
+            else:
+                # No active trace: open a one-shot observation so the score has a
+                # home trace instead of orphaning.
+                with client.start_as_current_observation(
+                    name=_SECURITY_SCORE_NAME,
+                    as_type="span",
+                    input={"boundary": boundary},
+                    metadata=metadata,
+                ):
+                    self._emit_security_score(client, boundary, reason, metadata)
+        except Exception:  # noqa: BLE001 — observability must never fail a request
+            log.warning("observability.security_event_failed", boundary=boundary)
+
+    @staticmethod
+    def _emit_security_score(
+        client: Any,
+        boundary: str,
+        reason: str | None,
+        metadata: dict[str, Any],
+    ) -> None:
+        """Create the categorical security score on the CURRENT trace."""
+        client.create_score(
+            name=_SECURITY_SCORE_NAME,
+            value=boundary,  # CATEGORICAL: "user_input" | "retrieved_content"
+            data_type="CATEGORICAL",
+            trace_id=client.get_current_trace_id(),
+            comment=reason,
+            metadata=metadata,
+        )

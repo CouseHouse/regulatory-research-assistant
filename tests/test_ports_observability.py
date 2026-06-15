@@ -263,3 +263,98 @@ def test_langfuse_adapter_propagate_session_delegates() -> None:
             pass
 
     mock_pa.assert_called_once_with(session_id="session-abc")
+
+
+# ─── record_security_event (ADR 0024) ────────────────────────────────────────
+
+
+def test_noop_adapter_record_security_event_is_no_op() -> None:
+    """NoopObservabilityAdapter.record_security_event() returns None, never raises."""
+    from rra.ports.observability import NoopObservabilityAdapter
+
+    adapter = NoopObservabilityAdapter()
+    assert (
+        adapter.record_security_event(
+            boundary="user_input",
+            categories=("prompt_injection",),
+            detector_score=0.9,
+            reason="prompt_injection",
+        )
+        is None
+    )
+
+
+def test_langfuse_adapter_security_event_scores_on_active_trace() -> None:
+    """With a live trace, the incident is a CATEGORICAL create_score on that trace."""
+    from rra.adapters.langfuse_observability import LangfuseObservabilityAdapter
+
+    lf_mock = _make_langfuse_mock()  # get_current_trace_id → "trace-xyz"
+    with patch("rra.adapters.langfuse_observability.get_langfuse", return_value=lf_mock):
+        adapter = LangfuseObservabilityAdapter()
+        adapter.record_security_event(
+            boundary="retrieved_content",
+            categories=("prompt_injection",),
+            detector_score=0.973,
+            reason="prompt_injection",
+            location="72674#3",
+        )
+
+    lf_mock.create_score.assert_called_once()
+    kwargs = lf_mock.create_score.call_args.kwargs
+    assert kwargs["name"] == "security.guardrail_block"
+    assert kwargs["value"] == "retrieved_content"
+    assert kwargs["data_type"] == "CATEGORICAL"
+    assert kwargs["trace_id"] == "trace-xyz"
+    assert kwargs["metadata"]["boundary"] == "retrieved_content"
+    assert kwargs["metadata"]["location"] == "72674#3"
+    assert kwargs["metadata"]["detector_score"] == 0.973
+    # A trace is already active → no one-shot observation is opened.
+    lf_mock.start_as_current_observation.assert_not_called()
+
+
+def test_langfuse_adapter_security_event_opens_oneshot_trace_when_none_active() -> None:
+    """user_input block fires before the request span: open a one-shot home trace."""
+    from rra.adapters.langfuse_observability import LangfuseObservabilityAdapter
+
+    lf_mock = _make_langfuse_mock()
+    # First read → no active trace; inside the one-shot observation → a trace id.
+    lf_mock.get_current_trace_id.side_effect = [None, "trace-oneshot"]
+    with patch("rra.adapters.langfuse_observability.get_langfuse", return_value=lf_mock):
+        adapter = LangfuseObservabilityAdapter()
+        adapter.record_security_event(boundary="user_input", categories=("x",))
+
+    lf_mock.start_as_current_observation.assert_called_once()
+    lf_mock.create_score.assert_called_once()
+    assert lf_mock.create_score.call_args.kwargs["trace_id"] == "trace-oneshot"
+
+
+def test_langfuse_adapter_security_event_never_raises() -> None:
+    """A Langfuse failure must be swallowed — observability never breaks a request."""
+    from rra.adapters.langfuse_observability import LangfuseObservabilityAdapter
+
+    lf_mock = _make_langfuse_mock()
+    lf_mock.create_score.side_effect = RuntimeError("langfuse down")
+    with patch("rra.adapters.langfuse_observability.get_langfuse", return_value=lf_mock):
+        adapter = LangfuseObservabilityAdapter()
+        adapter.record_security_event(boundary="user_input")  # must not raise
+
+
+def test_langfuse_adapter_security_event_metadata_is_allowlisted() -> None:
+    """The score payload carries ONLY safe machine fields — never raw text."""
+    from rra.adapters.langfuse_observability import LangfuseObservabilityAdapter
+
+    lf_mock = _make_langfuse_mock()
+    with patch("rra.adapters.langfuse_observability.get_langfuse", return_value=lf_mock):
+        adapter = LangfuseObservabilityAdapter()
+        adapter.record_security_event(
+            boundary="retrieved_content",
+            categories=("prompt_injection",),
+            detector_score=0.97,
+            reason="prompt_injection",
+            location="72674#3",
+        )
+
+    metadata = lf_mock.create_score.call_args.kwargs["metadata"]
+    assert set(metadata).issubset(
+        {"boundary", "categories", "detector_score", "location"}
+    )

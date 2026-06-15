@@ -117,6 +117,8 @@ def query(
 ) -> QueryResponse:
     _verify_api_key(x_api_key)
 
+    obs = get_observability()
+
     # ── Guardrails: user-input boundary ───────────────────────────────────────
     # Check the query and product_context BEFORE the graph runs.
     # With AllowAllGuardrails (phase-2 wiring) this is a no-op; the real
@@ -132,6 +134,15 @@ def query(
             categories=query_verdict.categories,
             # Intentionally omit: request.query, score, reason (might echo content).
         )
+        # Surface the incident in the trace UI (ADR 0024). Metadata-only — the
+        # offending query text is NEVER recorded (RT-redteam.md). No request span
+        # is open yet, so the adapter hosts the score on a one-shot incident trace.
+        obs.record_security_event(
+            boundary="user_input",
+            categories=query_verdict.categories,
+            detector_score=query_verdict.score,
+            reason=query_verdict.reason,
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="request blocked by content policy",
@@ -146,6 +157,12 @@ def query(
                 boundary=ctx_verdict.boundary,
                 categories=ctx_verdict.categories,
             )
+            obs.record_security_event(
+                boundary="user_input",
+                categories=ctx_verdict.categories,
+                detector_score=ctx_verdict.score,
+                reason=ctx_verdict.reason,
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="request blocked by content policy",
@@ -154,7 +171,6 @@ def query(
     session_id = str(uuid.uuid4())
     log.info("query.start", session_id=session_id, query=request.query[:120])
 
-    obs = get_observability()
     # Propagate session_id onto the parent span AND the child spans the graph
     # opens, so Langfuse's Sessions view groups this request's whole trace —
     # metadata={"session_id": ...} alone does NOT populate Sessions (v4). The
@@ -163,7 +179,10 @@ def query(
     with obs.propagate_session(session_id), obs.start_span(
         "query",
         as_type="span",
-        input={"query": request.query, "product_context": request.product_context},
+        # ADR 0025: product_context is confidential commercial info — never store its
+        # text in a trace; record only its size. The query (regulatory question) is kept
+        # for trace utility (general question, not device CCI).
+        input={"query": request.query, "product_context_chars": len(request.product_context)},
         metadata={"session_id": session_id},
     ) as trace_span:
         trace_id = obs.current_trace_id()
